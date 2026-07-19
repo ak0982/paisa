@@ -1,0 +1,1010 @@
+import 'account_bank_registry.dart';
+import 'bank_promo_filters.dart';
+import 'parsed_sms_transaction.dart';
+import 'sms_keyword_lists.dart';
+
+/// Regex-based parser for Indian bank / UPI SMS alerts.
+class SmsParser {
+  SmsParser._();
+
+  /// Indian (1,25,000) and Western (1,250,000) comma grouping.
+  static final _amount = r'(\d+(?:,\d+)*(?:\.\d{2})?)';
+  static final _currency = r'(?:Rs\.?|INR|₹)\s*';
+  /// Must be preceded by a/c marker or masked chars (XX**, *5300) — never bare
+  /// digits inside amounts like 52000.00.
+  static final _account = r'(?:'
+      r'(?:a/c|acct|account|A/C)\s*[Xx*•]*'
+      r'|'
+      r'[Xx*•]{2,}'
+      r')(\d{4})\b';
+
+  /// Known financial sender ID fragments (case-insensitive).
+  static final bankSenderPatterns = [
+    RegExp(r'hdfc', caseSensitive: false),
+    RegExp(r'sbi', caseSensitive: false),
+    RegExp(r'icici', caseSensitive: false),
+    RegExp(r'axis', caseSensitive: false),
+    RegExp(r'kotak', caseSensitive: false),
+    RegExp(r'paytm', caseSensitive: false),
+    RegExp(r'phonepe', caseSensitive: false),
+    RegExp(r'gpay|googlepay', caseSensitive: false),
+    RegExp(r'mobikwik|mbkwik', caseSensitive: false),
+    RegExp(r'freecharge|frchrg', caseSensitive: false),
+    RegExp(r'amazonpay|amznpay', caseSensitive: false),
+    RegExp(r'bhim', caseSensitive: false),
+    RegExp(r'yesbank', caseSensitive: false),
+    RegExp(r'indusind', caseSensitive: false),
+    RegExp(r'pnb', caseSensitive: false),
+    RegExp(r'canara', caseSensitive: false),
+    RegExp(r'baroda', caseSensitive: false),
+    RegExp(r'federal', caseSensitive: false),
+    RegExp(r'idfc', caseSensitive: false),
+    RegExp(r'lenden', caseSensitive: false),
+  ];
+
+  /// Body must look like a transaction alert, not a promo OTP message.
+  static final transactionSignals = RegExp(
+    r'(debited|credited|spent|paid|received|withdrawn|deposited|depositing|txn|transaction|upi|neft|imps|rtgs|a/c|acct|account|loan ac|bal\s|balance)',
+    caseSensitive: false,
+  );
+
+  static final _otpOnly = RegExp(
+    r'^\s*(?:otp|one time password|verification code|do not share)',
+    caseSensitive: false,
+  );
+
+  /// Loan offers, card promos, scam alerts, and marketing — not completed transactions.
+  static final _promoOfferPattern = RegExp(
+    r'(pre[- ]?approved|loan offer|personal loan|instant loan|'
+    r'eligible for(?: a)? loan|apply now|click here|limited period|'
+    r't&c apply|terms and conditions|sanction letter|loan eligibility|'
+    r'avail(?:able)? loan|lakh loan|crore loan|processing fee offer|'
+    r'credit card offer|get(?: a)? loan|loan at \d|interest rate starts|'
+    r'offer for you|exclusive offer|zero processing|'
+    r'loan\s+is\s+approv|loan\s+approved|withdraw\s+direct|zero\s+document|'
+    r'to your wallet|wallet a/c|credited to wallet|'
+    r'click to check|tap (?:here|to claim|now)|claim now|claim before|'
+    r'finance guru|instant disbursal|zero docs|no docs|loan update:|'
+    r"kyc needed|tap now|hurry!|offer expires|recharged!|talktime|"
+    r"you(?:'ve| have) received rs\.?\s*[\d,]+(?:\.\d{2})?\s+(?:cashback|talktime)|"
+    r'received rs\.?\s*[\d,]+(?:\.\d{2})?\s+loan|'
+    r'earns?\s+rs\.?\s*[\d,]+\s+daily|in one place)',
+    caseSensitive: false,
+  );
+
+  /// Scam SMS often obfuscate keywords (L0AN, Appr0ve).
+  static final _scamObfuscationPattern = RegExp(
+    r'(l0an|l[o0]an\s+is\s+appr|y0ur\s+received|withdraw\s+t0|'
+    r'rs\.?\s*[\d,]+\s+l0an|wallet\s+a/c)',
+    caseSensitive: false,
+  );
+
+  /// Completed money movement — distinguishes real txns from promos with amounts.
+  static final _completedTxnPattern = RegExp(
+    r'(debited|debited by|sent\s+rs|paid\s+to|paid\s+at|spent\s+at|withdrawn|deposited|'
+    r'neft\s+(?:dr|cr)|imps\s+(?:dr|cr)|rtgs\s+(?:dr|cr)|'
+    r'credited\s+to\s+(?:your\s+)?(?:a/c|acct|account)\s*(?:[x*•]{2,8})?\s*\d{4}|'
+    r'credited with amount|credit alert!|'
+    r'is debited to your account|has a credit by|'
+    r'depositing an amount.*loan ac|against your loan ac|'
+    r'payment of\s+(?:inr|rs).*(?:credited|received)|'
+    r'credited\s+towards\s+your.*credit card|'
+    r'received payment of.*bbps.*credit card|'
+    r'payment of.*received for your bobcard|'
+    r'payment of.*received towards your.*credit card|'
+    r'payment of rs.*received towards your credit card ending|'
+    r'is spent on your bobcard|'
+    r'spent on your (?:\w+ ){0,4}credit card ending|'
+    r'(?:delicious purchase|fueled up).*spent on your|'
+    r'credited with rs\.?\s*[\d,]+.*(?:on \d|against reversal)|'
+    r'deposited in (?:\w+ ){0,3}bank|'
+    r'credit card (?:xx)?\d{4} debited for|'
+    r'spent using icici bank card|'
+    r'a/c x?\d{4} debited by .*trf to mbk ccbp|'
+    r'reversal of .*credited to .*credit card|'
+    r'received\s+rs\.?\s*[\d,]+.*in your (?:kotak|hdfc|sbi|icici|axis|bank|a/c|account)|'
+    r'spent on yes bank card|'
+    r'credited to your\s+\w[\w .&-]{1,40}\s+account)',
+    caseSensitive: false,
+  );
+
+  /// True when SMS looks like a loan/card/marketing offer, not a real transaction.
+  static bool isPromoOrOfferSms(String body, {String sender = ''}) {
+    if (_completedTxnPattern.hasMatch(body)) return false;
+
+    if (_promoOfferPattern.hasMatch(body)) return true;
+    if (_scamObfuscationPattern.hasMatch(body.toLowerCase())) return true;
+
+    if (sender.isNotEmpty &&
+        BankPromoFilters.matchesBankPromo(sender: sender, body: body)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  static bool isPersonalPhoneSender(String sender) {
+    final s = sender.replaceAll(RegExp(r'[\s\-]'), '');
+    return RegExp(r'^\+?91\d{10}$').hasMatch(s);
+  }
+
+  /// Strong bank alert verbs — used for trusted senders only.
+  static final _bankAlertPattern = RegExp(
+    r'(debited|credited|spent\s+on|paid\s+to|sent\s+rs|withdrawn|deposited|'
+    r'depositing|payment of\s+(?:inr|rs)|has a credit by|is debited to|'
+    r'received\s+rs\.?\s*[\d,]+.*in your)',
+    caseSensitive: false,
+  );
+
+  /// True when SMS shows evidence of completed money movement, not an offer.
+  static bool hasCompletedTransactionSignal(String body) {
+    return _completedTxnPattern.hasMatch(body);
+  }
+
+  /// Scam phishing that claims a wallet credit without a completed bank txn.
+  /// Real "credited to your <platform> account" alerts are parsed normally.
+  static bool isNonBankWalletMovement(String body) {
+    final lower = body.toLowerCase();
+    // Completed platform wallet top-ups (amount credited to a named account).
+    if (RegExp(
+      r'(?:inr|rs\.?)\s*[\d,]+\s+has been credited to your\s+\w',
+      caseSensitive: false,
+    ).hasMatch(lower)) {
+      return false;
+    }
+    return lower.contains('credited to your wallet a/c') ||
+        lower.contains('credited to wallet');
+  }
+
+  /// Multi-check filter: promos, scams, and weak "received Rs" alerts are rejected.
+  static bool isRealTransactionSms(String sender, String body) {
+    final trimmed = body.trim();
+    if (trimmed.length < 20) return false;
+    if (isOtpOnly(trimmed)) return false;
+    if (isNonBankWalletMovement(trimmed)) return false;
+    if (isPromoOrOfferSms(trimmed, sender: sender)) return false;
+
+    if (hasCompletedTransactionSignal(trimmed)) return true;
+
+    if (isPersonalPhoneSender(sender)) return false;
+
+    if (isFinancialSender(sender) &&
+        _bankAlertPattern.hasMatch(trimmed) &&
+        !isNonBankWalletMovement(trimmed)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  static bool isFinancialSender(String sender) {
+    if (sender.isEmpty || isPersonalPhoneSender(sender)) return false;
+    final upper = sender.toUpperCase();
+    if (bankSenderPatterns.any((p) => p.hasMatch(upper))) return true;
+    return _trustedSenderHints.any((hint) => upper.contains(hint));
+  }
+
+  static const _trustedSenderHints = [
+    'HDFCBK',
+    'KOTAKB',
+    'CBSSBI',
+    'PNBSMS',
+    'CREDIN',
+    'MOBIKW',
+    'PLUXEE',
+    'SBICRD',
+    'SBIN',
+    'LENDEN',
+    'YESBNK',
+    'IDFCFB',
+    'ICICIT',
+    'ICICIO',
+    'AXISBK',
+    'PHONEPE',
+    'GPAY',
+    'PAYTMB',
+    'FRCHRG',
+    'AMZNPAY',
+    'AIRTEL',
+  ];
+
+  static bool isOtpOnly(String body) {
+    return _otpOnly.hasMatch(body) && !transactionSignals.hasMatch(body);
+  }
+
+  static bool hasTransactionSignal(String body) {
+    return transactionSignals.hasMatch(body);
+  }
+
+  static bool isLikelyBankSms(String sender, String body) {
+    final normalizedBody = body.trim();
+
+    if (normalizedBody.length < 20) return false;
+    if (!isRealTransactionSms(sender, normalizedBody)) return false;
+
+    final senderMatch = bankSenderPatterns.any((p) => p.hasMatch(sender.toUpperCase())) ||
+        isFinancialSender(sender);
+    final bodyBank = _detectBankFromBody(normalizedBody) != null;
+
+    return senderMatch || bodyBank;
+  }
+
+  static String? _detectBankFromSender(String sender) {
+    final s = sender.toUpperCase();
+    if (s.contains('HDFC')) return 'HDFC';
+    if (s.contains('SBI') || s.contains('SBIN')) return 'SBI';
+    if (s.contains('ICICI')) return 'ICICI';
+    if (s.contains('AXIS')) return 'Axis';
+    if (s.contains('KOTAK')) return 'Kotak';
+    if (s.contains('PAYTM')) return 'Paytm';
+    if (s.contains('PHONEPE')) return 'PhonePe';
+    if (s.contains('MOBIKW')) return 'MobiKwik';
+    if (s.contains('FRCHRG') || s.contains('FREECHARGE')) return 'Freecharge';
+    if (s.contains('AMZNPAY') || s.contains('AMAZONPAY')) return 'Amazon Pay';
+    if (s.contains('GPAY') || s.contains('GOOGLE')) return 'GPay';
+    if (s.contains('YES')) return 'Yes Bank';
+    if (s.contains('INDUS')) return 'IndusInd';
+    if (s.contains('PNB')) return 'PNB';
+    if (s.contains('CANARA')) return 'Canara';
+    if (s.contains('BARODA')) return 'Bank of Baroda';
+    if (s.contains('IDFC')) return 'IDFC';
+    if (s.contains('FEDBNK') ||
+        s.contains('FEDFIB') ||
+        s.contains('MYJPTR') ||
+        s.contains('FEDERAL')) {
+      return 'Federal';
+    }
+    if (s.contains('LENDEN')) return 'LenDenClub';
+    final wallet = SmsKeywordLists.detectWalletProvider(sender);
+    if (wallet != null) return wallet;
+    return null;
+  }
+
+  static String? _detectBankFromBody(String body) {
+    final b = body.toLowerCase();
+    if (b.contains('hdfc')) return 'HDFC';
+    if (b.contains('state bank') || RegExp(r'\bsbi\b').hasMatch(b)) return 'SBI';
+    if (b.contains('icici')) return 'ICICI';
+    if (b.contains('axis bank') || RegExp(r'\baxis\b').hasMatch(b)) return 'Axis';
+    if (b.contains('kotak')) return 'Kotak';
+    if (b.contains('federal bank')) return 'Federal';
+    if (RegExp(r'\bpnb\b').hasMatch(b) || b.contains('punjab national')) {
+      return 'PNB';
+    }
+    if (b.contains('lendenclub')) return 'LenDenClub';
+    final wallet = SmsKeywordLists.detectWalletProvider(body);
+    if (wallet != null) return wallet;
+    return null;
+  }
+
+  /// Prefer the bank that owns the account in the SMS body. Some senders
+  /// relay credits into another bank's account — use [registry] when the
+  /// account last-4 is known from other SMS.
+  static String _resolveBank(
+    String sender,
+    String body, {
+    String? accountLast4,
+    AccountBankRegistry? registry,
+  }) {
+    final fromSender = _detectBankFromSender(sender);
+    if (fromSender != null &&
+        RegExp(
+          r'debited to your account|your kotak bank a/c|from kotak bank ac',
+          caseSensitive: false,
+        ).hasMatch(body)) {
+      return fromSender;
+    }
+
+    final explicit = AccountBankRegistry.detectExplicitAccountBank(body);
+    if (explicit != null) return explicit;
+
+    if (AccountBankRegistry.isIciciSettlementNotification(sender, body)) {
+      if (accountLast4 != null && registry != null) {
+        final known = registry.lookup(accountLast4);
+        if (known != null) return known;
+      }
+      return 'Bank';
+    }
+
+    if (fromSender != null) return fromSender;
+
+    return _detectBankFromBody(body) ?? 'Bank';
+  }
+
+  static String? _normalizeAccountLast4(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    final digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return null;
+    if (digits.length < 4) {
+      return digits.padLeft(4, '0');
+    }
+    return digits.substring(digits.length - 4);
+  }
+
+  static String? extractAccountLast4(String body) {
+    return _extractAccountFallback(
+      body.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' '),
+    );
+  }
+
+  static String maskFromLast4(String? last4) {
+    if (last4 == null || last4.isEmpty) return '';
+    return '••••$last4';
+  }
+
+  static String _maskAccount(String? last4) {
+    return maskFromLast4(last4);
+  }
+
+  static double _parseAmount(String raw) {
+    return double.parse(raw.replaceAll(',', ''));
+  }
+
+  static String _cleanMerchant(String raw) {
+    var m = raw.trim();
+    m = m.replaceAll(RegExp(r'\s+'), ' ');
+    m = m.replaceAll(RegExp(r'[.\s]+$'), '');
+    m = m.replaceAll(RegExp(r'^to\s+', caseSensitive: false), '');
+    m = m.replaceAll(RegExp(r'\s+on\s+\d.*$', caseSensitive: false), '');
+    m = SmsKeywordLists.stripBalanceSuffix(m);
+    m = m.replaceAll(RegExp(r'\s+via\s+.*$', caseSensitive: false), '');
+    if (m.length > 40) m = m.substring(0, 40).trim();
+    if (m.isEmpty) return 'Unknown';
+    // Keep VPAs readable (don't title-case local-part / handle).
+    if (SmsKeywordLists.isKnownUpiVpa(m)) return m.toLowerCase();
+    final embeddedVpa = SmsKeywordLists.extractUpiVpa(m);
+    if (embeddedVpa != null && m.contains('@')) return embeddedVpa;
+    return _titleCase(m);
+  }
+
+  static String _titleCase(String input) {
+    return input.split(' ').map((w) {
+      if (w.isEmpty) return w;
+      if (w.length <= 3 && w == w.toUpperCase()) return w;
+      return '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}';
+    }).join(' ');
+  }
+
+  /// Returns parsed transaction or null if SMS doesn't match any pattern.
+  static ParsedSmsTransaction? parse(SmsMessageInput message) {
+    if (!isLikelyBankSms(message.sender, message.body)) return null;
+    if (isPromoOrOfferSms(message.body, sender: message.sender)) return null;
+    return parseTransaction(message);
+  }
+
+  /// Full regex extraction — caller must have already passed pipeline gates.
+  static ParsedSmsTransaction? parseTransaction(
+    SmsMessageInput message, {
+    AccountBankRegistry? registry,
+  }) {
+    final body = message.body.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ');
+    final patterns = _buildPatterns();
+    for (final pattern in patterns) {
+      final match = pattern.regex.firstMatch(body);
+      if (match == null) continue;
+
+      try {
+        final amount = _parseAmount(match.group(pattern.amountGroup)!);
+        if (amount <= 0) continue;
+
+        final isCredit = pattern.isCredit;
+        final accountRaw = pattern.accountGroup != null
+            ? match.group(pattern.accountGroup!)
+            : _extractAccountFallback(body);
+        final account = accountRaw == null
+            ? null
+            : _normalizeAccountLast4(accountRaw);
+        if (pattern.accountGroup != null && account == null) continue;
+        final merchant = pattern.merchantGroup != null
+            ? () {
+                final raw = match.group(pattern.merchantGroup!);
+                if (raw != null && raw.trim().isNotEmpty) {
+                  final cleaned = _cleanMerchant(raw);
+                  // Prefer full allowlisted VPA when regex truncated at '.' / spaces.
+                  final vpa = SmsKeywordLists.extractUpiVpa(body);
+                  if (vpa != null &&
+                      !SmsKeywordLists.isKnownUpiVpa(cleaned) &&
+                      (cleaned.length < 4 ||
+                          vpa.startsWith(cleaned.toLowerCase().split('@').first))) {
+                    return _cleanMerchant(vpa);
+                  }
+                  return cleaned;
+                }
+                return _extractMerchantFallback(body, isCredit);
+              }()
+            : _extractMerchantFallback(body, isCredit);
+
+        final infoMerchant = RegExp(
+          r"Info[:\s]+([A-Za-z0-9 .&'-]{3,40})",
+          caseSensitive: false,
+        ).firstMatch(body);
+        final resolvedMerchant = infoMerchant != null && isCredit
+            ? _cleanMerchant(infoMerchant.group(1)!)
+            : merchant;
+
+        final accountLast4 = account;
+        final bank = _resolveBank(
+          message.sender,
+          body,
+          accountLast4: accountLast4,
+          registry: registry,
+        );
+        final resolvedBank = registry?.resolveBank(
+              sender: message.sender,
+              body: body,
+              accountLast4: accountLast4,
+              parsedBank: bank,
+            ) ??
+            bank;
+
+        return ParsedSmsTransaction(
+          amount: amount,
+          isCredit: isCredit,
+          merchant: resolvedMerchant,
+          bank: resolvedBank,
+          maskedAccount: _maskAccount(account),
+          timestamp: message.timestamp,
+        );
+      } catch (_) {
+        continue;
+      }
+    }
+
+    return null;
+  }
+
+  static String? _extractAccountFallback(String body) {
+    final patterns = [
+      RegExp(_account, caseSensitive: false),
+      RegExp(
+        r'(?:a/c|acct|account|A/C)\s*No\.?\s*[Xx*•]*(\d{4,})\b',
+        caseSensitive: false,
+      ),
+      RegExp(
+        r'(?:your\s+)?Account\s+[Xx*•]+(\d{4,})\b',
+        caseSensitive: false,
+      ),
+      RegExp(
+        r'Kotak Bank\s+(?:A/?c|AC)\s+X?(\d{4,})\b',
+        caseSensitive: false,
+      ),
+    ];
+    for (final p in patterns) {
+      final m = p.firstMatch(body);
+      if (m != null) return _normalizeAccountLast4(m.group(1));
+    }
+    return null;
+  }
+
+  static String _extractMerchantFallback(String body, bool isCredit) {
+      if (isCredit) {
+      // Platform wallet credit: "Rs. X has been credited to your Foo account"
+      final platformCredit = RegExp(
+        r'(?:INR|Rs\.?)\s*\d+(?:,\d+)*(?:\.\d{2})?\s+has been credited to your\s+([A-Za-z0-9 .&-]{2,40}?)\s+account',
+        caseSensitive: false,
+      ).firstMatch(body);
+      if (platformCredit != null) {
+        return _cleanMerchant(platformCredit.group(1)!);
+      }
+
+      final thanks = RegExp(
+        r"Thanks,\s+([A-Za-z0-9 .&'-]{3,60}?)(?:\s+ACCOUNT)?\.?\s*$",
+        caseSensitive: false,
+      ).firstMatch(body.trim());
+      if (thanks != null) {
+        return _cleanMerchant(thanks.group(1)!);
+      }
+
+      final thanksInline = RegExp(
+        r"Thanks,\s+([A-Za-z0-9 .&'-]{3,60})",
+        caseSensitive: false,
+      ).firstMatch(body);
+      if (thanksInline != null) {
+        return _cleanMerchant(thanksInline.group(1)!);
+      }
+
+      final fromVpa = RegExp(
+        r'from VPA\s+([A-Za-z0-9._+\-]+@[A-Za-z0-9._+\-]+)',
+        caseSensitive: false,
+      ).firstMatch(body);
+      if (fromVpa != null) return _cleanMerchant(fromVpa.group(1)!);
+
+      // Prefer allowlisted UPI handles when VPA appears without "from VPA".
+      final allowlistedVpa = SmsKeywordLists.extractUpiVpa(body);
+      if (allowlistedVpa != null) return _cleanMerchant(allowlistedVpa);
+
+      final salary = RegExp(
+        r"credited(?:\s+by|\s+from)\s+([A-Za-z0-9 .&'-]{3,40})",
+        caseSensitive: false,
+      ).firstMatch(body);
+      if (salary != null) return _cleanMerchant(salary.group(1)!);
+      return 'Credit received';
+    }
+
+    final info = RegExp(
+      r"Info[:\s]+([A-Za-z0-9 .&'-]{3,40})",
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (info != null) return _cleanMerchant(info.group(1)!);
+
+    final allowlistedVpa = SmsKeywordLists.extractUpiVpa(body);
+    if (allowlistedVpa != null) return _cleanMerchant(allowlistedVpa);
+
+    final upi = RegExp(
+      r"(?:to|at|towards)\s+([A-Za-z0-9 .&'-]{3,40})",
+      caseSensitive: false,
+    ).firstMatch(body);
+    if (upi != null) return _cleanMerchant(upi.group(1)!);
+
+    return 'Transaction';
+  }
+
+  static List<_SmsPattern> _buildPatterns() {
+    final amt = _amount;
+    final cur = _currency;
+    final acct = _account;
+
+    return [
+      // Platform wallet credit: Rs. 2500.00 has been credited to your Foo account
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+has been credited to your\s+([A-Za-z0-9 .&-]{2,40}?)\s+account',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        merchantGroup: 2,
+        isCredit: true,
+      ),
+      // SBI UPI: Dear UPI user A/C X0429 debited by 3250.00 on date 04Jun26 trf to MERCHANT
+      _SmsPattern(
+        RegExp(
+          r"Dear UPI user A/C\s*X?(\d{4})\s+debited by\s+(\d+(?:\.\d+)?)\s+on date\s+\S+\s+trf to\s+([A-Za-z0-9 .&'-]+?)(?:\s+Refno|\s+If not)",
+          caseSensitive: false,
+        ),
+        amountGroup: 2,
+        accountGroup: 1,
+        merchantGroup: 3,
+      ),
+      // SBI UPI reversal credit: ur A/cX0429 credited with Rs500.00 on 04Jun26
+      _SmsPattern(
+        RegExp(
+          r'ur A/cX?(\d{4})\s+credited with Rs\.?\s*(\d+(?:\.\d+)?)\s+on',
+          caseSensitive: false,
+        ),
+        amountGroup: 2,
+        accountGroup: 1,
+        isCredit: true,
+      ),
+      // SBI Credit Card: Rs.605.29 spent on your SBI Credit Card ending 3452 at MERCHANT
+      _SmsPattern(
+        RegExp(
+          r"Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+spent on your (?:SBI|ICICI|Axis|HDFC|Kotak|IDFC(?:\s+FIRST)?)\s+(?:Bank\s+)?Credit Card ending (?:XX|xx)?(\d{4}) at ([A-Za-z0-9 .&'-]+)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // IDFC: INR 80.00 spent on your IDFC FIRST Bank Credit Card ending XX7424 at HungerBox
+      _SmsPattern(
+        RegExp(
+          r"(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+spent on your (?:IDFC(?:\s+FIRST)?|HDFC|SBI|ICICI|Axis|Kotak)\s+(?:Bank\s+)?(?:\w+\s+)*Credit Card ending (?:XX|xx)?(\d{4}) at ([A-Za-z0-9 .&'-]+)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // ICICI: Payment of Rs 14,747.00 received on your ICICI Bank Credit Card XX2009
+      _SmsPattern(
+        RegExp(
+          r'(?:Payment of|paid)\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?).*(?:received on your|received towards your).*Credit Card (?:XX|xx|X)?(\d{4})',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // ICICI CC spend: INR 387.00 spent using ICICI Bank Card XX2009 on ... on AMAZON
+      _SmsPattern(
+        RegExp(
+          r'INR\s+(\d+(?:,\d+)*(?:\.\d{2})?)\s+spent using ICICI Bank Card (?:XX|xx)?(\d{4}) on \d+-\w+-\d+ on ([A-Za-z0-9 .*]+?)\.\s+Avl',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // ICICI CC UPI debit: Credit Card XX0003 debited for INR 50.00 on ... for UPI-xxx-MERCHANT
+      _SmsPattern(
+        RegExp(
+          r'ICICI Bank Credit Card (?:XX|xx)?(\d{4}) debited for (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?) on \d+-\w+-\d+ for (?:UPI-)?([A-Za-z0-9._-]+)',
+          caseSensitive: false,
+        ),
+        amountGroup: 2,
+        accountGroup: 1,
+        merchantGroup: 3,
+      ),
+      // CRED / generic: Payment credited towards bank Credit Card (no mask in SMS)
+      _SmsPattern(
+        RegExp(
+          r'Payment of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?).*credited towards your (?:ICICI Bank|Bank of Baroda|HDFC Bank|Axis Bank) Credit Card',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        isCredit: true,
+      ),
+      // HDFC CC payment received
+      _SmsPattern(
+        RegExp(
+          r'PAYMENT OF Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH (\d{4})',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // YES BANK CC payment received
+      _SmsPattern(
+        RegExp(
+          r'payment of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?).*received towards your YES BANK Credit Card ending (\d{4})',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // BOBCARD spend alert
+      _SmsPattern(
+        RegExp(
+          r"INR\s+(\d+(?:,\d+)*(?:\.\d{2})?)\s+is spent on your BOBCARD ending (\d{4})\s+at\s+([A-Za-z0-9 .&'_-]+)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // ICICI CC reversal credit
+      _SmsPattern(
+        RegExp(
+          r'Reversal of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+credited to (?:\w+ )*Credit Card X+(\d{4})',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // SBI BBPS credit card payment
+      _SmsPattern(
+        RegExp(
+          r'received payment of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?).*BBPS.*credited to your SBI Credit Card',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        isCredit: true,
+      ),
+      // BOBCARD payment received
+      _SmsPattern(
+        RegExp(
+          r'Payment of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?).*received for your BOBCARD ending (\d{4})',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // SBI UPI CCBP: debited from savings to pay credit card bill
+      _SmsPattern(
+        RegExp(
+          r'A/C X?(\d{4}) debited by (\d+(?:\.\d+)?) on date \d+\w+ trf to MBK CCBP',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+        merchantGroup: null,
+      ),
+      // Yes Bank CC: INR 449.54 spent on YES BANK Card X9757 @UPI_MCDONALDS
+      _SmsPattern(
+        RegExp(
+          r"INR\s+(\d+(?:,\d+)*(?:\.\d{2})?)\s+spent on YES BANK Card X?(\d{4})\s+@([A-Za-z0-9_ .&'-]+)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Kotak NACH: INR 25,797.00 is debited to your Account XXXXXX3649 towards HDFC BANK
+      _SmsPattern(
+        RegExp(
+          r"INR\s+(\d+(?:,\d+)*(?:\.\d{2})?)\s+is debited to your Account\s+X+(\d{4,})\s+on.*?towards\s+([A-Za-z0-9 .&'-]+)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Kotak UPI: Sent Rs.20000.00 from Kotak Bank AC X3649 to merchant@upi
+      _SmsPattern(
+        RegExp(
+          r"Sent Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+from Kotak Bank AC X?(\d{4,})\s+to\s+([A-Za-z0-9@._+\-]+)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Kotak NEFT credit: Rs. 72700 credited to your Kotak Bank a/c XX3649 via NEFT
+      _SmsPattern(
+        RegExp(
+          r"Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+credited to your Kotak Bank a/c\s+X*(\d{4,})\s+via\s+NEFT",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // SBI NACH credit: Your A/C XXXXX286675 has a credit by NACH- MERCHANT of Rs 733.50
+      _SmsPattern(
+        RegExp(
+          r"Your A/C\s+X+(\d{4,})\s+has a credit by\s+([A-Za-z0-9 .&'-]+?)\s+of\s+(?:Rs\.?|INR)\s*(\d+(?:,\d+)*(?:\.\d{2})?)",
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        merchantGroup: 2,
+        amountGroup: 3,
+        isCredit: true,
+      ),
+      _SmsPattern(
+        RegExp(
+          r'(?:HDFC Bank:?\s*)?Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+debited\s+from\s+(?:HDFC Bank\s+)?A/?c\s*\*+(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+      ),
+      // HDFC: Rs.3700 debited from HDFC Bank A/c **5300 on DATE to A/c
+      _SmsPattern(
+        RegExp(
+          r'Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+debited\s+from\s+HDFC Bank\s+A/?c\s*\*+(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+      ),
+      // HDFC NEFT salary: deposited in HDFC Bank A/c XX5300
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+deposited in HDFC Bank A/c\s*X*(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // HDFC: INR 73,000 debited from HDFC Bank XX5300
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+debited\s+from\s+HDFC Bank\s+XX?(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+      ),
+      // HDFC: Sent Rs.3000.00 From HDFC Bank A/C *5300 To MERCHANT On 09/12/25
+      _SmsPattern(
+        RegExp(
+          r"Sent\s+Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+From\s+HDFC Bank\s+A/C\s*\*?(\d{4})\s+To\s+([A-Za-z0-9 @.'&-]+?)\s+On",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // HDFC Credit Alert: Credit Alert! Rs.1000.00 credited to HDFC Bank A/c XX5300
+      _SmsPattern(
+        RegExp(
+          r'Credit Alert!\s*Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+credited to HDFC Bank A/c\s*X*(\d{4})',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // SBI NEFT credit: INR 2,782.61 credited to your A/c No XX0429 … ACCOUNT-SBI
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+credited to your A/c\s*No\.?\s*X*(\d{4})\b.*?(?:NEFT|neft)',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // ICICI settlement relay: account XXXXXXXX0429 has been credited with amount
+      _SmsPattern(
+        RegExp(
+          r'account\s+X+(\d{4})\s+has been credited with amount\s+(\d+(?:,\d+)*(?:\.\d{2})?)',
+          caseSensitive: false,
+        ),
+        amountGroup: 2,
+        accountGroup: 1,
+        isCredit: true,
+      ),
+      // ICICI IMPS: Acct XX505 debited with Rs 74,000.00
+      _SmsPattern(
+        RegExp(
+          r'ICICI Bank Acct XX(\d+)\s+debited with Rs\s*(\d+(?:,\d+)*(?:\.\d{2})?)',
+          caseSensitive: false,
+        ),
+        amountGroup: 2,
+        accountGroup: 1,
+      ),
+      // HDFC: Sent Rs.486.00 from a/c **4321 to Swiggy on 07-Jul
+      // Merchant may be a name or allowlisted VPA (coffee.shop@ybl).
+      _SmsPattern(
+        RegExp(
+          "Sent\\s+$cur$amt\\s+from\\s+a/c\\s*$acct\\s+to\\s+([A-Za-z0-9@._+&'\\-]+?)(?:\\s+on\\b|\\s+UPI\\b|\\s+Ref\\b|\\.\\s|\$)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Rs.500.00 debited from a/c **4321 on 07-Jul. Info: SWIGGY
+      _SmsPattern(
+        RegExp(
+          "$cur$amt\\s+debited\\s+from\\s+(?:your\\s+)?(?:a/c|acct|account)\\s*$acct.*?(?:Info[:\\s]+|UPI[:\\s]+)([A-Za-z0-9 .&'\\-]+)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // ICICI: Acct XX123 debited for Rs 500.00 on 07-Jul-25; Swiggy credited
+      _SmsPattern(
+        RegExp(
+          "(?:Acct|A/c|Account)\\s*(?:XX|xx|\\*\\*|••)?\\s*$acct\\s+debited\\s+for\\s+$cur$amt.*?(?:;|/|-)\\s*([A-Za-z0-9 .&'\\-]+?)\\s+credited",
+          caseSensitive: false,
+        ),
+        amountGroup: 2,
+        accountGroup: 1,
+        merchantGroup: 3,
+      ),
+      // Axis: INR 500.00 debited on 07-07-25 Info: Swiggy
+      _SmsPattern(
+        RegExp(
+          "$cur$amt\\s+debited.*?(?:Info[:\\s]+)([A-Za-z0-9 .&'\\-]+)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        merchantGroup: 2,
+      ),
+      // SBI: Rs.500.00 debited from A/c XX1234 on 07Jul25. Info: SWIGGY
+      _SmsPattern(
+        RegExp(
+          "$cur$amt\\s+debited\\s+from\\s+A/c\\s*(?:XX|xx|\\*\\*)?\\s*$acct.*?(?:Info[:\\s]+)([A-Za-z0-9 .&'\\-]+)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Kotak: Rs.500.00 debited from Kotak Bank a/c XXXX1234 towards Swiggy
+      _SmsPattern(
+        RegExp(
+          "$cur$amt\\s+debited\\s+from\\s+.*?a/c\\s*(?:XXXX|xx|\\*\\*)?\\s*$acct\\s+towards\\s+([A-Za-z0-9 .&'\\-]+?)(?:\\s+on|\\.|\\s+ref)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Paytm / PhonePe: Rs.500 paid to Swiggy via Paytm
+      _SmsPattern(
+        RegExp(
+          "$cur$amt\\s+paid\\s+(?:to|at)\\s+([A-Za-z0-9 .&'\\-]+?)(?:\\s+via|\\s+on|\\.|\\s+using)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        merchantGroup: 2,
+      ),
+      // UPI: Rs 500.00 spent at AMAZON PAY
+      _SmsPattern(
+        RegExp(
+          "$cur$amt\\s+spent\\s+at\\s+([A-Za-z0-9 .&'\\-]+)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        merchantGroup: 2,
+      ),
+      // Credit: Rs. 68000.00 credited to your a/c **2015
+      _SmsPattern(
+        RegExp(
+          '$cur$amt\\s+credited\\s+to\\s+(?:your\\s+)?(?:a/c|acct|account)\\s*$acct',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // Credit: credited with Rs. 5000.00
+      _SmsPattern(
+        RegExp(
+          'credited\\s+with\\s+$cur$amt',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        isCredit: true,
+      ),
+      // Bank credit: You received Rs.500 in your account
+      _SmsPattern(
+        RegExp(
+          r'(?:you\s+)?received\s+Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?).*in your (?:a/c|account|bank)',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        isCredit: true,
+      ),
+      // Kotak UPI/IMPS credit: Received Rs.456.25 in your Kotak Bank AC X3649
+      _SmsPattern(
+        RegExp(
+          r'Received Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?).*in your Kotak Bank',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        isCredit: true,
+      ),
+      // PNB loan payment: Thanks for depositing Rs. 5200 against your Loan Ac XX0310
+      _SmsPattern(
+        RegExp(
+          r'Thanks for depositing an amount of (?:Rs\.?|INR)\s*(\d+(?:,\d+)*(?:\.\d{2})?).*Loan Ac\s*X*(\d{4,})',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+      ),
+      // SBI ECS/NACH dishonor return charges
+      _SmsPattern(
+        RegExp(
+          r'ECS/NACH dishonored in Acc\s+X+(\d{4,}).*?(?:Rs\.?|INR)\s*(\d+(?:,\d+)*(?:\.\d{2})?).*debited',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+      ),
+      // EMI: Rs.8500.00 debited ... EMI / Home Loan
+      _SmsPattern(
+        RegExp(
+          '$cur$amt\\s+debited.*?(?:EMI|Home Loan|Loan)',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        merchantGroup: null,
+      ),
+      // Generic debit with amount
+      _SmsPattern(
+        RegExp(
+          '$cur$amt\\s+(?:has been\\s+)?debited',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+      ),
+    ];
+  }
+}
+
+class _SmsPattern {
+  const _SmsPattern(
+    this.regex, {
+    required this.amountGroup,
+    this.accountGroup,
+    this.merchantGroup,
+    this.isCredit = false,
+  });
+
+  final RegExp regex;
+  final int amountGroup;
+  final int? accountGroup;
+  final int? merchantGroup;
+  final bool isCredit;
+}
