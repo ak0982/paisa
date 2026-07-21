@@ -8,7 +8,8 @@ class SmsParser {
   SmsParser._();
 
   /// Indian (1,25,000) and Western (1,250,000) comma grouping.
-  static final _amount = r'(\d+(?:,\d+)*(?:\.\d{2})?)';
+  /// Decimal part allows 1–2 digits so "Rs 500.5" parses as 500.5 (ISSUE-14).
+  static final _amount = r'(\d+(?:,\d+)*(?:\.\d{1,2})?)';
   static final _currency = r'(?:Rs\.?|INR|₹)\s*';
   /// Must be preceded by a/c marker or masked chars (XX**, *5300) — never bare
   /// digits inside amounts like 52000.00.
@@ -66,8 +67,8 @@ class SmsParser {
     r'click to check|tap (?:here|to claim|now)|claim now|claim before|'
     r'finance guru|instant disbursal|zero docs|no docs|loan update:|'
     r"kyc needed|tap now|hurry!|offer expires|recharged!|talktime|"
-    r"you(?:'ve| have) received rs\.?\s*[\d,]+(?:\.\d{2})?\s+(?:cashback|talktime)|"
-    r'received rs\.?\s*[\d,]+(?:\.\d{2})?\s+loan|'
+    r"you(?:'ve| have) received rs\.?\s*[\d,]+(?:\.\d{1,2})?\s+(?:cashback|talktime)|"
+    r'received rs\.?\s*[\d,]+(?:\.\d{1,2})?\s+loan|'
     r'earns?\s+rs\.?\s*[\d,]+\s+daily|in one place)',
     caseSensitive: false,
   );
@@ -486,7 +487,7 @@ class SmsParser {
       if (isCredit) {
       // Platform wallet credit: "Rs. X has been credited to your Foo account"
       final platformCredit = RegExp(
-        r'(?:INR|Rs\.?)\s*\d+(?:,\d+)*(?:\.\d{2})?\s+has been credited to your\s+([A-Za-z0-9 .&-]{2,40}?)\s+account',
+        r'(?:INR|Rs\.?)\s*\d+(?:,\d+)*(?:\.\d{1,2})?\s+has been credited to your\s+([A-Za-z0-9 .&-]{2,40}?)\s+account',
         caseSensitive: false,
       ).firstMatch(body);
       if (platformCredit != null) {
@@ -557,7 +558,7 @@ class SmsParser {
       // Platform wallet credit: Rs. 2500.00 has been credited to your Foo account
       _SmsPattern(
         RegExp(
-          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+has been credited to your\s+([A-Za-z0-9 .&-]{2,40}?)\s+account',
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+has been credited to your\s+([A-Za-z0-9 .&-]{2,40}?)\s+account',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -587,7 +588,7 @@ class SmsParser {
       // SBI Credit Card: Rs.605.29 spent on your SBI Credit Card ending 3452 at MERCHANT
       _SmsPattern(
         RegExp(
-          r"Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+spent on your (?:SBI|ICICI|Axis|HDFC|Kotak|IDFC(?:\s+FIRST)?)\s+(?:Bank\s+)?Credit Card ending (?:XX|xx)?(\d{4}) at ([A-Za-z0-9 .&'-]+)",
+          r"Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent on your (?:SBI|ICICI|Axis|HDFC|Kotak|IDFC(?:\s+FIRST)?)\s+(?:Bank\s+)?Credit Card ending (?:XX|xx)?(\d{4}) at ([A-Za-z0-9 .&'-]+)",
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -597,7 +598,7 @@ class SmsParser {
       // IDFC: INR 80.00 spent on your IDFC FIRST Bank Credit Card ending XX7424 at HungerBox
       _SmsPattern(
         RegExp(
-          r"(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+spent on your (?:IDFC(?:\s+FIRST)?|HDFC|SBI|ICICI|Axis|Kotak)\s+(?:Bank\s+)?(?:\w+\s+)*Credit Card ending (?:XX|xx)?(\d{4}) at ([A-Za-z0-9 .&'-]+)",
+          r"(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent on your (?:IDFC(?:\s+FIRST)?|HDFC|SBI|ICICI|Axis|Kotak)\s+(?:Bank\s+)?(?:\w+\s+)*Credit Card ending (?:XX|xx)?(\d{4}) at ([A-Za-z0-9 .&'-]+)",
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -607,7 +608,7 @@ class SmsParser {
       // ICICI: Payment of Rs 14,747.00 received on your ICICI Bank Credit Card XX2009
       _SmsPattern(
         RegExp(
-          r'(?:Payment of|paid)\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?).*(?:received on your|received towards your).*Credit Card (?:XX|xx|X)?(\d{4})',
+          r'(?:Payment of|paid)\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).*(?:received on your|received towards your).*Credit Card (?:XX|xx|X)?(\d{4})',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -617,7 +618,7 @@ class SmsParser {
       // ICICI CC spend: INR 387.00 spent using ICICI Bank Card XX2009 on ... on AMAZON
       _SmsPattern(
         RegExp(
-          r'INR\s+(\d+(?:,\d+)*(?:\.\d{2})?)\s+spent using ICICI Bank Card (?:XX|xx)?(\d{4}) on \d+-\w+-\d+ on ([A-Za-z0-9 .*]+?)\.\s+Avl',
+          r'INR\s+(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent using ICICI Bank Card (?:XX|xx)?(\d{4}) on \d+-\w+-\d+ on ([A-Za-z0-9 .*]+?)\.\s+Avl',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -627,7 +628,7 @@ class SmsParser {
       // ICICI CC UPI debit: Credit Card XX0003 debited for INR 50.00 on ... for UPI-xxx-MERCHANT
       _SmsPattern(
         RegExp(
-          r'ICICI Bank Credit Card (?:XX|xx)?(\d{4}) debited for (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?) on \d+-\w+-\d+ for (?:UPI-)?([A-Za-z0-9._-]+)',
+          r'ICICI Bank Credit Card (?:XX|xx)?(\d{4}) debited for (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?) on \d+-\w+-\d+ for (?:UPI-)?([A-Za-z0-9._-]+)',
           caseSensitive: false,
         ),
         amountGroup: 2,
@@ -637,7 +638,7 @@ class SmsParser {
       // CRED / generic: Payment credited towards bank Credit Card (no mask in SMS)
       _SmsPattern(
         RegExp(
-          r'Payment of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?).*credited towards your (?:ICICI Bank|Bank of Baroda|HDFC Bank|Axis Bank) Credit Card',
+          r'Payment of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).*credited towards your (?:ICICI Bank|Bank of Baroda|HDFC Bank|Axis Bank) Credit Card',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -646,7 +647,7 @@ class SmsParser {
       // HDFC CC payment received
       _SmsPattern(
         RegExp(
-          r'PAYMENT OF Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH (\d{4})',
+          r'PAYMENT OF Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+RECEIVED TOWARDS YOUR CREDIT CARD ENDING WITH (\d{4})',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -656,7 +657,7 @@ class SmsParser {
       // YES BANK CC payment received
       _SmsPattern(
         RegExp(
-          r'payment of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?).*received towards your YES BANK Credit Card ending (\d{4})',
+          r'payment of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).*received towards your YES BANK Credit Card ending (\d{4})',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -666,7 +667,7 @@ class SmsParser {
       // BOBCARD spend alert
       _SmsPattern(
         RegExp(
-          r"INR\s+(\d+(?:,\d+)*(?:\.\d{2})?)\s+is spent on your BOBCARD ending (\d{4})\s+at\s+([A-Za-z0-9 .&'_-]+)",
+          r"INR\s+(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+is spent on your BOBCARD ending (\d{4})\s+at\s+([A-Za-z0-9 .&'_-]+)",
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -676,7 +677,7 @@ class SmsParser {
       // ICICI CC reversal credit
       _SmsPattern(
         RegExp(
-          r'Reversal of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+credited to (?:\w+ )*Credit Card X+(\d{4})',
+          r'Reversal of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+credited to (?:\w+ )*Credit Card X+(\d{4})',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -686,7 +687,7 @@ class SmsParser {
       // SBI BBPS credit card payment
       _SmsPattern(
         RegExp(
-          r'received payment of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?).*BBPS.*credited to your SBI Credit Card',
+          r'received payment of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).*BBPS.*credited to your SBI Credit Card',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -695,7 +696,7 @@ class SmsParser {
       // BOBCARD payment received
       _SmsPattern(
         RegExp(
-          r'Payment of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?).*received for your BOBCARD ending (\d{4})',
+          r'Payment of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).*received for your BOBCARD ending (\d{4})',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -715,7 +716,7 @@ class SmsParser {
       // Yes Bank CC: INR 449.54 spent on YES BANK Card X9757 @UPI_MCDONALDS
       _SmsPattern(
         RegExp(
-          r"INR\s+(\d+(?:,\d+)*(?:\.\d{2})?)\s+spent on YES BANK Card X?(\d{4})\s+@([A-Za-z0-9_ .&'-]+)",
+          r"INR\s+(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent on YES BANK Card X?(\d{4})\s+@([A-Za-z0-9_ .&'-]+)",
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -725,7 +726,7 @@ class SmsParser {
       // Kotak NACH: INR 25,797.00 is debited to your Account XXXXXX3649 towards HDFC BANK
       _SmsPattern(
         RegExp(
-          r"INR\s+(\d+(?:,\d+)*(?:\.\d{2})?)\s+is debited to your Account\s+X+(\d{4,})\s+on.*?towards\s+([A-Za-z0-9 .&'-]+)",
+          r"INR\s+(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+is debited to your Account\s+X+(\d{4,})\s+on.*?towards\s+([A-Za-z0-9 .&'-]+)",
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -735,7 +736,7 @@ class SmsParser {
       // Kotak UPI: Sent Rs.20000.00 from Kotak Bank AC X3649 to merchant@upi
       _SmsPattern(
         RegExp(
-          r"Sent Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+from Kotak Bank AC X?(\d{4,})\s+to\s+([A-Za-z0-9@._+\-]+)",
+          r"Sent Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+from Kotak Bank AC X?(\d{4,})\s+to\s+([A-Za-z0-9@._+\-]+)",
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -745,7 +746,7 @@ class SmsParser {
       // Kotak NEFT credit: Rs. 72700 credited to your Kotak Bank a/c XX3649 via NEFT
       _SmsPattern(
         RegExp(
-          r"Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+credited to your Kotak Bank a/c\s+X*(\d{4,})\s+via\s+NEFT",
+          r"Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+credited to your Kotak Bank a/c\s+X*(\d{4,})\s+via\s+NEFT",
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -755,7 +756,7 @@ class SmsParser {
       // SBI NACH credit: Your A/C XXXXX286675 has a credit by NACH- MERCHANT of Rs 733.50
       _SmsPattern(
         RegExp(
-          r"Your A/C\s+X+(\d{4,})\s+has a credit by\s+([A-Za-z0-9 .&'-]+?)\s+of\s+(?:Rs\.?|INR)\s*(\d+(?:,\d+)*(?:\.\d{2})?)",
+          r"Your A/C\s+X+(\d{4,})\s+has a credit by\s+([A-Za-z0-9 .&'-]+?)\s+of\s+(?:Rs\.?|INR)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)",
           caseSensitive: false,
         ),
         accountGroup: 1,
@@ -765,7 +766,7 @@ class SmsParser {
       ),
       _SmsPattern(
         RegExp(
-          r'(?:HDFC Bank:?\s*)?Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+debited\s+from\s+(?:HDFC Bank\s+)?A/?c\s*\*+(\d{4})\b',
+          r'(?:HDFC Bank:?\s*)?Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+debited\s+from\s+(?:HDFC Bank\s+)?A/?c\s*\*+(\d{4})\b',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -774,7 +775,7 @@ class SmsParser {
       // HDFC: Rs.3700 debited from HDFC Bank A/c **5300 on DATE to A/c
       _SmsPattern(
         RegExp(
-          r'Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+debited\s+from\s+HDFC Bank\s+A/?c\s*\*+(\d{4})\b',
+          r'Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+debited\s+from\s+HDFC Bank\s+A/?c\s*\*+(\d{4})\b',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -783,7 +784,7 @@ class SmsParser {
       // HDFC NEFT salary: deposited in HDFC Bank A/c XX5300
       _SmsPattern(
         RegExp(
-          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+deposited in HDFC Bank A/c\s*X*(\d{4})\b',
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+deposited in HDFC Bank A/c\s*X*(\d{4})\b',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -793,7 +794,7 @@ class SmsParser {
       // HDFC: INR 73,000 debited from HDFC Bank XX5300
       _SmsPattern(
         RegExp(
-          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+debited\s+from\s+HDFC Bank\s+XX?(\d{4})\b',
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+debited\s+from\s+HDFC Bank\s+XX?(\d{4})\b',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -802,7 +803,7 @@ class SmsParser {
       // HDFC: Sent Rs.3000.00 From HDFC Bank A/C *5300 To MERCHANT On 09/12/25
       _SmsPattern(
         RegExp(
-          r"Sent\s+Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+From\s+HDFC Bank\s+A/C\s*\*?(\d{4})\s+To\s+([A-Za-z0-9 @.'&-]+?)\s+On",
+          r"Sent\s+Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+From\s+HDFC Bank\s+A/C\s*\*?(\d{4})\s+To\s+([A-Za-z0-9 @.'&-]+?)\s+On",
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -812,7 +813,7 @@ class SmsParser {
       // HDFC Credit Alert: Credit Alert! Rs.1000.00 credited to HDFC Bank A/c XX5300
       _SmsPattern(
         RegExp(
-          r'Credit Alert!\s*Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+credited to HDFC Bank A/c\s*X*(\d{4})',
+          r'Credit Alert!\s*Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+credited to HDFC Bank A/c\s*X*(\d{4})',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -822,7 +823,7 @@ class SmsParser {
       // SBI NEFT credit: INR 2,782.61 credited to your A/c No XX0429 … ACCOUNT-SBI
       _SmsPattern(
         RegExp(
-          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{2})?)\s+credited to your A/c\s*No\.?\s*X*(\d{4})\b.*?(?:NEFT|neft)',
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+credited to your A/c\s*No\.?\s*X*(\d{4})\b.*?(?:NEFT|neft)',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -832,7 +833,7 @@ class SmsParser {
       // ICICI settlement relay: account XXXXXXXX0429 has been credited with amount
       _SmsPattern(
         RegExp(
-          r'account\s+X+(\d{4})\s+has been credited with amount\s+(\d+(?:,\d+)*(?:\.\d{2})?)',
+          r'account\s+X+(\d{4})\s+has been credited with amount\s+(\d+(?:,\d+)*(?:\.\d{1,2})?)',
           caseSensitive: false,
         ),
         amountGroup: 2,
@@ -842,7 +843,7 @@ class SmsParser {
       // ICICI IMPS: Acct XX505 debited with Rs 74,000.00
       _SmsPattern(
         RegExp(
-          r'ICICI Bank Acct XX(\d+)\s+debited with Rs\s*(\d+(?:,\d+)*(?:\.\d{2})?)',
+          r'ICICI Bank Acct XX(\d+)\s+debited with Rs\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
           caseSensitive: false,
         ),
         amountGroup: 2,
@@ -948,7 +949,7 @@ class SmsParser {
       // Bank credit: You received Rs.500 in your account
       _SmsPattern(
         RegExp(
-          r'(?:you\s+)?received\s+Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?).*in your (?:a/c|account|bank)',
+          r'(?:you\s+)?received\s+Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).*in your (?:a/c|account|bank)',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -957,7 +958,7 @@ class SmsParser {
       // Kotak UPI/IMPS credit: Received Rs.456.25 in your Kotak Bank AC X3649
       _SmsPattern(
         RegExp(
-          r'Received Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{2})?).*in your Kotak Bank',
+          r'Received Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).*in your Kotak Bank',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -966,7 +967,7 @@ class SmsParser {
       // PNB loan payment: Thanks for depositing Rs. 5200 against your Loan Ac XX0310
       _SmsPattern(
         RegExp(
-          r'Thanks for depositing an amount of (?:Rs\.?|INR)\s*(\d+(?:,\d+)*(?:\.\d{2})?).*Loan Ac\s*X*(\d{4,})',
+          r'Thanks for depositing an amount of (?:Rs\.?|INR)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).*Loan Ac\s*X*(\d{4,})',
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -975,7 +976,7 @@ class SmsParser {
       // SBI ECS/NACH dishonor return charges
       _SmsPattern(
         RegExp(
-          r'ECS/NACH dishonored in Acc\s+X+(\d{4,}).*?(?:Rs\.?|INR)\s*(\d+(?:,\d+)*(?:\.\d{2})?).*debited',
+          r'ECS/NACH dishonored in Acc\s+X+(\d{4,}).*?(?:Rs\.?|INR)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).*debited',
           caseSensitive: false,
         ),
         accountGroup: 1,

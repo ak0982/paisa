@@ -61,7 +61,10 @@ const int categorizerVersion = 4;
 // adds cross-source de-duplication at insert time (bank + wallet SMS for the
 // same UPI payment now store one row). Lists still show every row. Forces a
 // rescan so the de-dupe applies to already-stored data.
-const int transactionSchemaVersion = 18;
+// Bumped 18 -> 19: amount regex accepts a single decimal digit ("Rs 500.5"
+// → 500.5) instead of only exactly two digits, which previously truncated to
+// 500 (ISSUE-14). Forces a rescan so any truncated amounts are re-parsed.
+const int transactionSchemaVersion = 19;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
