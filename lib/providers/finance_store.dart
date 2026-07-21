@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Color, DateTimeRange;
+import 'package:flutter/services.dart' show PlatformException;
 
 import '../models/bank_account.dart';
 import '../models/budget.dart';
@@ -333,9 +334,14 @@ class FinanceStore extends ChangeNotifier {
         scannedSms: lastProgress?.scanned ?? hits.length,
         totalSms: lastProgress?.total ?? hits.length,
       );
-    } catch (e) {
-      _error = 'Failed to scan SMS: $e';
+    } catch (e, stackTrace) {
+      // ISSUE-8: never surface raw PlatformException / stack internals in the
+      // UI. Log the details for debugging, show a short friendly message.
+      debugPrint('FinanceStore: SMS scan failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+      _error = friendlyScanError(e);
       _loading = false;
+      _scanProgress = null;
       notifyListeners();
       return ScanResult(
         newCount: 0,
@@ -344,6 +350,19 @@ class FinanceStore extends ChangeNotifier {
         categoryCount: usedCategories.length,
       );
     }
+  }
+
+  /// Maps a raw scan exception to a short, user-facing message. Never leaks
+  /// PlatformException internals or stack details into the UI (ISSUE-8) — those
+  /// are logged via debugPrint instead.
+  @visibleForTesting
+  static String friendlyScanError(Object error) {
+    if (error is PlatformException) {
+      return "We couldn't read your SMS inbox. Please check that SMS access "
+          'is allowed and try again.';
+    }
+    return 'Something went wrong while scanning your messages. '
+        'Please try again.';
   }
 
   @visibleForTesting
