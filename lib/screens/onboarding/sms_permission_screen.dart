@@ -121,7 +121,7 @@ class _PrivacyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const items = [
       'Messages are processed on your device — never uploaded to any server.',
-      'We read bank alerts only. Personal messages are ignored.',
+      'All messages are processed on-device; only bank alerts are stored.',
       'Your data is never sold or shared with anyone.',
     ];
 
