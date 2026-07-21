@@ -168,8 +168,11 @@ class FinanceStore extends ChangeNotifier {
         },
       );
       final hits = scan.hits;
-      _discoveredAccounts = scan.discoveredAccounts;
-      await _db.saveDiscoveredAccounts(_discoveredAccounts);
+      // Merge (not replace) so accounts discovered in earlier scans survive an
+      // incremental sync that returns few/no discoveries. A full rescan clears
+      // the table first, so this rebuilds the authoritative set. See ISSUE-1.
+      await _db.mergeDiscoveredAccounts(scan.discoveredAccounts);
+      _discoveredAccounts = await _db.getDiscoveredAccounts();
       final lastProgress = _scanProgress;
       final existingSmsIds = await _db.getExistingSmsIds();
       final transactionsToSave = <Transaction>[];

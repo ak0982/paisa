@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
@@ -7,9 +8,17 @@ import '../services/sms/account_discovery.dart';
 import 'sms_scan_state.dart';
 
 class TransactionDatabase {
-  TransactionDatabase._();
+  TransactionDatabase._({String? dbPathOverride})
+      : _dbPathOverride = dbPathOverride;
   static final TransactionDatabase instance = TransactionDatabase._();
 
+  /// Creates an isolated instance backed by [dbPath] (e.g.
+  /// `inMemoryDatabasePath`) for unit tests. Never used in production.
+  @visibleForTesting
+  factory TransactionDatabase.forTesting(String dbPath) =>
+      TransactionDatabase._(dbPathOverride: dbPath);
+
+  final String? _dbPathOverride;
   Database? _db;
   static const _dbVersion = 4;
 
@@ -20,8 +29,8 @@ class TransactionDatabase {
   }
 
   Future<Database> _open() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'paisa_transactions.db');
+    final path =
+        _dbPathOverride ?? join(await getDatabasesPath(), 'paisa_transactions.db');
     return openDatabase(
       path,
       version: _dbVersion,
@@ -139,6 +148,12 @@ class TransactionDatabase {
         .toSet();
   }
 
+  /// Destructive replace of the discovered-accounts table.
+  ///
+  /// Only safe to call when [items] is the authoritative FULL set (e.g. a full
+  /// rescan). Incremental syncs must use [mergeDiscoveredAccounts] instead, or
+  /// accounts discovered in earlier scans would be wiped when a routine
+  /// incremental scan returns few/no discoveries. See ISSUE-1.
   Future<void> saveDiscoveredAccounts(List<DiscoveredAccount> items) async {
     final db = await database;
     await db.delete('discovered_accounts');
@@ -158,6 +173,47 @@ class TransactionDatabase {
           'received_total': item.receivedTotal,
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  /// Non-destructive upsert used by every sync (full and incremental).
+  ///
+  /// Newly discovered accounts are inserted; accounts already present have their
+  /// aggregate counters accumulated. Crucially, accounts that are NOT in [items]
+  /// (e.g. because an incremental scan only read the last hour of messages) are
+  /// left untouched instead of being deleted. A full rescan clears the table
+  /// first (via [clearAll]) so this merges into an empty table and rebuilds the
+  /// authoritative set.
+  Future<void> mergeDiscoveredAccounts(List<DiscoveredAccount> items) async {
+    if (items.isEmpty) return;
+    final db = await database;
+    final batch = db.batch();
+    for (final item in items) {
+      batch.rawInsert(
+        '''
+        INSERT INTO discovered_accounts
+          (account_key, bank, mask, kind, account_label,
+           sms_hits, spent_total, received_total)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(account_key) DO UPDATE SET
+          sms_hits = sms_hits + excluded.sms_hits,
+          spent_total = spent_total + excluded.spent_total,
+          received_total = received_total + excluded.received_total,
+          account_label =
+            COALESCE(discovered_accounts.account_label, excluded.account_label)
+        ''',
+        [
+          item.key,
+          item.bank,
+          item.mask,
+          item.kind.name,
+          item.accountLabel,
+          item.smsHits,
+          item.spentTotal,
+          item.receivedTotal,
+        ],
       );
     }
     await batch.commit(noResult: true);

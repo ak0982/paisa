@@ -46,7 +46,12 @@ Future<void> main() async {
   // genuine savings accounts that never produced a parsed transaction (e.g.
   // Federal ••••7953, Federal ••••3455, PNB ••••4720) surface instead of being
   // dropped. Forces a rebuild so existing installs pick up the missing accounts.
-  const transactionSchemaVersion = 14;
+  // Bumped 14 -> 15: incremental sync no longer wipes previously discovered
+  // accounts. Persistence switched from a destructive delete-and-replace to a
+  // non-destructive merge upsert (ISSUE-1). Forces a one-time full rescan so
+  // existing installs that had already lost balance/interest-only savings
+  // accounts on a prior incremental sync repopulate them.
+  const transactionSchemaVersion = 15;
   final needsRescan =
       (prefs.getInt('categorizer_version') ?? 0) < categorizerVersion ||
       (prefs.getInt('transaction_schema_version') ?? 0) <
