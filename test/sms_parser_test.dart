@@ -447,6 +447,45 @@ void main() {
       expect(parsed.isCredit, false);
       expect(parsed.merchant.toLowerCase(), contains('mcdonalds'));
     });
+
+    // ISSUE-3: personal 10-digit senders never send real bank alerts. A scam
+    // text mimicking a debit alert must be rejected even though it carries a
+    // completed-transaction phrase ("debited").
+    test('rejects personal-number sender mimicking a bank debit', () {
+      expect(
+        SmsParser.isRealTransactionSms(
+          '+919876543210',
+          'Rs.4,999 debited from your a/c XX1234. Call to reverse.',
+        ),
+        isFalse,
+      );
+      expect(
+        SmsParser.parse(_msg(
+          sender: '9876543210',
+          body: 'Rs.4,999 debited from your a/c XX1234. Call to reverse.',
+        )),
+        isNull,
+      );
+    });
+
+    // The SAME body from a registered DLT bank header is a legitimate alert and
+    // must still parse — the fix keys on the sender, not the body.
+    test('accepts DLT bank sender with the same debit body', () {
+      expect(
+        SmsParser.isRealTransactionSms(
+          'VM-HDFCBK',
+          'Rs.4,999 debited from your a/c XX1234 on 07-Jul-26.',
+        ),
+        isTrue,
+      );
+      final parsed = SmsParser.parse(_msg(
+        sender: 'VM-HDFCBK',
+        body: 'Rs.4,999 debited from your a/c XX1234 on 07-Jul-26.',
+      ));
+      expect(parsed, isNotNull);
+      expect(parsed!.amount, 4999);
+      expect(parsed.isCredit, false);
+    });
   });
 }
 

@@ -58,7 +58,12 @@ Future<void> main() async {
   // removed) so Dart is the single source of truth (ISSUE-2). Forces a rescan
   // so promo/scam SMS that slipped past the weaker native-only gate on existing
   // installs are re-filtered out.
-  const transactionSchemaVersion = 16;
+  // Bumped 16 -> 17: isRealTransactionSms now rejects personal 10-digit senders
+  // BEFORE the completed-transaction-signal shortcut, so scam SMS from personal
+  // numbers that mimic bank alerts ("Rs.X debited from a/c XX1234") are no
+  // longer accepted (ISSUE-3). Forces a rescan so any such rows already stored
+  // are removed.
+  const transactionSchemaVersion = 17;
   final needsRescan =
       (prefs.getInt('categorizer_version') ?? 0) < categorizerVersion ||
       (prefs.getInt('transaction_schema_version') ?? 0) <

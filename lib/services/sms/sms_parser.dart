@@ -164,9 +164,14 @@ class SmsParser {
     if (isNonBankWalletMovement(trimmed)) return false;
     if (isPromoOrOfferSms(trimmed, sender: sender)) return false;
 
-    if (hasCompletedTransactionSignal(trimmed)) return true;
-
+    // Transactional bank/UPI alerts in India are delivered from registered DLT
+    // sender headers (e.g. VM-HDFCBK), never from personal 10-digit numbers.
+    // Reject personal senders BEFORE the completed-signal shortcut, otherwise a
+    // scam text from a personal number that mimics a real alert ("Rs.4,999
+    // debited from a/c XX1234") would be accepted as a transaction. See ISSUE-3.
     if (isPersonalPhoneSender(sender)) return false;
+
+    if (hasCompletedTransactionSignal(trimmed)) return true;
 
     if (isFinancialSender(sender) &&
         _bankAlertPattern.hasMatch(trimmed) &&

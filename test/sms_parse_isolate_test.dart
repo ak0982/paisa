@@ -100,5 +100,21 @@ void main() {
 
       expect(hits, isEmpty);
     });
+
+    // ISSUE-3: an SMS from a personal 10-digit number that mimics a bank debit
+    // alert must be rejected by the isolate gate (personal senders never send
+    // real bank alerts in India).
+    test('rejects personal-number fake debit in isolate (ISSUE-3)', () async {
+      final hits = await parseCandidatesInIsolate([
+        {
+          'id': '4',
+          'sender': '+919876543210',
+          'body': 'Rs.4,999 debited from your a/c XX1234. Call to reverse.',
+          'timestampMs': DateTime(2026, 7, 7).millisecondsSinceEpoch,
+        },
+      ]);
+
+      expect(hits, isEmpty);
+    });
   });
 }
