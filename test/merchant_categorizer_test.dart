@@ -5,7 +5,7 @@ import 'package:paisa_app/services/sms/merchant_categorizer.dart';
 
 void main() {
   group('MerchantCategorizer', () {
-    test('classifies Kotak NACH EMI as emi not transfer', () {
+    test('classifies Kotak NACH without loan wording as bills not emi', () {
       expect(
         MerchantCategorizer.categorize(
           merchant: 'NACH-10-HDFC BANK LIMITED Kotak Bank',
@@ -13,7 +13,7 @@ void main() {
               'INR 25,797.00 is debited to your Account XXXXXX3649 on 07/12/2025 towards NACH-10-HDFC BANK LIMITED Kotak Bank',
           isCredit: false,
         ),
-        SpendCategory.emi,
+        SpendCategory.bills,
       );
     });
 

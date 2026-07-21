@@ -49,7 +49,7 @@ class MerchantCategorizer {
     SpendCategory.bills: [
       'jio',
       'airtel',
-      'vi ',
+      'vi',
       'vodafone',
       'bsnl',
       'recharge',
@@ -59,7 +59,8 @@ class MerchantCategorizer {
       'gas bill',
       'broadband',
       'act fibernet',
-      'bbps',
+      // 'bbps' removed (ISSUE-13): BBPS card-bill debits are transfers, checked
+      // via _looksLikeTransfer before the keyword loop.
     ],
     SpendCategory.entertainment: [
       'netflix',
@@ -75,17 +76,14 @@ class MerchantCategorizer {
       'emi of',
       'emi due',
       'emi reminder',
-      'nach-',
-      'nach ',
-      'towards nach',
       'home loan',
       'personal loan',
       'car loan',
       'loan instalment',
       'loan installment',
       'loan a/c',
-      'hdfc bank limited',
-      'tp ach',
+      // Personal NACH merchant strings / "hdfc bank limited" / "tp ach" removed
+      // (ISSUE-13) — those misfired every HDFC NACH (SIPs, insurance) as EMI.
     ],
     SpendCategory.health: [
       'apollo',
@@ -116,6 +114,35 @@ class MerchantCategorizer {
     ],
   };
 
+  /// Short tokens that false-fire as substrings (ola⊂Cola, jio⊂Jiomart, …).
+  /// Matched with word boundaries; longer brand names keep substring match so
+  /// composites like "IRCTCAutoPe" still hit "irctc".
+  static const _wordBoundedKeywords = <String>{
+    'ola',
+    'jio',
+    'food',
+    'metro',
+    'cafe',
+    'atm',
+    'vi',
+    'fuel',
+    'pvr',
+    'kfc',
+  };
+
+  static final Map<String, RegExp> _boundedPatterns = {
+    for (final kw in _wordBoundedKeywords)
+      kw: RegExp('\\b${RegExp.escape(kw)}\\b', caseSensitive: false),
+  };
+
+  static bool _keywordHits(String haystack, String keyword) {
+    final kw = keyword.trim().toLowerCase();
+    if (kw.isEmpty) return false;
+    final bounded = _boundedPatterns[kw];
+    if (bounded != null) return bounded.hasMatch(haystack);
+    return haystack.contains(kw);
+  }
+
   static bool _isCreditCardPaymentCredit(String haystack) {
     if (!haystack.contains('credit card') &&
         !haystack.contains('bobcard') &&
@@ -135,7 +162,7 @@ class MerchantCategorizer {
         m == 'credit received' ||
         m == 'transfer' ||
         m.startsWith('trf to ') ||
-        m == 'nach-10-hdfc bank limited kotak bank';
+        m.startsWith('nach');
   }
 
   /// P2P/UPI moves, account-to-account, and card-bill payments — Transfer.
@@ -150,6 +177,7 @@ class MerchantCategorizer {
     }
 
     if (haystack.contains('ccbp') ||
+        haystack.contains('bbps') ||
         merchant.toLowerCase().contains('ccbp') ||
         merchant.toLowerCase().contains('mobikwikccbp')) {
       return true;
@@ -184,6 +212,18 @@ class MerchantCategorizer {
             .hasMatch(haystack);
   }
 
+  static bool _hasExplicitLoanSignal(String haystack) {
+    return haystack.contains('home loan') ||
+        haystack.contains('personal loan') ||
+        haystack.contains('car loan') ||
+        haystack.contains('housing loan') ||
+        haystack.contains('loan instalment') ||
+        haystack.contains('loan installment') ||
+        haystack.contains('loan a/c') ||
+        haystack.contains('emi of') ||
+        haystack.contains('emi due');
+  }
+
   static SpendCategory categorize({
     required String merchant,
     required String smsBody,
@@ -202,7 +242,7 @@ class MerchantCategorizer {
 
     if (isCredit) {
       for (final keyword in _rules[SpendCategory.income]!) {
-        if (haystack.contains(keyword)) {
+        if (_keywordHits(haystack, keyword)) {
           return SpendCategory.income;
         }
       }
@@ -213,17 +253,26 @@ class MerchantCategorizer {
       }
     }
 
+    // ISSUE-13: check transfers BEFORE keyword rules so BBPS/CCBP card-bill
+    // debits are not swallowed by the old 'bbps' → bills keyword.
+    if (!isCredit && _looksLikeTransfer(merchant, haystack)) {
+      return SpendCategory.transfer;
+    }
+
+    // Unknown NACH/ECS autopay without an explicit loan signal → bills, not EMI.
+    if (!isCredit &&
+        RegExp(r'\bnach\b|\becs\b', caseSensitive: false).hasMatch(haystack) &&
+        !_hasExplicitLoanSignal(haystack)) {
+      return SpendCategory.bills;
+    }
+
     for (final entry in _rules.entries) {
       if (entry.key == SpendCategory.income) continue;
       for (final keyword in entry.value) {
-        if (haystack.contains(keyword)) {
+        if (_keywordHits(haystack, keyword)) {
           return entry.key;
         }
       }
-    }
-
-    if (!isCredit && _looksLikeTransfer(merchant, haystack)) {
-      return SpendCategory.transfer;
     }
 
     return SpendCategory.other;

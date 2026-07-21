@@ -351,29 +351,27 @@ abstract final class TransactionEnrichment {
 
   static String? loanLabelFromBody(String body) {
     final lower = body.toLowerCase();
-    if (lower.contains('nach-10-hdfc') ||
-        lower.contains('hdfc bank limited')) {
-      return 'HDFC Home Loan EMI';
-    }
-    if (lower.contains('tp ach icici') ||
-        lower.contains('nach-10-tp ach icici')) {
-      return 'ICICI Personal Loan EMI';
-    }
-    if (lower.contains('idfc first bank')) {
-      return 'IDFC Loan EMI';
-    }
+    // Prefer explicit product wording over personal NACH merchant strings
+    // (ISSUE-13). Unknown NACH becomes a generic label — never "HDFC Home Loan
+    // EMI" just because the mandate mentions HDFC.
     if (lower.contains('ecs/nach dishonored')) {
       return 'NACH return charges';
-    }
-    if (lower.contains('against your loan ac') ||
-        (lower.contains('depositing') && lower.contains('loan ac'))) {
-      return 'PNB Loan payment';
     }
     if (lower.contains('home loan') || lower.contains('housing loan')) {
       return 'Home loan EMI';
     }
     if (lower.contains('personal loan')) return 'Personal loan EMI';
     if (lower.contains('car loan')) return 'Car loan EMI';
+    if (lower.contains('against your loan ac') ||
+        (lower.contains('depositing') && lower.contains('loan ac'))) {
+      return 'Loan payment';
+    }
+    if (RegExp(r'\bnach\b|\becs\b', caseSensitive: false).hasMatch(lower)) {
+      return 'NACH debit';
+    }
+    if (lower.contains('loan ac') || lower.contains('loan a/c')) {
+      return 'Loan EMI';
+    }
     return null;
   }
 
