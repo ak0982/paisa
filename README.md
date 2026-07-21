@@ -6,6 +6,8 @@ It is purpose‑built for **Indian banks and payment providers** (HDFC, SBI, ICI
 
 > **Private / personal project.** This is a personal-use application. No SMS content, account masks, or other personal data is committed to this repository. All SMS parsing happens locally on the device.
 
+> **AI agents:** see [`AGENTS.md`](AGENTS.md) for an AI-oriented project context & handoff (architecture, history of what's been tried, known issues, conventions).
+
 ---
 
 ## Table of contents
