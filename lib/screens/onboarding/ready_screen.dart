@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../main.dart' show categorizerVersion, transactionSchemaVersion;
 import '../../providers/finance_store.dart';
 import '../../theme/paisa_colors.dart';
 import '../../theme/paisa_theme.dart';
@@ -55,7 +56,14 @@ class _ReadyScreenState extends State<ReadyScreen> {
   Future<void> _goToDashboard() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_complete', true);
+    // ISSUE-7: onboarding just performed the initial full scan of the whole
+    // inbox, so stamp the current versions and clear any pending launch rescan.
+    // Otherwise MainShell would immediately wipe-and-rescan the data we just
+    // built.
+    await prefs.setInt('categorizer_version', categorizerVersion);
+    await prefs.setInt('transaction_schema_version', transactionSchemaVersion);
     if (!mounted) return;
+    context.read<FinanceStore>().markLaunchScanSatisfied();
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(builder: (_) => const MainShell()),
       (_) => false,

@@ -109,6 +109,49 @@ class FinanceStore extends ChangeNotifier {
     return _activeSync ??= _runSync().whenComplete(() => _activeSync = null);
   }
 
+  // --- Launch scan coordination (ISSUE-7) ---
+  //
+  // A schema/categorizer version bump requires a one-time full rescan. This
+  // used to run in main() *before* runApp, which froze the splash for the whole
+  // (multi-year) scan and, on fresh installs, popped the OS permission dialog
+  // over a dead screen instead of the onboarding flow. Instead, main() records
+  // the decision here and the app shell runs the scan after the first frame
+  // (with the existing progress UI). Version stamps are persisted only after the
+  // rescan future completes, so a process death mid-scan retries next launch.
+  bool _pendingFullRescan = false;
+  Future<void> Function()? _persistScanVersions;
+
+  /// Records whether the next launch scan should be a full rescan (schema bump)
+  /// and how to persist the version stamps once it completes. Called from
+  /// main() before runApp.
+  void configureLaunchScan({
+    required bool needsRescan,
+    required Future<void> Function() persistVersions,
+  }) {
+    _pendingFullRescan = needsRescan;
+    _persistScanVersions = persistVersions;
+  }
+
+  /// Marks the pending launch rescan as already satisfied (e.g. onboarding just
+  /// performed the initial full scan), so the app shell won't wipe-and-rescan
+  /// again on first entry.
+  void markLaunchScanSatisfied() {
+    _pendingFullRescan = false;
+  }
+
+  /// Runs the appropriate scan for app launch, invoked from the shell after the
+  /// first frame. Full rescan when a schema/categorizer bump is pending, else a
+  /// normal incremental sync.
+  Future<ScanResult> runLaunchScan() async {
+    if (_pendingFullRescan) {
+      _pendingFullRescan = false;
+      final result = await fullRescanFromSms();
+      await _persistScanVersions?.call();
+      return result;
+    }
+    return syncFromSms();
+  }
+
   /// Re-reads the full SMS inbox from scratch and refreshes every stored
   /// transaction (e.g. after parser improvements).
   ///

@@ -32,7 +32,9 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<FinanceStore>().syncFromSms();
+      // ISSUE-7: runs a full rescan when a schema/categorizer bump is pending
+      // (with progress UI), otherwise a normal incremental sync.
+      context.read<FinanceStore>().runLaunchScan();
     });
   }
 
