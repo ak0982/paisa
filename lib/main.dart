@@ -67,7 +67,10 @@ const int categorizerVersion = 4;
 // Bumped 19 -> 20: categorizer precision (ISSUE-13) — short keywords use word
 // boundaries (ola⊄Cola, jio⊄Jiomart), BBPS/CCBP debits classify as transfer
 // before bills keywords, and personal NACH→"Home Loan EMI" hardcoding is gone.
-const int transactionSchemaVersion = 20;
+// Bumped 20 -> 21: account-kind evidence and spend stats are keyed by
+// (bank, mask) instead of mask alone, so two banks sharing a last-4 no longer
+// merge into one pooled account (ISSUE-11). Forces a rebuild to re-split.
+const int transactionSchemaVersion = 21;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

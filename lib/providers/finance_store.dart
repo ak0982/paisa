@@ -1160,12 +1160,11 @@ class FinanceStore extends ChangeNotifier {
     // TransactionEnrichment.resolveAccountKind, which understands "spent on your
     // credit card", "BOBCARD", CCBP bill payments, EMI/loan a/c, etc.).
     //
-    // We aggregate both sources per mask and classify by the DOMINANT kind
-    // (balanced voting), so a savings account that occasionally pays a card bill
-    // stays savings while a mask whose activity is genuinely on a card becomes a
-    // card. This is fully generic — it keys on bank + masked last4 and relies
-    // only on the same signals used to classify transactions, with no hardcoded
-    // card numbers.
+    // We aggregate both sources per (bank, mask) and classify by the DOMINANT
+    // kind (balanced voting), so a savings account that occasionally pays a
+    // card bill stays savings while a mask whose activity is genuinely on a
+    // card becomes a card. Keying by bank|mask (ISSUE-11) keeps two banks that
+    // share a last-4 from merging into one pooled account.
     final kinds = _AccountKindEvidence();
     for (final d in merged.values) {
       kinds.addDiscovery(d);
@@ -1174,16 +1173,18 @@ class FinanceStore extends ChangeNotifier {
       kinds.addTransaction(t);
     }
 
-    // Group transactions per mask, routed by the mask's dominant resolved kind
-    // so every mask surfaces as exactly one account of its winning kind.
-    final statsByMask = <String, _SavingsStats>{};
+    // Group transactions per (bank, mask), routed by the dominant resolved kind
+    // so every account surfaces as exactly one row of its winning kind.
+    final statsByKey = <String, _SavingsStats>{};
     for (final t in _transactions) {
       if (hiddenMasks.contains(t.maskedAccount)) continue;
-      final kind = kinds.kindForMask(t.maskedAccount);
+      final kind = kinds.kindFor(t.bank, t.maskedAccount);
       if (!_isAccountTransaction(t.bank, t.maskedAccount, kind)) continue;
 
-      final stats = statsByMask.putIfAbsent(t.maskedAccount, _SavingsStats.new);
+      final key = _AccountKindEvidence.evidenceKey(t.bank, t.maskedAccount);
+      final stats = statsByKey.putIfAbsent(key, _SavingsStats.new);
       stats.bankVotes[t.bank] = (stats.bankVotes[t.bank] ?? 0) + 1;
+      stats.mask = t.maskedAccount;
       stats.activityCount++;
       if (t.isCredit) {
         stats.received += t.amount;
@@ -1192,23 +1193,26 @@ class FinanceStore extends ChangeNotifier {
       }
     }
 
-    for (final mask in statsByMask.keys) {
+    for (final entry in statsByKey.entries) {
+      final stats = entry.value;
+      final mask = stats.mask;
       if (hiddenMasks.contains(mask)) continue;
-      final stats = statsByMask[mask]!;
       if (stats.activityCount < 1) continue;
 
-      final kind = kinds.kindForMask(mask);
-      final bank = kinds.bankForMask(mask, kind) ??
-          stats.bankVotes.entries
-              .reduce((a, b) => a.value >= b.value ? a : b)
-              .key;
-      final key = '${kind.name}|$bank|$mask';
+      final bank = stats.bankVotes.entries
+          .reduce((a, b) => a.value >= b.value ? a : b)
+          .key;
+      final kind = kinds.kindFor(bank, mask);
+      final preferredBank = kinds.bankFor(bank, mask, kind) ?? bank;
+      final key = '${kind.name}|$preferredBank|$mask';
 
       accountsByKey[key] = BankAccount(
-        name: '$bank ${_kindLabel(kind)}',
+        name: '$preferredBank ${_kindLabel(kind)}',
         mask: mask,
-        badge: bank.isNotEmpty ? bank[0].toUpperCase() : _kindBadge(kind),
-        color: _bankColor(bank),
+        badge: preferredBank.isNotEmpty
+            ? preferredBank[0].toUpperCase()
+            : _kindBadge(kind),
+        color: _bankColor(preferredBank),
         receivedTotal: stats.received,
         spentTotal: stats.spent,
         kind: kind,
@@ -1218,20 +1222,21 @@ class FinanceStore extends ChangeNotifier {
 
     for (final d in merged.values) {
       if (hiddenMasks.contains(d.mask)) continue;
-      final resolvedKind = kinds.kindForMask(d.mask);
+      final resolvedKind = kinds.kindFor(d.bank, d.mask);
+      final evidenceKey = _AccountKindEvidence.evidenceKey(d.bank, d.mask);
 
       if (d.kind == AccountKind.savings) {
         // A discovered "savings" mask that transactions prove is a card/loan is
         // handled by the transaction loop above — skip the savings fallback.
         if (resolvedKind != AccountKind.savings) continue;
         if (!_isRealBankAccount(d.bank, d.mask)) continue;
-        if (_walletBanks.contains(d.bank) && !statsByMask.containsKey(d.mask)) {
+        if (_walletBanks.contains(d.bank) && !statsByKey.containsKey(evidenceKey)) {
           continue;
         }
         if (d.smsHits < 2) continue;
         final key = 'savings|${d.bank}|${d.mask}';
         if (accountsByKey.containsKey(key) ||
-            statsByMask.containsKey(d.mask)) {
+            statsByKey.containsKey(evidenceKey)) {
           continue;
         }
         accountsByKey[key] = BankAccount(
@@ -1338,26 +1343,22 @@ class FinanceStore extends ChangeNotifier {
 
 class _SavingsStats {
   final bankVotes = <String, int>{};
+  String mask = '';
   double received = 0;
   double spent = 0;
   int activityCount = 0;
 }
 
-/// Aggregates per-mask evidence for whether an account is a credit card, loan,
-/// or plain savings, combining SMS discoveries with already-classified
+/// Aggregates per-(bank, mask) evidence for whether an account is a credit card,
+/// loan, or plain savings, combining SMS discoveries with already-classified
 /// transactions.
 ///
-/// Classification is by BALANCED VOTING per mask, not "any credit-card evidence
-/// wins". Each transaction contributes one vote for its own resolved
-/// [AccountKind] (the most reliable per-transaction signal), and each SMS
-/// discovery contributes weighted votes. A mask is a credit card / loan only
-/// when that kind is the DOMINANT signal for the mask. This is critical because
-/// a real savings account frequently pays a credit-card bill (CCBP / BBPS /
-/// "trf to credit card") or receives a card-related SMS — those funding-side
-/// transactions must not flip the whole account to "credit card". The card-ness
-/// of a bill payment belongs to the card, not the savings account it was paid
-/// from, so a mask dominated by ordinary bank movement (UPI/NEFT/IMPS/salary/
-/// ATM) stays savings.
+/// Classification is by BALANCED VOTING per account key (`bank|mask`), not
+/// "any credit-card evidence wins". Each transaction contributes one vote for
+/// its own resolved [AccountKind], and each SMS discovery contributes weighted
+/// votes. A mask is a credit card / loan only when that kind is the DOMINANT
+/// signal for that bank+mask. Keying by bank|mask (ISSUE-11) prevents two
+/// different banks that happen to share a last-4 from pooling votes / totals.
 class _AccountKindEvidence {
   final _cc = <String, int>{};
   final _loan = <String, int>{};
@@ -1365,23 +1366,32 @@ class _AccountKindEvidence {
   final _ccBankVotes = <String, Map<String, int>>{};
   final _loanBankVotes = <String, Map<String, int>>{};
 
+  /// Composite evidence key. Falls back to mask-only when the bank is unknown
+  /// so sparse rows still participate.
+  static String evidenceKey(String bank, String mask) {
+    if (bank.isEmpty || bank == 'Bank') return mask;
+    return '$bank|$mask';
+  }
+
   void addDiscovery(DiscoveredAccount d) {
     if (d.mask.isEmpty) return;
+    final key = evidenceKey(d.bank, d.mask);
     final weight = d.smsHits < 1 ? 1 : d.smsHits;
     switch (d.kind) {
       case AccountKind.creditCard:
-        _cc[d.mask] = (_cc[d.mask] ?? 0) + weight;
-        _vote(_ccBankVotes, d.mask, d.bank, weight);
+        _cc[key] = (_cc[key] ?? 0) + weight;
+        _vote(_ccBankVotes, key, d.bank, weight);
       case AccountKind.loan:
-        _loan[d.mask] = (_loan[d.mask] ?? 0) + weight;
-        _vote(_loanBankVotes, d.mask, d.bank, weight);
+        _loan[key] = (_loan[key] ?? 0) + weight;
+        _vote(_loanBankVotes, key, d.bank, weight);
       case AccountKind.savings:
-        _savings[d.mask] = (_savings[d.mask] ?? 0) + weight;
+        _savings[key] = (_savings[key] ?? 0) + weight;
     }
   }
 
   void addTransaction(Transaction t) {
     if (t.maskedAccount.isEmpty) return;
+    final key = evidenceKey(t.bank, t.maskedAccount);
     switch (t.accountKind) {
       case AccountKind.creditCard:
         // A credit-card bill PAID FROM a bank account (CCBP/BBPS debit) is a
@@ -1390,60 +1400,46 @@ class _AccountKindEvidence {
         // savings account into a credit card. Genuine on-card activity (spends,
         // payments received on the card) still votes credit card.
         if (_isFundingSideBillPayment(t)) {
-          _savings[t.maskedAccount] = (_savings[t.maskedAccount] ?? 0) + 1;
+          _savings[key] = (_savings[key] ?? 0) + 1;
         } else {
-          _cc[t.maskedAccount] = (_cc[t.maskedAccount] ?? 0) + 1;
-          _vote(_ccBankVotes, t.maskedAccount, t.bank, 1);
+          _cc[key] = (_cc[key] ?? 0) + 1;
+          _vote(_ccBankVotes, key, t.bank, 1);
         }
       case AccountKind.loan:
-        _loan[t.maskedAccount] = (_loan[t.maskedAccount] ?? 0) + 1;
-        _vote(_loanBankVotes, t.maskedAccount, t.bank, 1);
+        _loan[key] = (_loan[key] ?? 0) + 1;
+        _vote(_loanBankVotes, key, t.bank, 1);
       case AccountKind.savings:
-        _savings[t.maskedAccount] = (_savings[t.maskedAccount] ?? 0) + 1;
+        _savings[key] = (_savings[key] ?? 0) + 1;
     }
   }
 
   /// True when a credit-card-kind transaction is really a bill payment made
   /// FROM a bank (funding) account rather than activity on the card itself.
-  ///
-  /// The enrichment layer labels CCBP debits "Credit card bill payment". When
-  /// such a debit could not be routed to a specific discovered card it stays on
-  /// the funding account's own mask — that outflow is savings-side money
-  /// movement, so it must not count as evidence that the mask is a card.
   static bool _isFundingSideBillPayment(Transaction t) {
     if (t.isCredit) return false;
     return t.merchant.toLowerCase().contains('credit card bill payment');
   }
 
-  AccountKind kindForMask(String mask) {
-    final cc = _cc[mask] ?? 0;
-    final loan = _loan[mask] ?? 0;
-    final savings = _savings[mask] ?? 0;
+  AccountKind kindFor(String bank, String mask) {
+    final key = evidenceKey(bank, mask);
+    final cc = _cc[key] ?? 0;
+    final loan = _loan[key] ?? 0;
+    final savings = _savings[key] ?? 0;
 
-    // No specific (card/loan) evidence at all → plain savings.
     if (cc == 0 && loan == 0) return AccountKind.savings;
 
-    // Balanced voting: classify by the DOMINANT resolved kind for this mask.
-    //
-    //  - Credit card wins only when on-card votes strictly exceed savings votes
-    //    (and are at least as strong as loan votes). A savings account with many
-    //    UPI/NEFT/salary rows that merely paid a few card bills keeps its
-    //    savings majority and stays savings.
-    //  - Loan wins only when loan votes strictly exceed savings AND credit-card
-    //    votes, so a single NACH/ECS loan EMI debited from a savings account
-    //    does not flip it to "loan".
-    //  - Ties and savings-dominant masks fall through to savings.
     if (cc >= loan && cc > savings) return AccountKind.creditCard;
     if (loan > cc && loan > savings) return AccountKind.loan;
     return AccountKind.savings;
   }
 
-  /// Preferred bank for a mask, using discovered/transaction bank votes for the
-  /// resolved kind. Returns null when there is no vote (caller falls back).
-  String? bankForMask(String mask, AccountKind kind) {
+  /// Preferred bank for an evidence key, using discovered/transaction bank
+  /// votes for the resolved kind. Returns null when there is no vote.
+  String? bankFor(String bank, String mask, AccountKind kind) {
+    final key = evidenceKey(bank, mask);
     final votes = switch (kind) {
-      AccountKind.creditCard => _ccBankVotes[mask],
-      AccountKind.loan => _loanBankVotes[mask],
+      AccountKind.creditCard => _ccBankVotes[key],
+      AccountKind.loan => _loanBankVotes[key],
       AccountKind.savings => null,
     };
     if (votes == null || votes.isEmpty) return null;
@@ -1452,12 +1448,12 @@ class _AccountKindEvidence {
 
   static void _vote(
     Map<String, Map<String, int>> target,
-    String mask,
+    String key,
     String bank,
     int weight,
   ) {
     if (bank.isEmpty) return;
-    final votes = target.putIfAbsent(mask, () => <String, int>{});
+    final votes = target.putIfAbsent(key, () => <String, int>{});
     votes[bank] = (votes[bank] ?? 0) + weight;
   }
 }
