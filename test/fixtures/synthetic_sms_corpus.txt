@@ -1,0 +1,19 @@
+# Synthetic Indian bank / UPI SMS corpus for CI (ISSUE-16).
+# Modeled on real templates; no personal names, phones, or real account data.
+# Format: sender<TAB>body  (one message per line; blank lines and # comments ignored)
+
+# --- Real transaction templates (must parse) ---
+VM-HDFCBK	Sent Rs.486.00 from a/c **4321 to Swiggy on 07-Jul-26 UPI ref 5521.
+SBIINB	Dear SBI User, Rs.2,499.00 debited from A/c XX8890 on 06Jul26. Info: AMAZON.IN Avl Bal Rs.10,000.00
+ICICIT	ICICI Bank Acct XX4321 debited for Rs 850.00 on 03-Jul-26; MERCHANT XYZ credited. Avl Bal Rs.5,000.00
+AX-AXISBK	INR 1,200.00 spent on your Axis Bank Credit Card ending XX8341 at IRCTC on 05-Jul-26.
+VM-KOTAKB	Rs.500.00 credited to your Kotak Bank a/c XX3649 via NEFT from EMPLOYER PVT LTD on 01-Jul-26.
+
+# --- Promo / scam (must NOT parse) ---
++919876543210	Congrats, Y0UR Received Rs.542000 L0AN is Approve on 11-10-2O24. Zero document. Withdraw direct T0 Y0UR A/c.
+VM-HDFCBK	Pre-approved personal loan of Rs.5,00,000 waiting for you. Apply now on HDFC NetBanking.
+SBIINB	Congratulations! You are eligible for SBI Credit Card. Click here to apply.
+AX-PROMO	Grab Deals this weekend! Flat 50% off. Shop now.
+
+# --- OTP only (must NOT parse) ---
+VM-HDFCBK	Your OTP for login is 482913. Do not share with anyone. Valid for 10 minutes.

@@ -280,7 +280,10 @@ SBI/HDFC beneficiary account, or LenDenClub settlement alerts.
   `~/Downloads/my_sms.txt` (and `~/Downloads/my_sms_live.txt`) that is **NOT in the repo**, so
   **real-device variance** can differ from test results. There is also a git-ignored
   `my_sms_live.txt` at repo root used locally — **never commit it**.
-- **No CI configured.** Tests must be run locally (`flutter test`).
+- **CI:** GitHub Action `.github/workflows/flutter_ci.yml` runs `flutter analyze` +
+  `flutter test` on push/PR to `main`. Dump-dependent suites skip when the private
+  SMS dump is absent; `test/fixtures/synthetic_sms_corpus.txt` keeps gate coverage
+  always-on (ISSUE-16).
 - **In-code TODO-ish markers.** No literal `TODO/FIXME` tags exist in `lib/`; the only matches
   are `XX`/`XXXX` mask literals inside regex comments (`sms_parser.dart`, `account_discovery.dart`).
   Grep before assuming: `rg -n "TODO|FIXME|HACK" lib/`.
