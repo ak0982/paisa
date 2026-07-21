@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:paisa_app/data/sms_scan_state.dart';
-import 'package:paisa_app/services/sms/parsed_sms_transaction.dart';
 import 'package:paisa_app/services/sms/sms_parse_isolate.dart';
 import 'package:paisa_app/services/sms/sms_reader_service.dart';
 
@@ -77,6 +76,24 @@ void main() {
           'body':
               'Dear Customer, Get pre-approved Personal Loan of Rs.5,00,000. '
               'Apply now.',
+          'timestampMs': DateTime(2026, 7, 7).millisecondsSinceEpoch,
+        },
+      ]);
+
+      expect(hits, isEmpty);
+    });
+
+    // ISSUE-2: the full Dart pipeline (promo / scam / transaction-signal gate)
+    // must run in the isolate, not just SmsParser.parseTransaction. A known scam
+    // template with obfuscated keywords and a fake credit must NOT become a hit.
+    test('rejects obfuscated scam SMS in isolate (ISSUE-2)', () async {
+      final hits = await parseCandidatesInIsolate([
+        {
+          'id': '3',
+          'sender': 'VM-000000',
+          'body':
+              'Your L0AN is appr0ved! Rs 50,000 credited to your wallet a/c. '
+              'Withdraw t0 your bank now. Tap here to claim.',
           'timestampMs': DateTime(2026, 7, 7).millisecondsSinceEpoch,
         },
       ]);

@@ -106,8 +106,16 @@ Android SMS inbox (platform channel: com.paisa.paisa_app/sms)
   → UI                          screens render via provider
 ```
 Scanning is **two-pass** and uses a **background isolate** (`sms_parse_isolate.dart`): pass 1
-collects candidates, learns bank ownership, runs discovery; pass 2 parses in the isolate so the
-UI stays responsive on large inboxes, with checkpointing (`sms_scan_state.dart`) for resume.
+collects candidates, learns bank ownership, runs discovery; pass 2 runs the **full staged Dart
+gate** (`SmsScanPipeline.process`) and parses in the isolate so the UI stays responsive on large
+inboxes, with checkpointing (`sms_scan_state.dart`) for resume.
+
+> **Single source of truth for filtering (ISSUE-2 fix):** the native Kotlin filter
+> (`SmsNativeFilter`) is now only a **coarse thinner** (financial-sender / length / OTP) that
+> keeps obviously-irrelevant SMS off the platform channel. The authoritative promo / scam /
+> personal-sender / transaction-signal gate lives in **Dart** (`SmsScanPipeline` + `SmsParser`)
+> and re-runs on **every** candidate inside the parse isolate. Over-returning candidates from
+> native is safe — Dart re-gates. Do **not** re-add promo/scam logic to Kotlin; it would drift.
 
 ### `transactionSchemaVersion` (critical)
 `lib/main.dart` defines `const transactionSchemaVersion` (currently **14**) and

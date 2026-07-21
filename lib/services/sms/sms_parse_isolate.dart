@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'parsed_sms_transaction.dart';
-import 'sms_parser.dart';
+import 'sms_scan_pipeline.dart';
 
 /// Parsed SMS hit returned from a background isolate.
 class SmsParseHit {
@@ -62,8 +62,14 @@ List<SmsParseHit> _parseCandidates(List<Map<String, dynamic>> candidates) {
       timestamp: DateTime.fromMillisecondsSinceEpoch(raw['timestampMs'] as int),
     );
 
-    final parsed = SmsParser.parseTransaction(message);
-    if (parsed == null) continue;
+    // Run the FULL staged Dart gate (OTP / promo / scam / transaction-signal)
+    // before parsing. The native pre-filter is only a coarse thinner now, so
+    // this isolate is the single source of truth for what becomes a
+    // transaction on-device — matching what the test suite validates. See
+    // ISSUE-2. Cheap: candidates are already pre-thinned natively.
+    final result = SmsScanPipeline.process(message);
+    if (!result.isParsed) continue;
+    final parsed = result.transaction!;
 
     hits.add(
       SmsParseHit(

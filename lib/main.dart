@@ -51,7 +51,14 @@ Future<void> main() async {
   // non-destructive merge upsert (ISSUE-1). Forces a one-time full rescan so
   // existing installs that had already lost balance/interest-only savings
   // accounts on a prior incremental sync repopulate them.
-  const transactionSchemaVersion = 15;
+  // Bumped 15 -> 16: the background parse isolate now runs the full staged Dart
+  // gate (SmsScanPipeline: OTP / promo / scam-obfuscation / transaction-signal)
+  // before parsing, instead of calling SmsParser.parseTransaction directly. The
+  // native Kotlin filter is demoted to a coarse thinner (promo/scam logic
+  // removed) so Dart is the single source of truth (ISSUE-2). Forces a rescan
+  // so promo/scam SMS that slipped past the weaker native-only gate on existing
+  // installs are re-filtered out.
+  const transactionSchemaVersion = 16;
   final needsRescan =
       (prefs.getInt('categorizer_version') ?? 0) < categorizerVersion ||
       (prefs.getInt('transaction_schema_version') ?? 0) <

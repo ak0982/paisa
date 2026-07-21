@@ -1,8 +1,16 @@
 package com.paisa.paisa_app
 
 /**
- * Fast on-device pre-filter for bank / UPI SMS (stages 1–4).
- * Heavy regex parsing stays in Dart on a background isolate.
+ * Coarse on-device pre-filter for bank / UPI SMS.
+ *
+ * This is ONLY a cheap thinner that keeps obviously non-financial and OTP-only
+ * messages off the platform channel. It intentionally does NOT try to reject
+ * promo / scam SMS or make the final "is this a transaction?" decision — the
+ * authoritative gate (promo, scam-obfuscation, personal-sender, transaction
+ * signal) lives in Dart (`SmsScanPipeline` / `SmsParser`) and re-runs on every
+ * candidate in the background isolate. Over-returning candidates here is safe;
+ * Dart re-gates. Keeping the promo/scam logic in exactly one place (Dart) avoids
+ * the Kotlin/Dart drift that previously let filters disagree. See ISSUE-2.
  */
 object SmsNativeFilter {
     private val senderHints = listOf(
@@ -24,21 +32,6 @@ object SmsNativeFilter {
         "deposited", "upi", "neft", "imps", "rtgs", "a/c", "acct", "account",
         "bal ", "balance", "rs.", "rs ", "inr ", "₹", "credit card", "emi",
         "loan a/c", "card ending"
-    )
-
-    private val promoHints = listOf(
-        "pre-approved", "pre approved", "loan offer", "personal loan",
-        "instant loan", "apply now", "click here", "limited period",
-        "credit card offer", "exclusive offer", "smartemi", "easyemi",
-        "yono offer", "grab deals", "refer and earn", "scratch card",
-        "cashback offer", "kotak 811 offer"
-    )
-
-    private val completedTxnHints = listOf(
-        "debited", "sent rs", "paid to", "paid at", "spent at", "spent on",
-        "withdrawn", "deposited", "neft dr", "neft cr", "imps dr",
-        "imps cr", "rtgs dr", "rtgs cr", "credited to", "payment of",
-        "payment received", "has been received"
     )
 
     fun isFinancialSender(sender: String): Boolean {
@@ -70,13 +63,6 @@ object SmsNativeFilter {
             lower.contains("do not share")
     }
 
-    fun isPromo(sender: String, body: String): Boolean {
-        val lower = body.lowercase()
-        if (completedTxnHints.any { lower.contains(it) }) return false
-        if (promoHints.any { lower.contains(it) }) return true
-        return BankPromoNative.matches(sender, body)
-    }
-
     fun hasTransactionSignal(body: String): Boolean {
         val lower = body.lowercase()
         return bodyTxnHints.any { hint ->
@@ -91,7 +77,12 @@ object SmsNativeFilter {
         }
     }
 
-    /** Stages 1–4: returns true when SMS should be sent to Dart for regex parse. */
+    /**
+     * Coarse pass: returns true when an SMS is worth sending to Dart for the
+     * real (authoritative) gate + regex parse. Keeps obviously non-financial
+     * and OTP-only messages off the channel; promo/scam rejection and the final
+     * transaction decision are deferred to Dart. See ISSUE-2.
+     */
     fun passesPreFilter(sender: String, body: String): Boolean {
         val trimmed = body.trim()
         if (trimmed.length >= 20 && isFinancialSender(sender) && looksLikeOtp(trimmed)) {
@@ -99,45 +90,7 @@ object SmsNativeFilter {
         }
         if (!passesFinancialGate(sender, trimmed)) return false
         if (looksLikeOtp(trimmed)) return false
-        if (isPromo(sender, trimmed)) return false
         if (!hasTransactionSignal(trimmed)) return false
         return true
-    }
-}
-
-/** Bank-specific promo phrases mirrored from Dart [BankPromoFilters]. */
-private object BankPromoNative {
-    private val senderBank = mapOf(
-        "hdfc" to "HDFC", "sbi" to "SBI", "icici" to "ICICI", "axis" to "Axis",
-        "kotak" to "Kotak", "paytm" to "Paytm", "phonepe" to "PhonePe"
-    )
-
-    private val bankPromos = mapOf(
-        "HDFC" to listOf("smartemi", "easyemi", "10x rewards", "millennia offer", "payzapp offer"),
-        "SBI" to listOf("yono offer", "simplyclick", "simplysave", "prime card offer"),
-        "ICICI" to listOf("imobile offer", "amazon pay icici", "coral offer", "ascend offer"),
-        "Axis" to listOf("grab deals", "axis neo offer", "flipkart axis offer"),
-        "Kotak" to listOf("kotak 811 offer", "dream different offer"),
-        "Paytm" to listOf("cashback offer", "refer and earn", "scratch card", "paytm offer"),
-        "PhonePe" to listOf("cashback offer", "refer and earn", "scratch card", "phonepe offer")
-    )
-
-    fun matches(sender: String, body: String): Boolean {
-        val bank = detectBank(sender, body) ?: return false
-        val promos = bankPromos[bank] ?: return false
-        val lower = body.lowercase()
-        return promos.any { lower.contains(it) }
-    }
-
-    private fun detectBank(sender: String, body: String): String? {
-        val s = sender.lowercase()
-        for ((key, bank) in senderBank) {
-            if (s.contains(key)) return bank
-        }
-        val b = body.lowercase()
-        for ((key, bank) in senderBank) {
-            if (b.contains(key)) return bank
-        }
-        return null
     }
 }
