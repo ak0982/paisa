@@ -9,11 +9,17 @@ class Budget {
     required this.category,
     required this.spent,
     required this.limit,
+    this.isUserSet = false,
   });
 
   final SpendCategory category;
   final double spent;
   final double limit;
+
+  /// True when [limit] came from a persisted user-set (or once-seeded) value
+  /// rather than a live auto-suggestion. Seeded limits are stored so they stay
+  /// fixed for the month and can be exceeded — see ISSUE-5.
+  final bool isUserSet;
 
   double get ratio => limit > 0 ? spent / limit : 0;
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/budget.dart';
 import '../providers/finance_store.dart';
 import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
@@ -148,81 +149,89 @@ class BudgetsScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 ...budgets.map((budget) {
                   final info = budget.info;
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 11),
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                    decoration: BoxDecoration(
-                      color: PaisaColors.card,
+                  return Material(
+                    color: Colors.transparent,
+                    child: InkWell(
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: PaisaColors.dividerAlt),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
+                      onTap: () => _editBudgetLimit(context, store, budget),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 11),
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                        decoration: BoxDecoration(
+                          color: PaisaColors.card,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: PaisaColors.dividerAlt),
+                        ),
+                        child: Column(
                           children: [
-                            Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                color: info.tintBg,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(info.emoji,
-                                  style: const TextStyle(fontSize: 17)),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: info.tintBg,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(info.emoji,
+                                      style: const TextStyle(fontSize: 17)),
+                                ),
+                                const SizedBox(width: 11),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        info.label,
+                                        style: PaisaTheme.manrope(
+                                          size: 13.5,
+                                          weight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      Text(
+                                        budget.statusLabel,
+                                        style: PaisaTheme.manrope(
+                                          size: 11,
+                                          color: budget.statusColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                RichText(
+                                  text: TextSpan(
+                                    children: [
+                                      TextSpan(
+                                        text: formatInr(budget.spent),
+                                        style: PaisaTheme.sora(
+                                          size: 14,
+                                          weight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      TextSpan(
+                                        text: ' / ${formatInr(budget.limit)}',
+                                        style: PaisaTheme.manrope(
+                                          size: 11.5,
+                                          weight: FontWeight.w600,
+                                          color: PaisaColors.navInactive,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 11),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    info.label,
-                                    style: PaisaTheme.manrope(
-                                      size: 13.5,
-                                      weight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  Text(
-                                    budget.statusLabel,
-                                    style: PaisaTheme.manrope(
-                                      size: 11,
-                                      color: budget.statusColor,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            RichText(
-                              text: TextSpan(
-                                children: [
-                                  TextSpan(
-                                    text: formatInr(budget.spent),
-                                    style: PaisaTheme.sora(
-                                      size: 14,
-                                      weight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: ' / ${formatInr(budget.limit)}',
-                                    style: PaisaTheme.manrope(
-                                      size: 11.5,
-                                      weight: FontWeight.w600,
-                                      color: PaisaColors.navInactive,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            const SizedBox(height: 12),
+                            PaisaProgressBar(
+                              progress: budget.ratio.clamp(0.0, 1.0),
+                              color: budget.barColor,
+                              height: 7,
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        PaisaProgressBar(
-                          progress: budget.ratio,
-                          color: budget.barColor,
-                          height: 7,
-                        ),
-                      ],
+                      ),
                     ),
                   );
                 }),
@@ -232,6 +241,51 @@ class BudgetsScreen extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+Future<void> _editBudgetLimit(
+  BuildContext context,
+  FinanceStore store,
+  Budget budget,
+) async {
+  final controller = TextEditingController(
+    text: budget.limit.round().toString(),
+  );
+  final saved = await showDialog<double>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('Monthly ${budget.info.label} budget'),
+      content: TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        decoration: const InputDecoration(
+          prefixText: '₹ ',
+          hintText: 'e.g. 5000',
+        ),
+        autofocus: true,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final parsed = double.tryParse(
+              controller.text.replaceAll(',', '').trim(),
+            );
+            if (parsed == null || parsed <= 0) return;
+            Navigator.pop(ctx, parsed);
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    ),
+  );
+  controller.dispose();
+  if (saved != null) {
+    await store.setCategoryBudgetLimit(budget.category, saved);
   }
 }
 

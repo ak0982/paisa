@@ -67,7 +67,118 @@ class FinanceStore extends ChangeNotifier {
     _hasSmsPermission = await _smsReader.hasSmsPermission();
     _transactions = await _db.getAll();
     _discoveredAccounts = await _db.getDiscoveredAccounts();
+    _userBudgetLimits = _parseBudgetLimits(await _db.getCategoryBudgets());
+    // Seed fixed limits for active categories that don't have one yet, so the
+    // Budgets tab is usable before the next SMS sync (ISSUE-5).
+    await ensureDefaultBudgetsSeeded();
     notifyListeners();
+  }
+
+  /// User-set monthly spend limits per category (ISSUE-5). A category present
+  /// here is the user's explicit intent; absent categories fall back to
+  /// [suggestedBudgetLimit]. Persisted in the `category_budgets` table.
+  Map<SpendCategory, double> _userBudgetLimits = {};
+
+  Map<SpendCategory, double> _parseBudgetLimits(Map<String, double> raw) {
+    final result = <SpendCategory, double>{};
+    for (final entry in raw.entries) {
+      for (final category in SpendCategory.values) {
+        if (category.name == entry.key) {
+          result[category] = entry.value;
+          break;
+        }
+      }
+    }
+    return result;
+  }
+
+  /// Persisted monthly limit for [category], or null if none stored yet.
+  double? userBudgetLimit(SpendCategory category) =>
+      _userBudgetLimits[category];
+
+  /// Saves an explicit monthly limit for [category] (ISSUE-5).
+  Future<void> setCategoryBudgetLimit(
+    SpendCategory category,
+    double limit,
+  ) async {
+    final clamped = limit < 100 ? 100.0 : limit;
+    await _db.setCategoryBudget(category.name, clamped);
+    _userBudgetLimits[category] = clamped;
+    notifyListeners();
+  }
+
+  /// Drops the stored limit so the next [ensureDefaultBudgetsSeeded] /
+  /// [budgets] pass can re-suggest from history.
+  Future<void> clearCategoryBudgetLimit(SpendCategory category) async {
+    await _db.deleteCategoryBudget(category.name);
+    _userBudgetLimits.remove(category);
+    notifyListeners();
+  }
+
+  /// Round to the nearest ₹100, floored at ₹1,000.
+  static double roundBudgetLimit(double raw) {
+    final rounded = ((raw / 100).ceil() * 100).toDouble();
+    return rounded < 1000 ? 1000.0 : rounded;
+  }
+
+  /// Suggested monthly limit for [category] from prior months' spend.
+  ///
+  /// Uses the median of the last up-to-3 *complete* months × 1.1 so the
+  /// suggestion does not grow with the current month's own spend (the circular
+  /// bug in ISSUE-5). Falls back to current-month spend × 1.1 only when there
+  /// is no history yet — callers should seed that once so it stays fixed.
+  double suggestedBudgetLimit(SpendCategory category) {
+    final history = <double>[];
+    final anchor = currentMonth;
+    for (var i = 1; i <= 3; i++) {
+      final month = DateTime(anchor.year, anchor.month - i, 1);
+      final spent = _categorySpendInMonth(category, month);
+      if (spent > 0) history.add(spent);
+    }
+    if (history.isNotEmpty) {
+      history.sort();
+      final median = history.length.isOdd
+          ? history[history.length ~/ 2]
+          : (history[history.length ~/ 2 - 1] + history[history.length ~/ 2]) /
+              2;
+      // Use *11/10 (not *1.1) so integer rupee medians stay exact under ceil.
+      return roundBudgetLimit(median * 11 / 10);
+    }
+    final current = categorySpending[category] ?? 0;
+    return roundBudgetLimit(current * 11 / 10);
+  }
+
+  double _categorySpendInMonth(SpendCategory category, DateTime month) {
+    final inMonth = _transactions.where(
+      (t) => t.timestamp.year == month.year && t.timestamp.month == month.month,
+    );
+    return _spendTxns(inMonth.toList())
+        .where((t) => t.category == category)
+        .fold(0.0, (sum, t) => sum + t.amount);
+  }
+
+  /// Seeds a stored limit for every currently-active spend category that does
+  /// not already have one. Called after sync so budgets become fixed user
+  /// intent (editable) instead of a live function of this month's spend.
+  Future<void> ensureDefaultBudgetsSeeded() async {
+    final categories = {
+      ...categorySpending.keys,
+      ..._userBudgetLimits.keys,
+    };
+    var changed = false;
+    for (final category in categories) {
+      if (_userBudgetLimits.containsKey(category)) continue;
+      // Skip non-spend categories that may appear in the map.
+      if (category == SpendCategory.income ||
+          category == SpendCategory.transfer) {
+        continue;
+      }
+      final suggestion = suggestedBudgetLimit(category);
+      await _db.setCategoryBudget(category.name, suggestion);
+      _userBudgetLimits[category] = suggestion;
+      changed = true;
+    }
+    if (changed) notifyListeners();
   }
 
   /// Opens the OS settings page for granting SMS access manually.
@@ -92,8 +203,10 @@ class FinanceStore extends ChangeNotifier {
   Future<void> clearAllData() async {
     await _db.clearAll();
     await _db.resetScanState();
+    await _db.clearCategoryBudgets();
     _transactions = [];
     _discoveredAccounts = [];
+    _userBudgetLimits = {};
     _lastSyncedAt = null;
     _scanProgress = null;
     _error = null;
@@ -322,6 +435,9 @@ class FinanceStore extends ChangeNotifier {
 
       _transactions = await _db.getAll();
       _lastSyncedAt = DateTime.now();
+      // ISSUE-5: persist fixed category limits (from history) so they no longer
+      // track the current month's spend. Existing user-set rows are left alone.
+      await ensureDefaultBudgetsSeeded();
       _loading = false;
       _scanProgress = null;
       notifyListeners();
@@ -903,14 +1019,24 @@ class FinanceStore extends ChangeNotifier {
 
   List<Budget> get budgets {
     final spending = categorySpending;
-    if (spending.isEmpty) return [];
+    final categories = <SpendCategory>{
+      ...spending.keys.where(
+        (c) => c != SpendCategory.income && c != SpendCategory.transfer,
+      ),
+      ..._userBudgetLimits.keys,
+    };
+    if (categories.isEmpty) return [];
 
-    return spending.entries.map((e) {
-      final spent = e.value;
-      // Auto budget: 30% headroom, minimum ₹1,000, rounded to ₹100
-      final limit = ((spent * 1.3) / 100).ceil() * 100;
-      final effectiveLimit = limit < 1000 ? 1000.0 : limit.toDouble();
-      return Budget(category: e.key, spent: spent, limit: effectiveLimit);
+    return categories.map((category) {
+      final spent = spending[category] ?? 0.0;
+      final stored = _userBudgetLimits[category];
+      final limit = stored ?? suggestedBudgetLimit(category);
+      return Budget(
+        category: category,
+        spent: spent,
+        limit: limit,
+        isUserSet: stored != null,
+      );
     }).toList()
       ..sort((a, b) => b.spent.compareTo(a.spent));
   }

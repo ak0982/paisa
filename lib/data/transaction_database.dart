@@ -20,7 +20,7 @@ class TransactionDatabase {
 
   final String? _dbPathOverride;
   Database? _db;
-  static const _dbVersion = 4;
+  static const _dbVersion = 5;
 
   Future<Database> get database async {
     if (_db != null) return _db!;
@@ -38,6 +38,7 @@ class TransactionDatabase {
         await _createV1Tables(db);
         await _createScanStateTable(db);
         await _createDiscoveredAccountsTable(db);
+        await _createCategoryBudgetsTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -50,6 +51,9 @@ class TransactionDatabase {
           await db.execute(
             "ALTER TABLE transactions ADD COLUMN account_kind TEXT NOT NULL DEFAULT 'savings'",
           );
+        }
+        if (oldVersion < 5) {
+          await _createCategoryBudgetsTable(db);
         }
       },
     );
@@ -106,6 +110,51 @@ class TransactionDatabase {
         received_total REAL NOT NULL DEFAULT 0
       )
     ''');
+  }
+
+  Future<void> _createCategoryBudgetsTable(Database db) async {
+    // User-set monthly spending limits per category (ISSUE-5). Absent rows fall
+    // back to an auto-suggested limit computed by FinanceStore; a present row is
+    // the user's explicit intent. `limit` is a SQL keyword, hence limit_amount.
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS category_budgets (
+        category TEXT PRIMARY KEY,
+        limit_amount REAL NOT NULL
+      )
+    ''');
+  }
+
+  /// Returns the user-set monthly limit per category (category name -> amount).
+  Future<Map<String, double>> getCategoryBudgets() async {
+    final db = await database;
+    final rows = await db.query('category_budgets');
+    return {
+      for (final row in rows)
+        row['category'] as String: (row['limit_amount'] as num).toDouble(),
+    };
+  }
+
+  Future<void> setCategoryBudget(String category, double limit) async {
+    final db = await database;
+    await db.insert(
+      'category_budgets',
+      {'category': category, 'limit_amount': limit},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> deleteCategoryBudget(String category) async {
+    final db = await database;
+    await db.delete(
+      'category_budgets',
+      where: 'category = ?',
+      whereArgs: [category],
+    );
+  }
+
+  Future<void> clearCategoryBudgets() async {
+    final db = await database;
+    await db.delete('category_budgets');
   }
 
   Future<void> upsert(models.Transaction tx) async {
