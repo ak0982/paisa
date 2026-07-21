@@ -9,6 +9,7 @@ import '../models/range_report.dart';
 import '../models/transaction.dart';
 import '../data/transaction_database.dart';
 import '../data/sms_scan_state.dart';
+import '../services/sms/account_bank_registry.dart';
 import '../services/sms/account_discovery.dart';
 import '../services/sms/merchant_categorizer.dart';
 import '../services/sms/sms_reader_service.dart';
@@ -223,6 +224,22 @@ class FinanceStore extends ChangeNotifier {
     return _activeSync ??= _runSync().whenComplete(() => _activeSync = null);
   }
 
+  /// Builds last4→bank vote counts from already-stored transactions so an
+  /// incremental scan's AccountBankRegistry is not empty (ISSUE-12).
+  static Map<String, Map<String, int>> _bankVotesFromTransactions(
+    List<Transaction> txns,
+  ) {
+    final votes = <String, Map<String, int>>{};
+    for (final t in txns) {
+      final last4 = AccountBankRegistry.last4FromMask(t.maskedAccount);
+      if (last4 == null) continue;
+      if (t.bank.isEmpty || t.bank == 'Bank') continue;
+      final bucket = votes.putIfAbsent(last4, () => {});
+      bucket[t.bank] = (bucket[t.bank] ?? 0) + 1;
+    }
+    return votes;
+  }
+
   // --- Launch scan coordination (ISSUE-7) ---
   //
   // A schema/categorizer version bump requires a one-time full rescan. This
@@ -307,7 +324,10 @@ class FinanceStore extends ChangeNotifier {
       _permissionPermanentlyDenied = false;
 
       final scanState = await _db.getScanState();
-      final scanOptions = _smsReader.optionsFromState(scanState);
+      final scanOptions = _smsReader.optionsFromState(
+        scanState,
+        seedBankVotes: _bankVotesFromTransactions(_transactions),
+      );
       // Full scan reads the entire inbox (sinceMs == null). We persist 0
       // (epoch) as the effective "since" so it's clear the window is unbounded.
       final sinceMs = scanOptions.sinceMs ?? 0;
