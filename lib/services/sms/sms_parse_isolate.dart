@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'account_bank_registry.dart';
+import 'account_discovery.dart';
 import 'parsed_sms_transaction.dart';
 import 'sms_scan_pipeline.dart';
 
@@ -88,3 +90,67 @@ List<SmsParseHit> _parseCandidates(List<Map<String, dynamic>> candidates) {
 
   return hits;
 }
+
+/// ISSUE-10: discovery + registry learning off the UI isolate.
+///
+/// [payload] keys:
+///   - `allRows`: every SMS row (for AccountDiscovery)
+///   - `candidates`: bank-like candidates (for AccountBankRegistry.learn)
+///   - `seedVotes` (optional): prior votes from stored transactions (ISSUE-12)
+Future<Pass1IsolateResult> discoverAndLearnInIsolate(
+  Map<String, dynamic> payload,
+) {
+  return compute(_discoverAndLearn, payload);
+}
+
+class Pass1IsolateResult {
+  const Pass1IsolateResult({
+    required this.discoveries,
+    required this.votes,
+  });
+
+  final List<DiscoveredAccount> discoveries;
+  final Map<String, Map<String, int>> votes;
+}
+
+Pass1IsolateResult _discoverAndLearn(Map<String, dynamic> payload) {
+  final allRows = (payload['allRows'] as List).cast<Map>();
+  final candidates = (payload['candidates'] as List).cast<Map>();
+  final seedRaw = payload['seedVotes'];
+
+  final registry = AccountBankRegistry();
+  if (seedRaw is Map) {
+    final seed = <String, Map<String, int>>{};
+    for (final entry in seedRaw.entries) {
+      final inner = entry.value;
+      if (inner is! Map) continue;
+      seed[entry.key.toString()] = {
+        for (final v in inner.entries)
+          v.key.toString(): (v.value as num).toInt(),
+      };
+    }
+    registry.seedVotes(seed);
+  }
+
+  final discoveries = <DiscoveredAccount>[];
+  for (final raw in allRows) {
+    final found = AccountDiscovery.discover(
+      sender: raw['sender'] as String? ?? '',
+      body: raw['body'] as String? ?? '',
+    );
+    if (found != null) discoveries.add(found);
+  }
+
+  for (final raw in candidates) {
+    registry.learn(
+      raw['sender'] as String? ?? '',
+      raw['body'] as String? ?? '',
+    );
+  }
+
+  return Pass1IsolateResult(
+    discoveries: discoveries,
+    votes: registry.exportVotes(),
+  );
+}
+

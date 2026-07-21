@@ -46,6 +46,7 @@ class SmsScanOptions {
     this.resumeOffset = 0,
     this.incremental = false,
     this.defaultHistoryMonths = 24,
+    this.seedBankVotes = const {},
   });
 
   final int batchSize;
@@ -53,6 +54,10 @@ class SmsScanOptions {
   final int resumeOffset;
   final bool incremental;
   final int defaultHistoryMonths;
+
+  /// Prior last4→bank votes from stored transactions (ISSUE-12), so incremental
+  /// scans do not start with an empty AccountBankRegistry.
+  final Map<String, Map<String, int>> seedBankVotes;
 
   /// Relative window helper (months ago from now). The full/first scan reads
   /// the entire inbox (sinceMs == null); this is now only used as the
@@ -231,9 +236,11 @@ class SmsReaderService {
     var bankCandidates = 0;
     var scanned = offset;
     final allCandidates = <SmsMessageInput>[];
+    final allRows = <SmsMessageInput>[];
 
-    // Pass 1 — collect bank-like SMS so we can learn which bank owns each
-    // account suffix (e.g. 0429 = SBI even when ICICI sends the alert).
+    // Pass 1 — collect SMS pages (native work is already off the Android main
+    // thread). Discovery + registry learning run in a Dart isolate after the
+    // pages are collected so the UI isolate stays responsive (ISSUE-10).
     while (scanned < total) {
       final batch = await fetchFilteredBatch(
         offset: offset,
@@ -245,14 +252,7 @@ class SmsReaderService {
 
       bankCandidates += batch.candidates.length;
       allCandidates.addAll(batch.candidates);
-
-      for (final message in batch.allRows) {
-        final found = AccountDiscovery.discover(
-          sender: message.sender,
-          body: message.body,
-        );
-        if (found != null) discoveries.add(found);
-      }
+      allRows.addAll(batch.allRows);
 
       offset += batch.rowsRead;
       scanned = offset;
@@ -272,10 +272,21 @@ class SmsReaderService {
       if (!batch.hasMore) break;
     }
 
-    final registry = AccountBankRegistry();
-    for (final message in allCandidates) {
-      registry.learn(message.sender, message.body);
-    }
+    Map<String, dynamic> rowMap(SmsMessageInput m) => {
+          'id': m.id,
+          'sender': m.sender,
+          'body': m.body,
+          'timestampMs': m.timestamp.millisecondsSinceEpoch,
+        };
+
+    final pass1 = await discoverAndLearnInIsolate({
+      'allRows': allRows.map(rowMap).toList(),
+      'candidates': allCandidates.map(rowMap).toList(),
+      'seedVotes': options.seedBankVotes,
+    });
+    discoveries.addAll(pass1.discoveries);
+
+    final registry = AccountBankRegistry()..seedVotes(pass1.votes);
 
     // Pass 2 — parse and attach the correct owning bank per account.
     for (var i = 0; i < allCandidates.length; i += options.batchSize) {
@@ -349,13 +360,17 @@ class SmsReaderService {
   }
 
   /// Builds scan options from persisted state.
-  SmsScanOptions optionsFromState(SmsScanState state) {
+  SmsScanOptions optionsFromState(
+    SmsScanState state, {
+    Map<String, Map<String, int>> seedBankVotes = const {},
+  }) {
     if (state.fullScanComplete && state.resumeOffset == 0) {
       final since = state.lastScanAt?.subtract(const Duration(hours: 1));
       return SmsScanOptions(
         sinceMs: since?.millisecondsSinceEpoch ??
             SmsScanOptions.defaultSinceMs(months: 1),
         incremental: true,
+        seedBankVotes: seedBankVotes,
       );
     }
 
@@ -364,6 +379,7 @@ class SmsReaderService {
       sinceMs: null,
       resumeOffset: state.resumeOffset,
       incremental: false,
+      seedBankVotes: seedBankVotes,
     );
   }
 }

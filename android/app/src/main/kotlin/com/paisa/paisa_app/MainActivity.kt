@@ -6,11 +6,14 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Telephony
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
     private val channelName = "com.paisa.paisa_app/sms"
@@ -21,6 +24,12 @@ class MainActivity : FlutterActivity() {
         Telephony.Sms.BODY,
         Telephony.Sms.DATE
     )
+
+    // ISSUE-10: content-provider reads + native filtering must not run on the
+    // Android main thread (ANR risk on large inboxes). One worker is enough —
+    // batches are already sequential from Dart.
+    private val smsExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -35,7 +44,16 @@ class MainActivity : FlutterActivity() {
                             return@setMethodCallHandler
                         }
                         val sinceMs = call.argument<Number>("sinceMs")?.toLong()
-                        result.success(getInboxCount(sinceMs))
+                        smsExecutor.execute {
+                            try {
+                                val count = getInboxCount(sinceMs)
+                                mainHandler.post { result.success(count) }
+                            } catch (e: Exception) {
+                                mainHandler.post {
+                                    result.error("SMS_COUNT_FAILED", e.message, null)
+                                }
+                            }
+                        }
                     }
                     "scanInboxBatch" -> {
                         if (!hasSmsPermission()) {
@@ -45,7 +63,16 @@ class MainActivity : FlutterActivity() {
                         val offset = call.argument<Int>("offset") ?: 0
                         val limit = call.argument<Int>("limit") ?: 500
                         val sinceMs = call.argument<Number>("sinceMs")?.toLong()
-                        result.success(scanInboxBatch(offset, limit, sinceMs))
+                        smsExecutor.execute {
+                            try {
+                                val payload = scanInboxBatch(offset, limit, sinceMs)
+                                mainHandler.post { result.success(payload) }
+                            } catch (e: Exception) {
+                                mainHandler.post {
+                                    result.error("SMS_SCAN_FAILED", e.message, null)
+                                }
+                            }
+                        }
                     }
                     else -> result.notImplemented()
                 }

@@ -4,6 +4,25 @@
 class AccountBankRegistry {
   final Map<String, Map<String, int>> _votes = {};
 
+  /// Imports previously learned votes (e.g. from stored transactions) so an
+  /// incremental scan does not start with an empty registry (ISSUE-12).
+  void seedVotes(Map<String, Map<String, int>> votes) {
+    for (final entry in votes.entries) {
+      final bucket = _votes.putIfAbsent(entry.key, () => {});
+      for (final bankVote in entry.value.entries) {
+        bucket[bankVote.key] = (bucket[bankVote.key] ?? 0) + bankVote.value;
+      }
+    }
+  }
+
+  /// Snapshot of current votes for isolate round-trips / persistence.
+  Map<String, Map<String, int>> exportVotes() {
+    return {
+      for (final entry in _votes.entries)
+        entry.key: Map<String, int>.from(entry.value),
+    };
+  }
+
   /// Extracts the last four digits from a masked account like `••••0429`.
   static String? last4FromMask(String maskedAccount) {
     final digits = RegExp(r'(\d{4})\s*$').firstMatch(maskedAccount.trim());
