@@ -13,10 +13,9 @@ import '../utils/formatters.dart';
 import 'edit_profile_screen.dart';
 import 'onboarding/welcome_screen.dart';
 import 'settings/help_support_screen.dart';
-import 'settings/notifications_settings_screen.dart';
 import 'settings/privacy_settings_screen.dart';
 
-enum _SettingAction { notifications, rescan, privacy, help, logout }
+enum _SettingAction { rescan, privacy, help, logout }
 
 enum _AccountFilter { all, savings, creditCard, loan }
 
@@ -71,9 +70,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
       return;
     }
-
-    final appSettings = context.read<AppSettings>();
-    if (!appSettings.syncCompleteAlerts) return;
 
     final message = result.newCount > 0
         ? 'Refreshed ${result.totalCount} transactions from ${result.scannedSms} SMS'
@@ -140,12 +136,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _SettingAction action,
   ) {
     switch (action) {
-      case _SettingAction.notifications:
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => const NotificationsSettingsScreen(),
-          ),
-        );
       case _SettingAction.rescan:
         _handleRescan(context, store);
       case _SettingAction.privacy:
@@ -171,13 +161,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Consumer<FinanceStore>(
       builder: (context, store, _) {
         const settings = [
-          _SettingItem(
-            icon: Icons.notifications_outlined,
-            label: 'Notifications',
-            tint: Color(0xFFE7F0FF),
-            iconColor: Color(0xFF3B6FD4),
-            action: _SettingAction.notifications,
-          ),
           _SettingItem(
             icon: Icons.sync,
             label: 'Rescan SMS',

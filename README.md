@@ -104,7 +104,6 @@ flowchart TD
 | `onboarding/profile_setup_screen.dart` | Collects on-device profile details (name + optional email). |
 | `onboarding/sms_permission_screen.dart` | Explains and requests SMS permission. |
 | `onboarding/ready_screen.dart` | Onboarding completion / hand-off to the main shell. |
-| `settings/notifications_settings_screen.dart` | Notification preferences. |
 | `settings/privacy_settings_screen.dart` | Privacy controls (incl. clearing local data). |
 | `settings/help_support_screen.dart` | Help & support. |
 
@@ -289,7 +288,6 @@ dart run flutter_launcher_icons
 Declared in `android/app/src/main/AndroidManifest.xml` and requested at runtime via `permission_handler`:
 
 - `android.permission.READ_SMS`
-- `android.permission.RECEIVE_SMS`
 
 ---
 
@@ -364,7 +362,7 @@ paisa_app/
 │   ├── theme/                          # colors + typography (Sora / Manrope)
 │   └── utils/formatters.dart           # ₹ + date/time formatting
 ├── test/                               # ~353 unit/widget tests
-├── android/                            # Android host (READ_SMS / RECEIVE_SMS)
+├── android/                            # Android host (READ_SMS)
 ├── assets/                             # fonts + app icon
 └── pubspec.yaml
 ```

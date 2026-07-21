@@ -9,53 +9,9 @@ void main() {
   });
 
   group('U01-U14 AppSettings preferences', () {
-    test('U01 budgetAlerts defaults to true', () async {
-      final settings = await AppSettings.load();
-      expect(settings.budgetAlerts, isTrue);
-    });
-
-    test('U02 weeklySummary defaults to true', () async {
-      final settings = await AppSettings.load();
-      expect(settings.weeklySummary, isTrue);
-    });
-
-    test('U03 syncCompleteAlerts defaults to true', () async {
-      final settings = await AppSettings.load();
-      expect(settings.syncCompleteAlerts, isTrue);
-    });
-
     test('U04 maskMerchantNames defaults to false', () async {
       final settings = await AppSettings.load();
       expect(settings.maskMerchantNames, isFalse);
-    });
-
-    test('U05 setBudgetAlerts persists false', () async {
-      final settings = await AppSettings.load();
-      await settings.setBudgetAlerts(false);
-      expect(settings.budgetAlerts, isFalse);
-      final reloaded = await AppSettings.load();
-      expect(reloaded.budgetAlerts, isFalse);
-    });
-
-    test('U06 setBudgetAlerts persists true', () async {
-      final settings = await AppSettings.load();
-      await settings.setBudgetAlerts(false);
-      await settings.setBudgetAlerts(true);
-      expect(settings.budgetAlerts, isTrue);
-    });
-
-    test('U07 setWeeklySummary toggles', () async {
-      final settings = await AppSettings.load();
-      await settings.setWeeklySummary(false);
-      expect(settings.weeklySummary, isFalse);
-      await settings.setWeeklySummary(true);
-      expect(settings.weeklySummary, isTrue);
-    });
-
-    test('U08 setSyncCompleteAlerts toggles', () async {
-      final settings = await AppSettings.load();
-      await settings.setSyncCompleteAlerts(false);
-      expect(settings.syncCompleteAlerts, isFalse);
     });
 
     test('U09 setMaskMerchantNames toggles', () async {
@@ -64,23 +20,6 @@ void main() {
       expect(settings.maskMerchantNames, isTrue);
       final reloaded = await AppSettings.load();
       expect(reloaded.maskMerchantNames, isTrue);
-    });
-
-    test('U10 toggles are independent', () async {
-      final settings = await AppSettings.load();
-      await settings.setBudgetAlerts(false);
-      await settings.setMaskMerchantNames(true);
-      expect(settings.budgetAlerts, isFalse);
-      expect(settings.maskMerchantNames, isTrue);
-      expect(settings.weeklySummary, isTrue);
-    });
-
-    test('U11 setBudgetAlerts notifies listeners', () async {
-      final settings = await AppSettings.load();
-      var notified = false;
-      settings.addListener(() => notified = true);
-      await settings.setBudgetAlerts(false);
-      expect(notified, isTrue);
     });
 
     test('U12 setMaskMerchantNames notifies listeners', () async {
@@ -99,15 +38,9 @@ void main() {
 
     test('U14 restores saved prefs on load', () async {
       SharedPreferences.setMockInitialValues({
-        'notify_budget_alerts': false,
-        'notify_weekly_summary': false,
-        'notify_sync_complete': false,
         'privacy_mask_merchants': true,
       });
       final settings = await AppSettings.load();
-      expect(settings.budgetAlerts, isFalse);
-      expect(settings.weeklySummary, isFalse);
-      expect(settings.syncCompleteAlerts, isFalse);
       expect(settings.maskMerchantNames, isTrue);
     });
   });

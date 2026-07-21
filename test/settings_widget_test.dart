@@ -8,7 +8,6 @@ import 'package:paisa_app/providers/finance_store.dart';
 import 'package:paisa_app/screens/edit_profile_screen.dart';
 import 'package:paisa_app/screens/profile_screen.dart';
 import 'package:paisa_app/screens/settings/help_support_screen.dart';
-import 'package:paisa_app/screens/settings/notifications_settings_screen.dart';
 import 'package:paisa_app/screens/settings/privacy_settings_screen.dart';
 import 'package:paisa_app/widgets/transaction_row.dart';
 
@@ -40,28 +39,18 @@ void main() {
   }
 
   group('U15-U34 Settings & profile widgets', () {
-    testWidgets('U15 Profile shows all five settings rows', (tester) async {
+    testWidgets('U15 Profile shows settings rows', (tester) async {
       await pump(
         tester,
         const ProfileScreen(),
         store: FinanceStore()..seedTransactions(dummyTransactionHistory()),
       );
 
-      expect(find.text('Notifications'), findsOneWidget);
+      expect(find.text('Notifications'), findsNothing);
       expect(find.text('Rescan SMS'), findsOneWidget);
       expect(find.text('Privacy Settings'), findsOneWidget);
       expect(find.text('Help & Support'), findsOneWidget);
       expect(find.text('Logout'), findsOneWidget);
-    });
-
-    testWidgets('U16 Profile navigates to Notifications', (tester) async {
-      await pump(tester, const ProfileScreen(), store: FinanceStore());
-
-      await tester.tap(find.text('Notifications'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Budget alerts'), findsOneWidget);
-      expect(find.byType(NotificationsSettingsScreen), findsOneWidget);
     });
 
     testWidgets('U17 Profile navigates to Privacy Settings', (tester) async {
@@ -118,42 +107,6 @@ void main() {
 
       expect(find.text('Log out?'), findsNothing);
       expect(find.text('Profile'), findsOneWidget);
-    });
-
-    testWidgets('U21 Notifications screen shows three toggles', (tester) async {
-      await pump(tester, const NotificationsSettingsScreen());
-
-      expect(find.text('Budget alerts'), findsOneWidget);
-      expect(find.text('Weekly summary'), findsOneWidget);
-      expect(find.text('SMS scan complete'), findsOneWidget);
-      expect(find.byType(Switch), findsNWidgets(3));
-    });
-
-    testWidgets('U22 Toggle budget alerts off', (tester) async {
-      await pump(tester, const NotificationsSettingsScreen());
-
-      await tester.tap(find.byType(Switch).first);
-      await tester.pumpAndSettle();
-
-      expect(settings.budgetAlerts, isFalse);
-    });
-
-    testWidgets('U23 Toggle weekly summary off', (tester) async {
-      await pump(tester, const NotificationsSettingsScreen());
-
-      await tester.tap(find.byType(Switch).at(1));
-      await tester.pumpAndSettle();
-
-      expect(settings.weeklySummary, isFalse);
-    });
-
-    testWidgets('U24 Toggle SMS scan complete off', (tester) async {
-      await pump(tester, const NotificationsSettingsScreen());
-
-      await tester.tap(find.byType(Switch).at(2));
-      await tester.pumpAndSettle();
-
-      expect(settings.syncCompleteAlerts, isFalse);
     });
 
     testWidgets('U25 Privacy screen shows mask merchant toggle', (tester) async {

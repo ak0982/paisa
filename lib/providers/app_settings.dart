@@ -1,23 +1,22 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// On-device user preferences for notifications and privacy toggles.
+/// On-device user preferences for privacy and profile.
+///
+/// Notification toggles (budget / weekly / sync alerts) were removed in
+/// ISSUE-6: there was no notification package or SMS receiver backing them,
+/// so the settings were placebo. Scan completion still shows an in-app
+/// SnackBar after a manual rescan.
 class AppSettings extends ChangeNotifier {
   AppSettings(this._prefs);
 
   final SharedPreferences _prefs;
 
-  static const _budgetAlertsKey = 'notify_budget_alerts';
-  static const _weeklySummaryKey = 'notify_weekly_summary';
-  static const _syncCompleteKey = 'notify_sync_complete';
   static const _maskMerchantsKey = 'privacy_mask_merchants';
   static const _userNameKey = 'profile_user_name';
   static const _userEmailKey = 'profile_user_email';
   static const _hiddenBankAccountsKey = 'hidden_bank_account_masks';
 
-  bool get budgetAlerts => _prefs.getBool(_budgetAlertsKey) ?? true;
-  bool get weeklySummary => _prefs.getBool(_weeklySummaryKey) ?? true;
-  bool get syncCompleteAlerts => _prefs.getBool(_syncCompleteKey) ?? true;
   bool get maskMerchantNames => _prefs.getBool(_maskMerchantsKey) ?? false;
 
   /// Full name entered during profile setup (empty when not yet set).
@@ -73,21 +72,6 @@ class AppSettings extends ChangeNotifier {
 
   Future<void> unhideAllBankAccounts() async {
     await _prefs.remove(_hiddenBankAccountsKey);
-    notifyListeners();
-  }
-
-  Future<void> setBudgetAlerts(bool value) async {
-    await _prefs.setBool(_budgetAlertsKey, value);
-    notifyListeners();
-  }
-
-  Future<void> setWeeklySummary(bool value) async {
-    await _prefs.setBool(_weeklySummaryKey, value);
-    notifyListeners();
-  }
-
-  Future<void> setSyncCompleteAlerts(bool value) async {
-    await _prefs.setBool(_syncCompleteKey, value);
     notifyListeners();
   }
 
