@@ -383,8 +383,9 @@ class SmsParser {
     AccountBankRegistry? registry,
   }) {
     final body = message.body.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ');
-    final patterns = _buildPatterns();
-    for (final pattern in patterns) {
+    // ISSUE-9: reuse the once-built pattern list — rebuilding ~50 RegExps per
+    // candidate was compiling ~1M regexes on a large inbox scan.
+    for (final pattern in _patterns) {
       final match = pattern.regex.firstMatch(body);
       if (match == null) continue;
 
@@ -543,6 +544,9 @@ class SmsParser {
 
     return 'Transaction';
   }
+
+  /// Compiled once for the process lifetime (ISSUE-9).
+  static final List<_SmsPattern> _patterns = _buildPatterns();
 
   static List<_SmsPattern> _buildPatterns() {
     final amt = _amount;
