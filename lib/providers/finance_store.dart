@@ -260,7 +260,11 @@ class FinanceStore extends ChangeNotifier {
       }
 
       if (transactionsToSave.isNotEmpty) {
-        await _db.upsertAll(transactionsToSave);
+        // Cross-source de-duplication: drop wallet-sourced mirrors of a
+        // bank-sourced payment (one UPI payment → two SMS). See ISSUE-4.
+        final deduped =
+            _dropCrossSourceDuplicates(transactionsToSave, _transactions);
+        await _db.upsertAll(deduped);
       }
 
       await _db.saveScanState(
@@ -299,6 +303,67 @@ class FinanceStore extends ChangeNotifier {
     }
   }
 
+  @visibleForTesting
+  List<Transaction> debugDropCrossSourceDuplicates(
+    List<Transaction> candidates,
+    List<Transaction> existing,
+  ) =>
+      _dropCrossSourceDuplicates(candidates, existing);
+
+  /// Cross-source de-duplication (ISSUE-4).
+  ///
+  /// One UPI payment often produces two SMS — the bank's "debited from a/c"
+  /// alert and the wallet's "Rs.X paid to Y via Paytm" alert — with different
+  /// SMS ids, so both would otherwise be stored as separate transactions. Drop a
+  /// candidate when an already-kept transaction (in [existing] or earlier in
+  /// this scan) has the SAME direction and amount within [_selfTransferWindow]
+  /// AND one side is a wallet source with a DIFFERENT bank (i.e. it is the
+  /// cross-source mirror, not two distinct payments from the same source).
+  ///
+  /// Bank-sourced rows are preferred, so the wallet mirror is the one dropped.
+  /// We intentionally do NOT dedupe purely on "same mask" (as originally
+  /// proposed) because two genuine same-amount purchases from one account within
+  /// three minutes would be wrongly collapsed.
+  List<Transaction> _dropCrossSourceDuplicates(
+    List<Transaction> candidates,
+    List<Transaction> existing,
+  ) {
+    bool isWallet(String bank) => _walletBanks.contains(bank);
+
+    // Process bank-sourced candidates first so a wallet mirror is dropped
+    // rather than the bank row.
+    final ordered = [...candidates]..sort(
+        (a, b) =>
+            (isWallet(a.bank) ? 1 : 0).compareTo(isWallet(b.bank) ? 1 : 0),
+      );
+
+    final keptByAmount = <(bool, double), List<Transaction>>{};
+    for (final t in existing) {
+      keptByAmount.putIfAbsent((t.isCredit, t.amount), () => []).add(t);
+    }
+
+    final result = <Transaction>[];
+    for (final c in ordered) {
+      final peers = keptByAmount[(c.isCredit, c.amount)];
+      var isDuplicate = false;
+      if (peers != null) {
+        for (final p in peers) {
+          if (c.timestamp.difference(p.timestamp).abs() > _selfTransferWindow) {
+            continue;
+          }
+          if ((isWallet(c.bank) || isWallet(p.bank)) && c.bank != p.bank) {
+            isDuplicate = true;
+            break;
+          }
+        }
+      }
+      if (isDuplicate) continue;
+      result.add(c);
+      keptByAmount.putIfAbsent((c.isCredit, c.amount), () => []).add(c);
+    }
+    return result;
+  }
+
   // --- Date range analytics ---
 
   /// Earliest transaction timestamp, or null when there is no data.
@@ -318,11 +383,13 @@ class FinanceStore extends ChangeNotifier {
   /// Builds a full analytics report for an inclusive [start]–[end] range.
   RangeReport buildReport(DateTime start, DateTime end) {
     final items = transactionsInRange(start, end);
-    final debits = items.where((t) => !t.isCredit).toList();
-    final credits = items.where((t) => t.isCredit).toList();
+    // KPIs exclude internal movement (CC bill payments, CC payment-received,
+    // self-transfers). See ISSUE-4.
+    final debits = _spendTxns(items);
+    final credits = _incomeTxns(items);
 
-    final spent = debits.fold(0.0, (sum, t) => sum + t.amount);
-    final income = credits.fold(0.0, (sum, t) => sum + t.amount);
+    final spent = _sumAmount(debits);
+    final income = _sumAmount(credits);
 
     final categoryMap = <SpendCategory, double>{};
     for (final t in debits) {
@@ -400,14 +467,12 @@ class FinanceStore extends ChangeNotifier {
 
   // --- Time filters ---
 
-  double _monthSpending(int year, int month) => _transactions
-      .where(
-        (t) =>
-            t.timestamp.year == year &&
-            t.timestamp.month == month &&
-            !t.isCredit,
-      )
-      .fold(0.0, (sum, t) => sum + t.amount);
+  double _monthSpending(int year, int month) {
+    final inMonth = _transactions
+        .where((t) => t.timestamp.year == year && t.timestamp.month == month)
+        .toList();
+    return _sumAmount(_spendTxns(inMonth));
+  }
 
   /// Always the current calendar month. Home / Budgets summary metrics use this
   /// even when the month has no spending yet (zeros / empty states).
@@ -456,13 +521,11 @@ class FinanceStore extends ChangeNotifier {
     return 'Since ${months[earliest.month - 1]} ${earliest.year}';
   }
 
-  double get insightsSpent => insightsTransactions
-      .where((t) => !t.isCredit)
-      .fold(0.0, (sum, t) => sum + t.amount);
+  double get insightsSpent => _sumAmount(_spendTxns(insightsTransactions));
 
   Map<SpendCategory, double> get insightsCategorySpending {
     final map = <SpendCategory, double>{};
-    for (final t in insightsTransactions.where((t) => !t.isCredit)) {
+    for (final t in _spendTxns(insightsTransactions)) {
       map[t.category] = (map[t.category] ?? 0) + t.amount;
     }
     return map;
@@ -470,7 +533,7 @@ class FinanceStore extends ChangeNotifier {
 
   List<(String name, String sub, double amount)> get insightsTopMerchants {
     final totals = <String, (double count, double amount)>{};
-    for (final t in insightsTransactions.where((t) => !t.isCredit)) {
+    for (final t in _spendTxns(insightsTransactions)) {
       if (_isGenericInsightsMerchant(t.merchant)) continue;
       final existing = totals[t.merchant];
       totals[t.merchant] = (
@@ -498,7 +561,7 @@ class FinanceStore extends ChangeNotifier {
 
   double get insightsHighestDaySpend {
     final byDay = <String, double>{};
-    for (final t in insightsTransactions.where((t) => !t.isCredit)) {
+    for (final t in _spendTxns(insightsTransactions)) {
       final key =
           '${t.timestamp.year}-${t.timestamp.month}-${t.timestamp.day}';
       byDay[key] = (byDay[key] ?? 0) + t.amount;
@@ -512,15 +575,15 @@ class FinanceStore extends ChangeNotifier {
     final recentStart = now.subtract(const Duration(days: 90));
     final priorStart = now.subtract(const Duration(days: 180));
 
-    double foodBetween(DateTime start, DateTime end) => insightsTransactions
-        .where(
-          (t) =>
-              !t.isCredit &&
-              t.category == SpendCategory.food &&
-              t.timestamp.isAfter(start) &&
-              !t.timestamp.isAfter(end),
-        )
-        .fold(0.0, (sum, t) => sum + t.amount);
+    double foodBetween(DateTime start, DateTime end) =>
+        _spendTxns(insightsTransactions)
+            .where(
+              (t) =>
+                  t.category == SpendCategory.food &&
+                  t.timestamp.isAfter(start) &&
+                  !t.timestamp.isAfter(end),
+            )
+            .fold(0.0, (sum, t) => sum + t.amount);
 
     // Last 90 days vs the prior 90 days (matches the Insights copy). Works
     // fine on sparse history — returns null when there's no food spend in
@@ -630,15 +693,81 @@ class FinanceStore extends ChangeNotifier {
     }).toList();
   }
 
+  // --- Cashflow KPI helpers (ISSUE-4) ---
+  //
+  // Spend / income KPIs exclude INTERNAL MOVEMENT so the headline numbers
+  // reflect real money in/out, while the lists still show every row:
+  //   * credit-card bill payments (debits) and CC "payment received" (credits),
+  //     via the per-transaction countsTowardSpend / countsTowardIncome flags;
+  //   * self / account-to-account transfers between the user's OWN accounts,
+  //     detected here by pairing a `transfer`-categorised debit with a
+  //     same-amount credit within a short window (both legs then excluded).
+  //
+  // We do NOT simply exclude `category == transfer`: ordinary UPI merchant
+  // purchases are frequently worded "trf to <merchant>" and categorised as
+  // transfer, so a blanket exclusion would drop genuine spend. Requiring a
+  // MATCHING opposite leg means only money that left one of your accounts and
+  // arrived in another is netted out.
+  static const Duration _selfTransferWindow = Duration(minutes: 3);
+
+  Set<String> _selfTransferLegIds(List<Transaction> txns) {
+    final debitsByAmount = <double, List<Transaction>>{};
+    for (final t in txns) {
+      if (!t.isCredit &&
+          t.category == SpendCategory.transfer &&
+          t.countsTowardSpend) {
+        debitsByAmount.putIfAbsent(t.amount, () => []).add(t);
+      }
+    }
+    if (debitsByAmount.isEmpty) return const {};
+
+    final matched = <String>{};
+    final usedDebits = <String>{};
+    for (final c in txns) {
+      if (!c.isCredit || !c.countsTowardIncome) continue;
+      final peers = debitsByAmount[c.amount];
+      if (peers == null) continue;
+      for (final d in peers) {
+        if (usedDebits.contains(d.id)) continue;
+        if (c.timestamp.difference(d.timestamp).abs() <= _selfTransferWindow) {
+          matched
+            ..add(c.id)
+            ..add(d.id);
+          usedDebits.add(d.id);
+          break;
+        }
+      }
+    }
+    return matched;
+  }
+
+  /// Debits that count toward spend KPIs (excludes CC bill payments and
+  /// self-transfer legs).
+  List<Transaction> _spendTxns(List<Transaction> txns) {
+    final internal = _selfTransferLegIds(txns);
+    return txns
+        .where((t) => t.countsTowardSpend && !internal.contains(t.id))
+        .toList();
+  }
+
+  /// Credits that count toward income KPIs (excludes CC payment-received and
+  /// self-transfer legs).
+  List<Transaction> _incomeTxns(List<Transaction> txns) {
+    final internal = _selfTransferLegIds(txns);
+    return txns
+        .where((t) => t.countsTowardIncome && !internal.contains(t.id))
+        .toList();
+  }
+
+  static double _sumAmount(Iterable<Transaction> txns) =>
+      txns.fold(0.0, (sum, t) => sum + t.amount);
+
   // --- Derived stats ---
 
-  double get monthlySpent => _dashboardMonthTransactions
-      .where((t) => !t.isCredit)
-      .fold(0.0, (sum, t) => sum + t.amount);
+  double get monthlySpent => _sumAmount(_spendTxns(_dashboardMonthTransactions));
 
-  double get monthlyIncome => _dashboardMonthTransactions
-      .where((t) => t.countsTowardIncome)
-      .fold(0.0, (sum, t) => sum + t.amount);
+  double get monthlyIncome =>
+      _sumAmount(_incomeTxns(_dashboardMonthTransactions));
 
   double get monthlySaved =>
       (monthlyIncome - monthlySpent).clamp(0, double.infinity);
@@ -650,7 +779,7 @@ class FinanceStore extends ChangeNotifier {
 
   Map<SpendCategory, double> get categorySpending {
     final map = <SpendCategory, double>{};
-    for (final t in _dashboardMonthTransactions.where((t) => !t.isCredit)) {
+    for (final t in _spendTxns(_dashboardMonthTransactions)) {
       map[t.category] = (map[t.category] ?? 0) + t.amount;
     }
     return map;
@@ -661,7 +790,7 @@ class FinanceStore extends ChangeNotifier {
 
   List<(String name, String sub, double amount)> get topMerchants {
     final totals = <String, (double count, double amount)>{};
-    for (final t in _dashboardMonthTransactions.where((t) => !t.isCredit)) {
+    for (final t in _spendTxns(_dashboardMonthTransactions)) {
       final existing = totals[t.merchant];
       totals[t.merchant] = (
         (existing?.$1 ?? 0) + 1,
@@ -686,7 +815,7 @@ class FinanceStore extends ChangeNotifier {
 
   double get highestDaySpend {
     final byDay = <String, double>{};
-    for (final t in _dashboardMonthTransactions.where((t) => !t.isCredit)) {
+    for (final t in _spendTxns(_dashboardMonthTransactions)) {
       final key =
           '${t.timestamp.year}-${t.timestamp.month}-${t.timestamp.day}';
       byDay[key] = (byDay[key] ?? 0) + t.amount;
@@ -696,15 +825,13 @@ class FinanceStore extends ChangeNotifier {
   }
 
   double get spentMoreThanLastMonth {
-    final prev = previousMonthTransactions
-        .where((t) => !t.isCredit)
-        .fold(0.0, (s, t) => s + t.amount);
+    final prev = _sumAmount(_spendTxns(previousMonthTransactions));
     return monthlySpent - prev;
   }
 
   double? foodDeltaVsLastMonth() {
-    double sum(List<Transaction> list) => list
-        .where((t) => !t.isCredit && t.category == SpendCategory.food)
+    double sum(List<Transaction> list) => _spendTxns(list)
+        .where((t) => t.category == SpendCategory.food)
         .fold(0.0, (s, t) => s + t.amount);
     final current = sum(currentMonthTransactions);
     final prev = sum(previousMonthTransactions);

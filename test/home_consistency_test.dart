@@ -4,9 +4,11 @@ import 'package:paisa_app/models/transaction.dart';
 import 'package:paisa_app/providers/finance_store.dart';
 import 'package:paisa_app/services/sms/account_discovery.dart';
 
-/// Home must count EVERY real debit and credit in the current calendar month —
-/// including both legs of a self-transfer — and the headline totals must always
-/// equal the sum of the rows Home lists (Today + This month).
+/// Home LISTS still show every real debit and credit in the current calendar
+/// month — including both legs of a self-transfer — but the headline KPI totals
+/// (spent / income) EXCLUDE internal movement (self-transfer legs, CC bill
+/// payments, CC payment-received) so the numbers reflect real money in/out.
+/// See ISSUE-4.
 void main() {
   Transaction tx({
     required String id,
@@ -31,7 +33,8 @@ void main() {
     );
   }
 
-  test('Home totals include a debit, a credit, and both self-transfer legs', () {
+  test('Home lists show transfers but KPI totals net out self-transfer legs',
+      () {
     final now = DateTime.now();
     // Anchor two items to "today" and two "earlier this month" (noon on the 1st)
     // so the Today / This month split is exercised without midnight edge cases.
@@ -78,20 +81,16 @@ void main() {
       ),
     ]);
 
-    // Headline totals count every debit / credit, transfer legs included.
-    expect(store.monthlySpent, 1200 + 5000);
-    expect(store.monthlyIncome, 50000 + 5000);
+    // Headline KPI totals exclude the self-transfer pair (money moved between
+    // your own accounts is not spend or income), so only the real food debit
+    // and salary credit count.
+    expect(store.monthlySpent, 1200);
+    expect(store.monthlyIncome, 50000);
 
+    // Lists still show ALL four rows (the transfer legs are visible with their
+    // flowLabel badges) — only the headline math excludes them.
     final month = store.homeMonthTransactions;
     expect(month.length, 4);
-
-    // The lists must sum to exactly the headline numbers (no divergence).
-    final listSpent =
-        month.where((t) => !t.isCredit).fold<double>(0, (s, t) => s + t.amount);
-    final listIncome =
-        month.where((t) => t.isCredit).fold<double>(0, (s, t) => s + t.amount);
-    expect(listSpent, store.monthlySpent);
-    expect(listIncome, store.monthlyIncome);
 
     // Today + earlier-this-month partition the month exactly (no dropped rows,
     // no duplicates).

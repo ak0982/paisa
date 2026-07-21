@@ -63,7 +63,15 @@ Future<void> main() async {
   // numbers that mimic bank alerts ("Rs.X debited from a/c XX1234") are no
   // longer accepted (ISSUE-3). Forces a rescan so any such rows already stored
   // are removed.
-  const transactionSchemaVersion = 17;
+  // Bumped 17 -> 18: spend/income KPIs now EXCLUDE internal movement so the
+  // headline numbers reflect real money in/out (ISSUE-4): credit-card bill
+  // payments and CC "payment received" legs are dropped via per-transaction
+  // flags, and self / account-to-account transfers are netted out by pairing a
+  // transfer-categorised debit with a same-amount credit within 3 minutes. Also
+  // adds cross-source de-duplication at insert time (bank + wallet SMS for the
+  // same UPI payment now store one row). Lists still show every row. Forces a
+  // rescan so the de-dupe applies to already-stored data.
+  const transactionSchemaVersion = 18;
   final needsRescan =
       (prefs.getInt('categorizer_version') ?? 0) < categorizerVersion ||
       (prefs.getInt('transaction_schema_version') ?? 0) <

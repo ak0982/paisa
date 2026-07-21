@@ -325,7 +325,8 @@ void main() {
       expect(store.recentSpendingOutsideCurrentMonth().map((t) => t.id), ['old']);
     });
 
-    test('U61g self-transfer both legs count on Home', () {
+    test('U61g self-transfer both legs shown on Home but netted from KPIs '
+        '(ISSUE-4)', () {
       final now = DateTime.now();
       final store = FinanceStore();
       store.seedTransactions([
@@ -351,13 +352,16 @@ void main() {
         ),
       ]);
 
-      expect(store.monthlySpent, 5000);
-      expect(store.monthlyIncome, 5000);
+      // ISSUE-4: a self-transfer between the user's own accounts is internal
+      // movement, so both legs net out of the headline spend/income KPIs...
+      expect(store.monthlySpent, 0);
+      expect(store.monthlyIncome, 0);
+      // ...but the underlying rows are still visible in the Home lists.
       expect(store.homeMonthTransactions.length, 2);
       expect(store.homeTodayTransactions.length, 2);
     });
 
-    test('U61h Home income includes credit-card payment credits', () {
+    test('U61h Home income excludes credit-card payment credits (ISSUE-4)', () {
       final now = DateTime.now();
       final store = FinanceStore();
       store.seedTransactions([
@@ -381,7 +385,9 @@ void main() {
         ),
       ]);
 
-      expect(store.monthlyIncome, 92000);
+      // ISSUE-4: a credit landing on a credit-card account is a bill payment
+      // (internal movement), not real income — only the salary counts.
+      expect(store.monthlyIncome, 80000);
     });
 
 

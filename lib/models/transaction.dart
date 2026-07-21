@@ -39,17 +39,40 @@ class Transaction {
         AccountKind.loan => 'Loan',
       };
 
-  /// Every stored cash movement counts toward Home spend/income lists.
+  /// Every stored cash movement is still SHOWN in Home / Transactions lists
+  /// (with a [flowLabel] badge). This drives list membership only — the spend /
+  /// income KPIs use [countsTowardSpend] / [countsTowardIncome] instead, so
+  /// internal movement (CC bill payments, CC payment-received, self-transfers)
+  /// is visible but does not distort the headline numbers. See ISSUE-4.
   bool get countsTowardCashflowSummary => true;
 
-  /// Money-in for Home: every parsed credit (bank, wallet, CC payment-in, etc.).
-  bool get countsTowardIncome => isCredit;
-
+  /// A credit-card bill payment: a debit made to pay down your own card
+  /// (CCBP / BBPS / "credit card bill"). It is internal movement — money leaving
+  /// a funding account to reduce a card liability — not spend ON the card.
   bool get isCreditCardBillPayment {
     if (accountKind != AccountKind.creditCard || isCredit) return false;
     final m = merchant.toLowerCase();
     return m.contains('ccbp') || m.contains('credit card bill');
   }
+
+  /// A "payment received" credit on a credit card. This reduces the card's
+  /// outstanding balance; it is NOT income.
+  bool get isCreditCardPaymentReceived =>
+      accountKind == AccountKind.creditCard && isCredit;
+
+  /// Counts toward spend KPIs: a real debit that is not a credit-card bill
+  /// payment. NOTE: self-transfers (money moved between your own accounts) are
+  /// netted out separately in `FinanceStore`, because deciding that requires
+  /// cross-transaction context (a matching opposite leg) that a single
+  /// transaction cannot know. Do NOT exclude `category == transfer` here —
+  /// ordinary UPI merchant purchases are frequently worded "trf to <merchant>"
+  /// and categorised as transfer, so excluding them would drop genuine spend.
+  bool get countsTowardSpend => !isCredit && !isCreditCardBillPayment;
+
+  /// Counts toward income KPIs: a real credit that is not a credit-card
+  /// payment-received leg. Self-transfer credit legs are netted out in
+  /// `FinanceStore` via matching.
+  bool get countsTowardIncome => isCredit && !isCreditCardPaymentReceived;
 
   String get flowLabel {
     if (accountKind == AccountKind.creditCard) {
