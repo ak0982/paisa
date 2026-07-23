@@ -77,7 +77,10 @@ Future<void> main() async {
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+      systemNavigationBarColor: Color(0xFF0A0A0B),
+      systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
 
@@ -131,7 +134,8 @@ class PaisaApp extends StatelessWidget {
     return MaterialApp(
       title: 'Paisa',
       debugShowCheckedModeBanner: false,
-      theme: PaisaTheme.light(),
+      theme: PaisaTheme.dark(),
+      themeMode: ThemeMode.dark,
       home: showMain ? const MainShell() : const WelcomeScreen(),
     );
   }

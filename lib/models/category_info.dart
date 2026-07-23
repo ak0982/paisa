@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/paisa_colors.dart';
+
 enum SpendCategory {
   food,
   travel,
@@ -26,6 +28,7 @@ class CategoryInfo {
   final SpendCategory category;
   final String label;
   final String emoji;
+  /// Solid saturated fill used as chip / icon tile background (Neo-Vault).
   final Color tintBg;
   final Color iconColor;
 
@@ -34,78 +37,78 @@ class CategoryInfo {
       category: SpendCategory.food,
       label: 'Food',
       emoji: '🍔',
-      tintBg: Color(0xFFFFEDE7),
-      iconColor: Color(0xFFD9663F),
+      tintBg: PaisaColors.catFood,
+      iconColor: PaisaColors.catFood,
     ),
     CategoryInfo(
       category: SpendCategory.travel,
       label: 'Travel',
       emoji: '🚗',
-      tintBg: Color(0xFFE7F0FF),
-      iconColor: Color(0xFF3B6FD4),
+      tintBg: PaisaColors.catTravel,
+      iconColor: PaisaColors.catTravel,
     ),
     CategoryInfo(
       category: SpendCategory.shopping,
       label: 'Shopping',
       emoji: '🛍️',
-      tintBg: Color(0xFFF3E8FF),
-      iconColor: Color(0xFF8B44D6),
+      tintBg: PaisaColors.catShopping,
+      iconColor: PaisaColors.catShopping,
     ),
     CategoryInfo(
       category: SpendCategory.bills,
       label: 'Bills',
       emoji: '⚡',
-      tintBg: Color(0xFFFDF3DD),
-      iconColor: Color(0xFFB4791A),
+      tintBg: PaisaColors.catBills,
+      iconColor: PaisaColors.catBills,
     ),
     CategoryInfo(
       category: SpendCategory.entertainment,
       label: 'Entertainment',
       emoji: '🎬',
-      tintBg: Color(0xFFE8E9FD),
-      iconColor: Color(0xFF4F52D6),
+      tintBg: PaisaColors.catEntertainment,
+      iconColor: PaisaColors.catEntertainment,
     ),
     CategoryInfo(
       category: SpendCategory.emi,
       label: 'EMI',
       emoji: '🏦',
-      tintBg: Color(0xFFE3F5EC),
-      iconColor: Color(0xFF0B7A4B),
+      tintBg: PaisaColors.catEmi,
+      iconColor: PaisaColors.catEmi,
     ),
     CategoryInfo(
       category: SpendCategory.health,
       label: 'Health',
       emoji: '💊',
-      tintBg: Color(0xFFFCE7F1),
-      iconColor: Color(0xFFC43C7E),
+      tintBg: PaisaColors.catHealth,
+      iconColor: PaisaColors.catHealth,
     ),
     CategoryInfo(
       category: SpendCategory.transfer,
       label: 'Transfer',
       emoji: '🔄',
-      tintBg: Color(0xFFDEF5F1),
-      iconColor: Color(0xFF0E9488),
+      tintBg: PaisaColors.catTransfer,
+      iconColor: PaisaColors.catTransfer,
     ),
     CategoryInfo(
       category: SpendCategory.income,
       label: 'Income',
       emoji: '💰',
-      tintBg: Color(0xFFE3F0E7),
-      iconColor: Color(0xFF0B7A4B),
+      tintBg: PaisaColors.catIncome,
+      iconColor: PaisaColors.catIncome,
     ),
     CategoryInfo(
       category: SpendCategory.atm,
       label: 'ATM',
       emoji: '🏧',
-      tintBg: Color(0xFFEEF1F4),
-      iconColor: Color(0xFF5B6B7B),
+      tintBg: PaisaColors.catAtm,
+      iconColor: PaisaColors.catAtm,
     ),
     CategoryInfo(
       category: SpendCategory.other,
       label: 'Other',
       emoji: '📦',
-      tintBg: Color(0xFFF1F4F7),
-      iconColor: Color(0xFF64748B),
+      tintBg: PaisaColors.catOther,
+      iconColor: PaisaColors.catOther,
     ),
   ];
 

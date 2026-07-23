@@ -32,7 +32,7 @@ class Budget {
   Color get barColor {
     switch (status) {
       case BudgetStatus.safe:
-        return PaisaColors.credit;
+        return PaisaColors.safe;
       case BudgetStatus.warning:
         return PaisaColors.warning;
       case BudgetStatus.over:
@@ -54,7 +54,7 @@ class Budget {
   Color get statusColor {
     switch (status) {
       case BudgetStatus.safe:
-        return PaisaColors.credit;
+        return PaisaColors.safe;
       case BudgetStatus.warning:
         return PaisaColors.warning;
       case BudgetStatus.over:
