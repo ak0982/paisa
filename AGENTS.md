@@ -88,6 +88,7 @@ The user develops against a **physical Android device**. When operating on it:
 | `android/.../MainActivity.kt` | Platform channel; SMS batch reads run on a **background executor** (ISSUE-10). |
 | `.github/workflows/flutter_ci.yml` | CI: `flutter analyze` + `flutter test` on push/PR to `main` (ISSUE-16). |
 | `test/fixtures/synthetic_sms_corpus.txt` | Synthetic SMS fixtures (no personal data) so gate coverage runs without the private dump. |
+| `docs/india_bank_sms_research.md` | RBI bank inventory, SMS taxonomy, public template notes, and parser expansion roadmap (research only). |
 | `tool/` | Standalone diagnostic scripts (audits, simulations) run against the SMS dump. |
 | `test/` | ~378 tests (see §7). |
 | `code_review_by_fable_claude.md` | Fable/Claude code review that drove ISSUES 1–16 (historical evidence + proposed fixes). |
@@ -323,7 +324,8 @@ Review report commit: `6c0741d`.
 - **Heuristic / regex-based classification.** Parsing, enrichment, and account-kind voting can
   still misclassify edge cases (unusual SMS wording, new templates, ambiguous senders).
 - **Uneven bank coverage.** Majors have rich patterns; **Canara** and **Bank of Baroda** are
-  mostly sender-detection only.
+  mostly sender-detection only. Research inventory + expansion roadmap:
+  `docs/india_bank_sms_research.md`.
 - **Account discovery depends on masks.** Unrecognized masking styles may hide accounts.
 - **Testing uses a private SMS dump** at `~/Downloads/my_sms.txt` (and `my_sms_live.txt`) that
   is **NOT in the repo**. Dump-dependent suites **skip when absent**. Synthetic fixtures
