@@ -157,9 +157,10 @@ abstract final class SmsScanPipeline {
     final trimmed = body.trim();
     if (trimmed.length < 20) return false;
 
-    if (SmsParser.isPersonalPhoneSender(sender)) {
-      return SmsParser.hasCompletedTransactionSignal(trimmed);
-    }
+    // Personal numbers never send legitimate bank/UPI alerts. Reject them at
+    // the financial gate — do not let a completed-txn phrase ("debited") reopen
+    // the door (that was ISSUE-3 hole #2 for bare 10-digit senders).
+    if (SmsParser.isPersonalPhoneSender(sender)) return false;
 
     if (hasFinancialBodyHint(trimmed)) return true;
     return isFinancialSender(sender) && SmsParser.hasTransactionSignal(trimmed);

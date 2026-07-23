@@ -126,7 +126,12 @@ class SmsParser {
 
   static bool isPersonalPhoneSender(String sender) {
     final s = sender.replaceAll(RegExp(r'[\s\-]'), '');
-    return RegExp(r'^\+?91\d{10}$').hasMatch(s);
+    // Indian mobiles are 10 digits starting 6–9. Scam SMS often omit the +91
+    // prefix ("9876543210"); requiring 91 alone let those through the pipeline
+    // because production calls parseTransaction after isRealTransactionSms.
+    if (RegExp(r'^\+?91[6-9]\d{9}$').hasMatch(s)) return true;
+    if (RegExp(r'^0?[6-9]\d{9}$').hasMatch(s)) return true;
+    return false;
   }
 
   /// Strong bank alert verbs — used for trusted senders only.

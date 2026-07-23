@@ -913,7 +913,8 @@ class FinanceStore extends ChangeNotifier {
     for (final t in txns) {
       if (!t.isCredit &&
           t.category == SpendCategory.transfer &&
-          t.countsTowardSpend) {
+          t.countsTowardSpend &&
+          _isRealBankAccount(t.bank, t.maskedAccount)) {
         debitsByAmount.putIfAbsent(t.amount, () => []).add(t);
       }
     }
@@ -923,10 +924,17 @@ class FinanceStore extends ChangeNotifier {
     final usedDebits = <String>{};
     for (final c in txns) {
       if (!c.isCredit || !c.countsTowardIncome) continue;
+      // Both legs must be distinct real bank accounts. Wallet / P2P credits
+      // (LenDenClub, Paytm, empty mask) must not cancel a genuine merchant UPI
+      // debit that happens to share the amount within three minutes.
+      if (!_isRealBankAccount(c.bank, c.maskedAccount)) continue;
       final peers = debitsByAmount[c.amount];
       if (peers == null) continue;
       for (final d in peers) {
         if (usedDebits.contains(d.id)) continue;
+        final cKey = _AccountKindEvidence.evidenceKey(c.bank, c.maskedAccount);
+        final dKey = _AccountKindEvidence.evidenceKey(d.bank, d.maskedAccount);
+        if (cKey == dKey) continue;
         if (c.timestamp.difference(d.timestamp).abs() <= _selfTransferWindow) {
           matched
             ..add(c.id)
@@ -1417,7 +1425,8 @@ class _AccountKindEvidence {
   /// FROM a bank (funding) account rather than activity on the card itself.
   static bool _isFundingSideBillPayment(Transaction t) {
     if (t.isCredit) return false;
-    return t.merchant.toLowerCase().contains('credit card bill payment');
+    final m = t.merchant.toLowerCase();
+    return m.contains('credit card bill payment') || m.contains('ccbp');
   }
 
   AccountKind kindFor(String bank, String mask) {

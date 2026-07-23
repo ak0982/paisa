@@ -49,8 +49,12 @@ class Transaction {
   /// A credit-card bill payment: a debit made to pay down your own card
   /// (CCBP / BBPS / "credit card bill"). It is internal movement — money leaving
   /// a funding account to reduce a card liability — not spend ON the card.
+  ///
+  /// Enrichment normally tags these as [AccountKind.creditCard], but if that
+  /// miss-fires and the row stays savings, the merchant wording alone is still
+  /// enough — otherwise KPIs double-count card spend + the funding debit.
   bool get isCreditCardBillPayment {
-    if (accountKind != AccountKind.creditCard || isCredit) return false;
+    if (isCredit) return false;
     final m = merchant.toLowerCase();
     return m.contains('ccbp') || m.contains('credit card bill');
   }

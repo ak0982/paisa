@@ -70,14 +70,19 @@ void main() {
         category: SpendCategory.transfer,
         merchant: 'Axis Transfer',
       ),
-      // Self-transfer SBI -> Axis: credit leg into Axis.
-      tx(
+      // Self-transfer SBI -> Axis: credit leg into Axis (must be a different
+      // real bank+mask — same-account pairs are not self-transfers).
+      Transaction(
         id: 'xfer_in',
+        smsId: 'xfer_in',
+        merchant: 'Self Transfer',
+        bank: 'Axis',
+        maskedAccount: '••••9867',
+        category: SpendCategory.transfer,
         amount: 5000,
         isCredit: true,
-        ts: today,
-        category: SpendCategory.transfer,
-        merchant: 'Self Transfer',
+        timestamp: today,
+        accountKind: AccountKind.savings,
       ),
     ]);
 

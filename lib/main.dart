@@ -70,7 +70,13 @@ const int categorizerVersion = 4;
 // Bumped 20 -> 21: account-kind evidence and spend stats are keyed by
 // (bank, mask) instead of mask alone, so two banks sharing a last-4 no longer
 // merge into one pooled account (ISSUE-11). Forces a rebuild to re-split.
-const int transactionSchemaVersion = 21;
+// Bumped 21 -> 22: adversarial QA fixes — (1) personal-sender gate also matches
+// bare 10-digit Indian mobiles (not only +91…), so scam "Rs.X debited" SMS are
+// rejected by the production pipeline; (2) self-transfer KPI pairing requires
+// two distinct real bank|mask legs (stops LenDenClub/P2P credits from zeroing
+// merchant UPI spend); (3) CCBP/bill-payment merchant wording excludes spend
+// even when enrichment left accountKind=savings.
+const int transactionSchemaVersion = 22;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

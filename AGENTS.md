@@ -132,7 +132,7 @@ inboxes, with checkpointing (`sms_scan_state.dart`) for resume.
 
 `lib/main.dart` defines:
 
-- `const transactionSchemaVersion = **21**`
+- `const transactionSchemaVersion = **22**`
 - `const categorizerVersion = **4**`
 
 On launch, if either stored value is lower than the code constant **and** onboarding is complete,
@@ -159,6 +159,7 @@ installs keep stale data and your change appears to "do nothing."
 | 18 → 19 | **ISSUE-14:** amount regex accepts single decimal digit (`Rs 500.5` → 500.5). |
 | 19 → 20 | **ISSUE-13:** categorizer word boundaries; BBPS/CCBP → transfer; no NACH product hardcoding. |
 | 20 → 21 | **ISSUE-11:** kind evidence + spend stats keyed by `(bank, mask)`, not mask alone. |
+| 21 → 22 | Adversarial QA: bare 10-digit personal senders rejected; self-transfer KPI pairing needs distinct real `bank\|mask` legs; CCBP merchant wording excludes spend even if kind stays savings. |
 
 `categorizerVersion` remains **4** (rebuilds when categorizer rules change enough independently of
 schema). ISSUE-13's categorizer precision rode the schema bump 19 → 20 rather than a separate
