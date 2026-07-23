@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Simplified IDFC FIRST-inspired mark (original recreation) -->
+  <rect width="64" height="64" rx="12" fill="#9B1D20"/>
+  <path d="M14 16 H50 V26 H28 V30 H46 V40 H28 V48 H14 Z" fill="#FFFFFF"/>
+  <circle cx="48" cy="48" r="6" fill="#F5A623"/>
+</svg>

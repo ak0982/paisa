@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Simplified PNB-inspired monogram (original recreation) -->
+  <rect width="64" height="64" rx="12" fill="#A51C30"/>
+  <path d="M12 14 H28 C36 14 40 18 40 26 C40 34 36 38 28 38 H22 V50 H12 Z M22 22 V30 H27 C30 30 32 29 32 26 C32 23 30 22 27 22 Z" fill="#FFFFFF"/>
+  <path d="M42 14 H52 V50 H42 V36 L36 50 H28 L36 34 L30 14 H38 L42 28 Z" fill="#FFFFFF"/>
+</svg>

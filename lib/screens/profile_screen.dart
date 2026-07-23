@@ -10,6 +10,7 @@ import '../services/sms/sms_reader_service.dart';
 import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
+import '../widgets/bank_logo.dart';
 import 'edit_profile_screen.dart';
 import 'onboarding/welcome_screen.dart';
 import 'settings/help_support_screen.dart';
@@ -531,22 +532,10 @@ class _BankRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: account.color,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              account.badge,
-              style: PaisaTheme.sora(
-                size: 15,
-                weight: FontWeight.w800,
-                color: Colors.white,
-              ),
-            ),
+          BankLogo(
+            bank: account.name,
+            fallbackLetter: account.badge,
+            fallbackColor: account.color,
           ),
           const SizedBox(width: 12),
           Expanded(

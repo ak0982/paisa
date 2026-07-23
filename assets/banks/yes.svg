@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Simplified Yes Bank-inspired Y mark (original recreation) -->
+  <rect width="64" height="64" rx="12" fill="#00205B"/>
+  <path d="M14 12 L28 34 V52 H36 V34 L50 12 H40 L32 26 L24 12 Z" fill="#E31C23"/>
+</svg>

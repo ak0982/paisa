@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Simplified IndusInd-inspired mark (original recreation) -->
+  <rect width="64" height="64" rx="12" fill="#7A1F2B"/>
+  <path d="M12 44 L24 16 H32 L26 32 H38 L32 16 H40 L52 44 H42 L36 30 H28 L22 44 Z" fill="#FFFFFF"/>
+  <rect x="18" y="48" width="28" height="4" rx="1" fill="#E31C23"/>
+</svg>

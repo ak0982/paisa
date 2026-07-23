@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Simplified Kotak-inspired K mark (original recreation) -->
+  <rect width="64" height="64" rx="12" fill="#ED232A"/>
+  <path d="M18 12 H28 V28 L42 12 H54 L36 32 L54 52 H42 L28 36 V52 H18 Z" fill="#FFFFFF"/>
+</svg>
