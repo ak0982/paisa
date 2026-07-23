@@ -13,48 +13,78 @@ class PaisaBottomNav extends StatelessWidget {
   final ValueChanged<int> onTap;
 
   static const _labels = [
-    'Home',
-    'Transactions',
-    'Budgets',
-    'Insights',
-    'Profile',
+    'HOME',
+    'MOVES',
+    'BUDGET',
+    'STATS',
+    'YOU',
   ];
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 68,
       decoration: const BoxDecoration(
-        color: PaisaColors.card,
-        border: Border(top: BorderSide(color: PaisaColors.navBorder)),
+        color: PaisaColors.surface,
+        border: Border(
+          top: BorderSide(color: PaisaColors.navBorder, width: 2),
+        ),
       ),
       child: SafeArea(
         top: false,
-        child: Row(
-          children: List.generate(_labels.length, (i) {
-            final active = i == currentIndex;
-            final color = active ? PaisaColors.credit : PaisaColors.navInactive;
-            return Expanded(
-              child: InkWell(
-                onTap: () => onTap(i),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(_iconFor(i), size: 23, color: color),
-                    const SizedBox(height: 5),
-                    Text(
-                      _labels[i],
-                      style: PaisaTheme.manrope(
-                        size: 10,
-                        weight: FontWeight.w600,
-                        color: color,
+        child: SizedBox(
+          height: 62,
+          child: Row(
+            children: List.generate(_labels.length, (i) {
+              final active = i == currentIndex;
+              return Expanded(
+                child: InkWell(
+                  onTap: () => onTap(i),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (active)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: PaisaColors.primary,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            _iconFor(i),
+                            size: 18,
+                            color: PaisaColors.inkOnAccent,
+                          ),
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Icon(
+                            _iconFor(i),
+                            size: 18,
+                            color: PaisaColors.navInactive,
+                          ),
+                        ),
+                      const SizedBox(height: 5),
+                      Text(
+                        _labels[i],
+                        style: PaisaTheme.manrope(
+                          size: 9.5,
+                          weight: FontWeight.w700,
+                          color: active
+                              ? PaisaColors.primary
+                              : PaisaColors.navInactive,
+                          letterSpacing: 0.4,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            );
-          }),
+              );
+            }),
+          ),
         ),
       ),
     );

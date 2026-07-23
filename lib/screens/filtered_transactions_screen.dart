@@ -91,7 +91,7 @@ class FilteredTransactionsScreen extends StatefulWidget {
       key: key,
       title: source,
       emoji: '💰',
-      tintBg: const Color(0xFFE3F0E7),
+      tintBg: PaisaColors.cardElevated,
       totalLabel: 'Total received',
       countSingular: 'credit',
       countPlural: 'credits',

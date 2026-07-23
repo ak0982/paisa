@@ -9,53 +9,56 @@ class CategorySpendChip extends StatelessWidget {
     super.key,
     required this.info,
     required this.amount,
+    this.rotate = false,
+    this.angle = -0.035,
   });
 
   final CategoryInfo info;
   final double amount;
+  final bool rotate;
+  final double angle;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color: PaisaColors.card,
-        border: Border.all(color: PaisaColors.navBorder),
-        borderRadius: BorderRadius.circular(16),
+        color: PaisaColors.cardElevated,
+        border: Border.all(color: info.iconColor, width: 2),
+        borderRadius: BorderRadius.circular(13),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: info.tintBg,
-              borderRadius: BorderRadius.circular(9),
-            ),
-            alignment: Alignment.center,
-            child: Text(info.emoji, style: const TextStyle(fontSize: 15)),
-          ),
-          const SizedBox(width: 9),
+          Text(info.emoji, style: const TextStyle(fontSize: 14)),
+          const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                info.label,
+                info.label.toUpperCase(),
                 style: PaisaTheme.manrope(
-                  size: 11,
-                  weight: FontWeight.w600,
+                  size: 9,
+                  weight: FontWeight.w700,
                   color: PaisaColors.mutedCaption,
+                  letterSpacing: 1,
                 ),
               ),
               Text(
                 formatInr(amount),
-                style: PaisaTheme.sora(size: 13, weight: FontWeight.w700),
+                style: PaisaTheme.sora(
+                  size: 12.5,
+                  weight: FontWeight.w800,
+                  color: PaisaColors.ink,
+                ),
               ),
             ],
           ),
         ],
       ),
     );
+
+    if (!rotate) return chip;
+    return Transform.rotate(angle: angle, child: chip);
   }
 }

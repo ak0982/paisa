@@ -6,7 +6,7 @@ class PaisaProgressBar extends StatefulWidget {
     required this.progress,
     required this.color,
     this.height = 8,
-    this.trackColor = const Color(0xFFEEF2EF),
+    this.trackColor = const Color(0xFF232427),
     this.animate = true,
   });
 

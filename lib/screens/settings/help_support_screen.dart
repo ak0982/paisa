@@ -66,7 +66,7 @@ class HelpSupportScreen extends StatelessWidget {
               'Paisa · version 1.0.0',
               style: PaisaTheme.manrope(
                 size: 11.5,
-                color: const Color(0xFFAAB8AF),
+                color: PaisaColors.muted,
               ),
             ),
           ),

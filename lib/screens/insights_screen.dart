@@ -60,27 +60,21 @@ class InsightsScreen extends StatelessWidget {
                           vertical: 7,
                         ),
                         decoration: BoxDecoration(
-                          color: PaisaColors.card,
-                          borderRadius: BorderRadius.circular(11),
-                          border: Border.all(color: PaisaColors.dividerAlt),
+                          color: PaisaColors.primary,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: PaisaColors.inkOnAccent,
+                            width: 2,
+                          ),
                         ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.tune_rounded,
-                              size: 14,
-                              color: PaisaColors.primary,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Reports',
-                              style: PaisaTheme.manrope(
-                                size: 12,
-                                weight: FontWeight.w700,
-                                color: PaisaColors.primary,
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          'REPORTS',
+                          style: PaisaTheme.sora(
+                            size: 11,
+                            weight: FontWeight.w800,
+                            color: PaisaColors.inkOnAccent,
+                            letterSpacing: 0.8,
+                          ),
                         ),
                       ),
                     ),
@@ -129,25 +123,25 @@ class InsightsScreen extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    gradient: PaisaColors.heroGradient,
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x470B7A4B),
-                        blurRadius: 30,
-                        offset: Offset(0, 16),
-                      ),
-                    ],
+                    color: PaisaColors.primary,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: PaisaColors.inkOnAccent,
+                      width: 2.5,
+                    ),
+                    boxShadow: PaisaColors.hardShadow(offset: 5),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Total spent · ${store.insightsPeriodLabel}',
+                        'TOTAL SPENT · ${store.insightsPeriodLabel}'
+                            .toUpperCase(),
                         style: PaisaTheme.manrope(
-                          size: 12,
-                          weight: FontWeight.w600,
-                          color: Colors.white.withOpacity(0.8),
+                          size: 10.5,
+                          weight: FontWeight.w700,
+                          color: PaisaColors.inkOnAccent,
+                          letterSpacing: 1.2,
                         ),
                       ),
                       Text(
@@ -155,7 +149,7 @@ class InsightsScreen extends StatelessWidget {
                         style: PaisaTheme.sora(
                           size: 34,
                           weight: FontWeight.w800,
-                          color: Colors.white,
+                          color: PaisaColors.inkOnAccent,
                           letterSpacing: -0.5,
                         ),
                       ),
@@ -167,15 +161,15 @@ class InsightsScreen extends StatelessWidget {
                             vertical: 5,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.16),
-                            borderRadius: BorderRadius.circular(9),
+                            color: PaisaColors.inkOnAccent,
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             '${sorted.length} categories · ${store.insightsTransactions.where((t) => !t.isCredit).length} purchases',
                             style: PaisaTheme.manrope(
                               size: 11.5,
-                              weight: FontWeight.w600,
-                              color: Colors.white.withOpacity(0.82),
+                              weight: FontWeight.w700,
+                              color: PaisaColors.primary,
                             ),
                           ),
                         ),
@@ -257,7 +251,7 @@ class InsightsScreen extends StatelessWidget {
                                             style: PaisaTheme.manrope(
                                               size: 12,
                                               weight: FontWeight.w600,
-                                              color: const Color(0xFF42524A),
+                                              color: PaisaColors.ink,
                                             ),
                                           ),
                                         ),
@@ -299,8 +293,11 @@ class InsightsScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFF6EC),
-                      border: Border.all(color: const Color(0xFFF6E4C6)),
+                      color: PaisaColors.cardElevated,
+                      border: Border.all(
+                        color: PaisaColors.warning,
+                        width: 2,
+                      ),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
@@ -310,8 +307,12 @@ class InsightsScreen extends StatelessWidget {
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFDECD1),
+                            color: PaisaColors.warning,
                             borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: PaisaColors.inkOnAccent,
+                              width: 2,
+                            ),
                           ),
                           alignment: Alignment.center,
                           child:
@@ -323,19 +324,24 @@ class InsightsScreen extends StatelessWidget {
                             TextSpan(
                               style: PaisaTheme.manrope(
                                 size: 12.5,
-                                color: const Color(0xFF6B5A38),
+                                color: PaisaColors.mutedCaption,
                               ),
                               children: [
                                 TextSpan(
                                   text: foodDelta > 0
                                       ? 'You spent ${formatInr(foodDelta)} more'
                                       : 'You spent ${formatInr(foodDelta.abs())} less',
+                                  style: const TextStyle(
+                                    color: PaisaColors.ink,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                                 TextSpan(
-                                  text: ' on Food in the last 90 days vs the prior 90 days.',
+                                  text:
+                                      ' on Food in the last 90 days vs the prior 90 days.',
                                   style: TextStyle(
                                     color: foodDelta > 0
-                                        ? const Color(0xFFB4791A)
+                                        ? PaisaColors.warning
                                         : PaisaColors.primary,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -447,7 +453,7 @@ class _InsightsEmptyHint extends StatelessWidget {
                 onPressed: () => store.syncFromSms(),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: PaisaColors.primary,
-                  foregroundColor: Colors.white,
+                  foregroundColor: PaisaColors.inkOnAccent,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -456,10 +462,10 @@ class _InsightsEmptyHint extends StatelessWidget {
                 ),
                 child: Text(
                   'Scan SMS now',
-                  style: PaisaTheme.manrope(
+                  style: PaisaTheme.sora(
                     size: 14,
-                    weight: FontWeight.w700,
-                    color: Colors.white,
+                    weight: FontWeight.w800,
+                    color: PaisaColors.inkOnAccent,
                   ),
                 ),
               ),
@@ -541,7 +547,7 @@ class _MerchantRow extends StatelessWidget {
               style: PaisaTheme.sora(
                 size: 12,
                 weight: FontWeight.w700,
-                color: const Color(0xFF5B6B62),
+                color: PaisaColors.mutedCaption,
               ),
             ),
           ),

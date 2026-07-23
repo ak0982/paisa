@@ -312,7 +312,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       Icon(
                         Icons.calendar_today_rounded,
                         size: 13,
-                        color: active ? Colors.white : PaisaColors.mutedLight,
+                        color: active ? PaisaColors.inkOnAccent : PaisaColors.mutedLight,
                       ),
                       const SizedBox(width: 6),
                     ],
@@ -320,8 +320,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       e.value,
                       style: PaisaTheme.manrope(
                         size: 12.5,
-                        weight: FontWeight.w600,
-                        color: active ? Colors.white : PaisaColors.mutedLight,
+                        weight: FontWeight.w700,
+                        color: active ? PaisaColors.inkOnAccent : PaisaColors.mutedLight,
                       ),
                     ),
                   ],
@@ -359,25 +359,21 @@ class _ReportsScreenState extends State<ReportsScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: PaisaColors.heroGradient,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x470B7A4B),
-            blurRadius: 30,
-            offset: Offset(0, 16),
-          ),
-        ],
+        color: PaisaColors.primary,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: PaisaColors.inkOnAccent, width: 2.5),
+        boxShadow: PaisaColors.hardShadow(offset: 5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Net for this range',
+            'NET FOR THIS RANGE',
             style: PaisaTheme.manrope(
-              size: 12,
-              weight: FontWeight.w600,
-              color: Colors.white.withOpacity(0.8),
+              size: 10.5,
+              weight: FontWeight.w700,
+              color: PaisaColors.inkOnAccent,
+              letterSpacing: 1.2,
             ),
           ),
           const SizedBox(height: 2),
@@ -388,7 +384,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             style: PaisaTheme.sora(
               size: 34,
               weight: FontWeight.w800,
-              color: Colors.white,
+              color: PaisaColors.inkOnAccent,
               letterSpacing: -0.5,
             ),
           ),
@@ -399,13 +395,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
               Container(
                 width: 1,
                 height: 34,
-                color: Colors.white.withOpacity(0.22),
+                color: PaisaColors.inkOnAccent.withOpacity(0.22),
               ),
               _heroStat('Earned', report.income),
               Container(
                 width: 1,
                 height: 34,
-                color: Colors.white.withOpacity(0.22),
+                color: PaisaColors.inkOnAccent.withOpacity(0.22),
               ),
               _heroStat('Saved', report.saved),
             ],
@@ -423,11 +419,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
           Padding(
             padding: const EdgeInsets.only(left: 2),
             child: Text(
-              label,
+              label.toUpperCase(),
               style: PaisaTheme.manrope(
-                size: 11,
-                weight: FontWeight.w600,
-                color: Colors.white.withOpacity(0.78),
+                size: 10,
+                weight: FontWeight.w700,
+                color: PaisaColors.inkOnAccent.withOpacity(0.75),
+                letterSpacing: 0.8,
               ),
             ),
           ),
@@ -439,7 +436,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               style: PaisaTheme.sora(
                 size: 16,
                 weight: FontWeight.w800,
-                color: Colors.white,
+                color: PaisaColors.inkOnAccent,
               ),
             ),
           ),
@@ -481,8 +478,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFFEFF8F2),
-          border: Border.all(color: const Color(0xFFD5EDE0)),
+          color: PaisaColors.cardElevated,
+          border: Border.all(color: PaisaColors.border),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -504,7 +501,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 TextSpan(
                   style: PaisaTheme.manrope(
                     size: 12.5,
-                    color: const Color(0xFF2F4A3D),
+                    color: PaisaColors.ink,
                   ),
                   children: [
                     const TextSpan(text: 'Most of your spending went to '),
@@ -586,7 +583,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                   style: PaisaTheme.manrope(
                                     size: 12,
                                     weight: FontWeight.w600,
-                                    color: const Color(0xFF42524A),
+                                    color: PaisaColors.ink,
                                   ),
                                 ),
                               ),
@@ -670,7 +667,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                             width: 30,
                             height: 30,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE3F0E7),
+                              color: PaisaColors.cardElevated,
                               borderRadius: BorderRadius.circular(9),
                             ),
                             alignment: Alignment.center,
@@ -845,7 +842,7 @@ class _MerchantRow extends StatelessWidget {
               style: PaisaTheme.sora(
                 size: 12,
                 weight: FontWeight.w700,
-                color: const Color(0xFF5B6B62),
+                color: PaisaColors.mutedCaption,
               ),
             ),
           ),

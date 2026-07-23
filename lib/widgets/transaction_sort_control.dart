@@ -65,7 +65,7 @@ class TransactionSortControl extends StatelessWidget {
                           : FontWeight.w600,
                       color: option == sort
                           ? PaisaColors.primary
-                          : const Color(0xFF42524A),
+                          : PaisaColors.ink,
                     ),
                   ),
                 ),
@@ -85,8 +85,8 @@ class TransactionSortControl extends StatelessWidget {
           vertical: 8,
         ),
         decoration: BoxDecoration(
-          color: PaisaColors.card,
-          border: Border.all(color: PaisaColors.border),
+          color: PaisaColors.cardElevated,
+          border: Border.all(color: PaisaColors.border, width: 1.5),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -104,7 +104,7 @@ class TransactionSortControl extends StatelessWidget {
                 style: PaisaTheme.manrope(
                   size: 12.5,
                   weight: FontWeight.w700,
-                  color: const Color(0xFF42524A),
+                  color: PaisaColors.ink,
                 ),
               ),
             ],

@@ -70,11 +70,12 @@ class TransactionSectionCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(2, 12, 2, 8),
             child: Text(
               section.header!,
-              style: PaisaTheme.manrope(
-                size: 11,
+              style: PaisaTheme.sora(
+                size: 10.5,
                 weight: FontWeight.w700,
-                color: PaisaColors.mutedCaption,
-              ).copyWith(letterSpacing: 0.6),
+                color: PaisaColors.muted,
+                letterSpacing: 1.2,
+              ),
             ),
           )
         else
@@ -83,8 +84,8 @@ class TransactionSectionCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
           decoration: BoxDecoration(
             color: PaisaColors.card,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: PaisaColors.dividerAlt),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: PaisaColors.border, width: 1.5),
           ),
           child: Column(
             children: [

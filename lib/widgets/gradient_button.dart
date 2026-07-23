@@ -18,64 +18,41 @@ class GradientButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (isWhite) {
-      return SizedBox(
-        width: double.infinity,
-        height: 54,
-        child: ElevatedButton(
-          onPressed: onPressed,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: PaisaColors.card,
-            foregroundColor: textColor ?? PaisaColors.primary,
-            elevation: 8,
-            shadowColor: Colors.black26,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-          child: Text(
-            label,
-            style: PaisaTheme.manrope(
-              size: 16,
-              weight: FontWeight.w700,
-              color: textColor ?? PaisaColors.primary,
-            ),
-          ),
-        ),
-      );
-    }
+    final bg = isWhite ? PaisaColors.cardElevated : PaisaColors.primary;
+    final fg = textColor ??
+        (isWhite ? PaisaColors.primary : PaisaColors.inkOnAccent);
+    final border = isWhite ? PaisaColors.primary : PaisaColors.primary;
 
     return SizedBox(
       width: double.infinity,
       height: 54,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          gradient: PaisaColors.fabGradient,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x6612B981),
-              blurRadius: 28,
-              offset: Offset(0, 14),
-            ),
-          ],
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: border, width: 2.5),
+          boxShadow: PaisaColors.hardShadow(
+            color: isWhite ? PaisaColors.primary : const Color(0xFF000000),
+            offset: 4,
+          ),
         ),
         child: ElevatedButton(
           onPressed: onPressed,
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.transparent,
             shadowColor: Colors.transparent,
-            foregroundColor: Colors.white,
+            foregroundColor: fg,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
             ),
           ),
           child: Text(
             label,
-            style: PaisaTheme.manrope(
-              size: 16,
-              weight: FontWeight.w700,
-              color: Colors.white,
+            style: PaisaTheme.sora(
+              size: 15,
+              weight: FontWeight.w800,
+              color: fg,
+              letterSpacing: 0.3,
             ),
           ),
         ),

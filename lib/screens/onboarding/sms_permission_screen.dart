@@ -58,15 +58,18 @@ class SmsPermissionScreen extends StatelessWidget {
                   width: 88,
                   height: 88,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFE7F5EC), Color(0xFFD4EEDD)],
+                    color: PaisaColors.primary,
+                    borderRadius: BorderRadius.circular(26),
+                    border: Border.all(
+                      color: PaisaColors.inkOnAccent,
+                      width: 2.5,
                     ),
-                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: PaisaColors.hardShadow(offset: 4),
                   ),
                   child: const Icon(
                     Icons.shield_outlined,
                     size: 42,
-                    color: PaisaColors.primary,
+                    color: PaisaColors.inkOnAccent,
                   ),
                 ),
               ),
@@ -93,7 +96,7 @@ class SmsPermissionScreen extends StatelessWidget {
               _PrivacyCard(),
               const Spacer(),
               GradientButton(
-                label: 'Allow SMS Access',
+                label: 'ALLOW SMS ACCESS',
                 onPressed: () => _allowSms(context),
               ),
               const SizedBox(height: 16),
@@ -141,7 +144,7 @@ class _PrivacyCard extends StatelessWidget {
                   width: 34,
                   height: 34,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE3F0E7),
+                    color: PaisaColors.cardElevated,
                     borderRadius: BorderRadius.circular(11),
                   ),
                   child: const Icon(
@@ -184,7 +187,7 @@ class _PrivacyCard extends StatelessWidget {
                           text,
                           style: PaisaTheme.manrope(
                             size: 12.5,
-                            color: const Color(0xFF42524A),
+                            color: PaisaColors.ink,
                           ),
                         ),
                       ),
@@ -219,7 +222,7 @@ class _StepIndicator extends StatelessWidget {
           height: 6,
           margin: const EdgeInsets.symmetric(horizontal: 3.5),
           decoration: BoxDecoration(
-            color: active ? PaisaColors.credit : const Color(0xFFCBD6CE),
+            color: active ? PaisaColors.credit : PaisaColors.border,
             borderRadius: BorderRadius.circular(3),
           ),
         );

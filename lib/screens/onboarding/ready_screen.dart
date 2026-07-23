@@ -19,7 +19,8 @@ class ReadyScreen extends StatefulWidget {
 class _ReadyScreenState extends State<ReadyScreen> {
   ScanResult? _result;
   bool _scanning = true;
-  String _statusText = 'Reading bank alerts and extracting transactions on your device.';
+  String _statusText =
+      'Reading bank alerts and extracting transactions on your device.';
 
   @override
   void initState() {
@@ -48,7 +49,8 @@ class _ReadyScreenState extends State<ReadyScreen> {
       if (progress.total > 0) {
         final pct = (progress.fraction * 100).round();
         final mode = progress.isIncremental ? 'Checking new' : 'Scanning';
-        _statusText = '$mode ${progress.scanned} of ${progress.total} messages ($pct%)…';
+        _statusText =
+            '$mode ${progress.scanned} of ${progress.total} messages ($pct%)…';
       }
     });
   }
@@ -73,102 +75,93 @@ class _ReadyScreenState extends State<ReadyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [PaisaColors.primary, Color(0xFF0C4E38)],
-          ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(28, 24, 28, 30),
-            child: Column(
-              children: [
-                const Spacer(),
-                Container(
-                  width: 104,
-                  height: 104,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white.withOpacity(0.28)),
+      backgroundColor: PaisaColors.surface,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 24, 28, 30),
+          child: Column(
+            children: [
+              const Spacer(),
+              Container(
+                width: 104,
+                height: 104,
+                decoration: BoxDecoration(
+                  color: PaisaColors.primary,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: PaisaColors.inkOnAccent,
+                    width: 3,
                   ),
-                  child: Center(
-                    child: _scanning
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : Container(
-                            width: 74,
-                            height: 74,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.check,
-                              size: 40,
-                              color: PaisaColors.primary,
-                            ),
+                  boxShadow: PaisaColors.hardShadow(offset: 5),
+                ),
+                child: Center(
+                  child: _scanning
+                      ? const CircularProgressIndicator(
+                          color: PaisaColors.inkOnAccent,
+                        )
+                      : Container(
+                          width: 70,
+                          height: 70,
+                          decoration: BoxDecoration(
+                            color: PaisaColors.inkOnAccent,
+                            borderRadius: BorderRadius.circular(18),
                           ),
+                          child: const Icon(
+                            Icons.check,
+                            size: 40,
+                            color: PaisaColors.primary,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 28),
+              Text(
+                _scanning ? 'Scanning your SMS…' : "You're all set!",
+                style: PaisaTheme.sora(
+                  size: 27,
+                  weight: FontWeight.w800,
+                  color: PaisaColors.ink,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _scanning
+                    ? _statusText
+                    : _result != null && _result!.totalSms > 0
+                        ? 'Scanned ${_result!.totalSms} messages and found your transactions.'
+                        : 'We scanned your inbox and set everything up automatically.',
+                textAlign: TextAlign.center,
+                style: PaisaTheme.manrope(
+                  size: 14,
+                  color: PaisaColors.mutedCaption,
+                ),
+              ),
+              const SizedBox(height: 28),
+              Row(
+                children: [
+                  _StatTile(
+                    value: _scanning ? '…' : '${_result?.accountCount ?? 0}',
+                    label: 'accounts',
                   ),
-                ),
-                const SizedBox(height: 28),
-                Text(
-                  _scanning ? 'Scanning your SMS…' : "You're all set!",
-                  style: PaisaTheme.sora(
-                    size: 27,
-                    weight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: -0.3,
+                  const SizedBox(width: 12),
+                  _StatTile(
+                    value: _scanning ? '…' : '${_result?.totalCount ?? 0}',
+                    label: 'moves',
                   ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  _scanning
-                      ? _statusText
-                      : _result != null && _result!.totalSms > 0
-                          ? 'Scanned ${_result!.totalSms} messages and found your transactions.'
-                          : 'We scanned your inbox and set everything up automatically.',
-                  textAlign: TextAlign.center,
-                  style: PaisaTheme.manrope(
-                    size: 14,
-                    color: Colors.white.withOpacity(0.82),
+                  const SizedBox(width: 12),
+                  _StatTile(
+                    value: _scanning ? '…' : '${_result?.categoryCount ?? 0}',
+                    label: 'tags',
                   ),
-                ),
-                const SizedBox(height: 28),
-                Row(
-                  children: [
-                    _StatTile(
-                      value: _scanning
-                          ? '…'
-                          : '${_result?.accountCount ?? 0}',
-                      label: 'accounts found',
-                    ),
-                    const SizedBox(width: 12),
-                    _StatTile(
-                      value: _scanning
-                          ? '…'
-                          : '${_result?.totalCount ?? 0}',
-                      label: 'transactions',
-                    ),
-                    const SizedBox(width: 12),
-                    _StatTile(
-                      value: _scanning
-                          ? '…'
-                          : '${_result?.categoryCount ?? 0}',
-                      label: 'categories',
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                GradientButton(
-                  label: 'Go to Dashboard',
-                  isWhite: true,
-                  onPressed: _scanning ? () {} : _goToDashboard,
-                ),
-              ],
-            ),
+                ],
+              ),
+              const Spacer(),
+              GradientButton(
+                label: 'GO TO DASHBOARD →',
+                onPressed: _scanning ? () {} : _goToDashboard,
+              ),
+            ],
           ),
         ),
       ),
@@ -186,11 +179,11 @@ class _StatTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.14),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withOpacity(0.2)),
+          color: PaisaColors.cardElevated,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: PaisaColors.primary, width: 2),
         ),
         child: Column(
           children: [
@@ -199,7 +192,7 @@ class _StatTile extends StatelessWidget {
               style: PaisaTheme.sora(
                 size: 26,
                 weight: FontWeight.w800,
-                color: Colors.white,
+                color: PaisaColors.primary,
               ),
             ),
             const SizedBox(height: 4),
@@ -208,8 +201,8 @@ class _StatTile extends StatelessWidget {
               textAlign: TextAlign.center,
               style: PaisaTheme.manrope(
                 size: 11,
-                weight: FontWeight.w600,
-                color: Colors.white.withOpacity(0.8),
+                weight: FontWeight.w700,
+                color: PaisaColors.mutedCaption,
               ),
             ),
           ],

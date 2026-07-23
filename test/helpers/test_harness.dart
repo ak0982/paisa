@@ -19,7 +19,7 @@ Widget buildTestApp({
       ChangeNotifierProvider<AppSettings>.value(value: settings),
     ],
     child: MaterialApp(
-      theme: PaisaTheme.light(),
+      theme: PaisaTheme.dark(),
       home: Scaffold(body: child),
     ),
   );

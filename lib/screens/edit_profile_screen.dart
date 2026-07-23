@@ -92,20 +92,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 const SizedBox(height: 24),
                 Center(
                   child: Consumer<AppSettings>(
-                    builder: (context, settings, _) => Container(
-                      width: 76,
-                      height: 76,
-                      decoration: BoxDecoration(
-                        gradient: PaisaColors.fabGradient,
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        settings.initials,
-                        style: PaisaTheme.sora(
-                          size: 28,
-                          weight: FontWeight.w800,
-                          color: Colors.white,
+                    builder: (context, settings, _) => Transform.rotate(
+                      angle: -0.05,
+                      child: Container(
+                        width: 76,
+                        height: 76,
+                        decoration: BoxDecoration(
+                          color: PaisaColors.primary,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: PaisaColors.inkOnAccent,
+                            width: 2.5,
+                          ),
+                          boxShadow: PaisaColors.hardShadow(offset: 4),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          settings.initials,
+                          style: PaisaTheme.sora(
+                            size: 28,
+                            weight: FontWeight.w800,
+                            color: PaisaColors.inkOnAccent,
+                          ),
                         ),
                       ),
                     ),
@@ -151,7 +159,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   },
                 ),
                 const Spacer(),
-                GradientButton(label: 'Save changes', onPressed: _save),
+                GradientButton(label: 'SAVE CHANGES', onPressed: _save),
               ],
             ),
           ),

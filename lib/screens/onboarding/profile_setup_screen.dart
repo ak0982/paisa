@@ -84,15 +84,18 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     width: 88,
                     height: 88,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFE7F5EC), Color(0xFFD4EEDD)],
+                      color: PaisaColors.primary,
+                      borderRadius: BorderRadius.circular(26),
+                      border: Border.all(
+                        color: PaisaColors.inkOnAccent,
+                        width: 2.5,
                       ),
-                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: PaisaColors.hardShadow(offset: 4),
                     ),
                     child: const Icon(
                       Icons.person_outline,
                       size: 42,
-                      color: PaisaColors.primary,
+                      color: PaisaColors.inkOnAccent,
                     ),
                   ),
                 ),
@@ -156,7 +159,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 ),
                 const Spacer(),
                 GradientButton(
-                  label: 'Continue',
+                  label: 'CONTINUE →',
                   onPressed: _continue,
                 ),
               ],
@@ -228,7 +231,7 @@ class _StepIndicator extends StatelessWidget {
           height: 6,
           margin: const EdgeInsets.symmetric(horizontal: 3.5),
           decoration: BoxDecoration(
-            color: active ? PaisaColors.credit : const Color(0xFFCBD6CE),
+            color: active ? PaisaColors.credit : PaisaColors.border,
             borderRadius: BorderRadius.circular(3),
           ),
         );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
+import 'neo_surface.dart';
 
 /// Shared scaffold for profile sub-settings screens.
 class SettingsDetailScaffold extends StatelessWidget {
@@ -39,6 +40,7 @@ class SettingsDetailScaffold extends StatelessWidget {
                       size: 22,
                       weight: FontWeight.w800,
                       letterSpacing: -0.3,
+                      color: PaisaColors.ink,
                     ),
                   ),
                 ],
@@ -64,13 +66,10 @@ class SettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return NeoSurface(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: PaisaColors.card,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: PaisaColors.dividerAlt),
-      ),
+      radius: 16,
+      borderWidth: 1.5,
       child: Column(children: children),
     );
   }
@@ -106,6 +105,7 @@ class SettingsToggleRow extends StatelessWidget {
                   style: PaisaTheme.manrope(
                     size: 13.5,
                     weight: FontWeight.w600,
+                    color: PaisaColors.ink,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -165,7 +165,7 @@ class SettingsActionRow extends StatelessWidget {
                       size: 13.5,
                       weight: FontWeight.w600,
                       color: destructive
-                          ? PaisaColors.overBudget
+                          ? PaisaColors.overBudgetSoft
                           : PaisaColors.ink,
                     ),
                   ),
@@ -186,7 +186,7 @@ class SettingsActionRow extends StatelessWidget {
                   size: 18,
                   color: destructive
                       ? PaisaColors.overBudget.withOpacity(0.6)
-                      : const Color(0xFFC6D2CB),
+                      : PaisaColors.muted,
                 ),
           ],
         ),

@@ -11,6 +11,7 @@ import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/category_spend_chip.dart';
+import '../widgets/neo_surface.dart';
 import '../widgets/paisa_progress_bar.dart';
 import '../widgets/transaction_row.dart';
 
@@ -21,9 +22,9 @@ class DashboardScreen extends StatelessWidget {
 
   String _greeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning,';
-    if (hour < 17) return 'Good afternoon,';
-    return 'Good evening,';
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
   }
 
   void _openCurrentMonth(BuildContext context, FinanceStore store) {
@@ -32,7 +33,7 @@ class DashboardScreen extends StatelessWidget {
         builder: (_) => FilteredTransactionsScreen(
           title: store.currentMonthLabel,
           emoji: '📅',
-          tintBg: PaisaColors.primary.withOpacity(0.12),
+          tintBg: PaisaColors.primary.withOpacity(0.18),
           totalLabel: 'All activity',
           countSingular: 'transaction',
           countPlural: 'transactions',
@@ -67,10 +68,11 @@ class DashboardScreen extends StatelessWidget {
 
         return RefreshIndicator(
           color: PaisaColors.primary,
+          backgroundColor: PaisaColors.cardElevated,
           onRefresh: store.syncFromSms,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(22, 8, 22, 16),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -81,18 +83,21 @@ class DashboardScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _greeting(),
-                          style: PaisaTheme.manrope(
-                            size: 13,
-                            color: PaisaColors.mutedLight,
+                          _greeting().toUpperCase(),
+                          style: PaisaTheme.label(
+                            size: 10.5,
+                            color: PaisaColors.muted,
+                            letterSpacing: 2,
                           ),
                         ),
+                        const SizedBox(height: 2),
                         Text(
-                          '$firstName 👋',
+                          '$firstName ⚡',
                           style: PaisaTheme.sora(
                             size: 22,
                             weight: FontWeight.w800,
                             letterSpacing: -0.3,
+                            color: PaisaColors.ink,
                           ),
                         ),
                       ],
@@ -105,20 +110,13 @@ class DashboardScreen extends StatelessWidget {
                           ),
                         );
                       },
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          gradient: PaisaColors.fabGradient,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        alignment: Alignment.center,
+                      child: NeoSticker(
                         child: Text(
                           initials,
                           style: PaisaTheme.sora(
                             size: 15,
-                            weight: FontWeight.w700,
-                            color: Colors.white,
+                            weight: FontWeight.w800,
+                            color: PaisaColors.inkOnAccent,
                           ),
                         ),
                       ),
@@ -126,20 +124,14 @@ class DashboardScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: PaisaColors.heroGradient,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x520B7A4B),
-                        blurRadius: 34,
-                        offset: Offset(0, 18),
-                      ),
-                    ],
-                  ),
+                NeoSurface(
+                  color: PaisaColors.primary,
+                  borderColor: PaisaColors.inkOnAccent,
+                  borderWidth: 2.5,
+                  radius: 20,
+                  shadow: true,
+                  shadowOffset: 5,
+                  padding: const EdgeInsets.all(19),
                   child: Column(
                     children: [
                       Row(
@@ -150,19 +142,22 @@ class DashboardScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Spent in ${store.currentMonthLabel}',
+                                  'Spent in ${store.currentMonthLabel}'
+                                      .toUpperCase(),
                                   style: PaisaTheme.manrope(
-                                    size: 12,
-                                    weight: FontWeight.w600,
-                                    color: PaisaColors.onGradientSecondary,
+                                    size: 10.5,
+                                    weight: FontWeight.w700,
+                                    color: PaisaColors.inkOnAccent,
+                                    letterSpacing: 1.5,
                                   ),
                                 ),
+                                const SizedBox(height: 4),
                                 Text(
                                   formatInr(store.monthlySpent),
                                   style: PaisaTheme.sora(
                                     size: 32,
                                     weight: FontWeight.w800,
-                                    color: Colors.white,
+                                    color: PaisaColors.inkOnAccent,
                                     letterSpacing: -0.5,
                                   ),
                                 ),
@@ -173,43 +168,46 @@ class DashboardScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                'Income',
+                                'INCOME',
                                 style: PaisaTheme.manrope(
-                                  size: 12,
-                                  weight: FontWeight.w600,
-                                  color: PaisaColors.onGradientSecondary,
+                                  size: 9,
+                                  weight: FontWeight.w700,
+                                  color: PaisaColors.inkOnAccent
+                                      .withOpacity(0.7),
+                                  letterSpacing: 1,
                                 ),
                               ),
                               Text(
                                 formatInr(store.monthlyIncome),
                                 style: PaisaTheme.sora(
                                   size: 18,
-                                  weight: FontWeight.w700,
-                                  color: PaisaColors.positiveHighlight,
+                                  weight: FontWeight.w800,
+                                  color: PaisaColors.inkOnAccent,
                                 ),
                               ),
                             ],
                           ),
                         ],
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Savings rate',
-                            style: PaisaTheme.manrope(
-                              size: 11.5,
-                              weight: FontWeight.w600,
-                              color: Colors.white.withOpacity(0.85),
+                            'SAVINGS RATE',
+                            style: PaisaTheme.sora(
+                              size: 10.5,
+                              weight: FontWeight.w700,
+                              color: PaisaColors.inkOnAccent,
+                              letterSpacing: 1,
                             ),
                           ),
                           Text(
                             '${(store.savingsRate * 100).round()}%',
-                            style: PaisaTheme.manrope(
-                              size: 11.5,
-                              weight: FontWeight.w600,
-                              color: Colors.white.withOpacity(0.85),
+                            style: PaisaTheme.sora(
+                              size: 10.5,
+                              weight: FontWeight.w700,
+                              color: PaisaColors.inkOnAccent,
                             ),
                           ),
                         ],
@@ -217,15 +215,19 @@ class DashboardScreen extends StatelessWidget {
                       const SizedBox(height: 7),
                       PaisaProgressBar(
                         progress: store.savingsRate,
-                        color: PaisaColors.positiveHighlight,
-                        trackColor: Colors.white.withOpacity(0.22),
+                        color: PaisaColors.inkOnAccent,
+                        trackColor: PaisaColors.inkOnAccent.withOpacity(0.2),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        '${formatInr(store.monthlySaved)} saved · ${store.activeMonthTransactionCount} transactions',
-                        style: PaisaTheme.manrope(
-                          size: 11,
-                          color: Colors.white.withOpacity(0.7),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '${formatInr(store.monthlySaved)} saved · ${store.activeMonthTransactionCount} transactions',
+                          style: PaisaTheme.manrope(
+                            size: 11,
+                            weight: FontWeight.w600,
+                            color: PaisaColors.inkOnAccent.withOpacity(0.75),
+                          ),
                         ),
                       ),
                     ],
@@ -234,7 +236,7 @@ class DashboardScreen extends StatelessWidget {
                 if (chips.isNotEmpty) ...[
                   const SizedBox(height: 18),
                   SizedBox(
-                    height: 72,
+                    height: 64,
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount: chips.length.clamp(0, 6),
@@ -245,6 +247,8 @@ class DashboardScreen extends StatelessWidget {
                         return CategorySpendChip(
                           info: info,
                           amount: chips[i].value,
+                          rotate: true,
+                          angle: i.isEven ? -0.035 : 0.035,
                         );
                       },
                     ),
@@ -326,7 +330,7 @@ class DashboardScreen extends StatelessWidget {
           .fold(0.0, (sum, t) => sum + t.amount);
       return formatInr(income);
     }
-    return formatInr(spent);
+    return formatAmount(spent, isCredit: false);
   }
 }
 
@@ -352,7 +356,11 @@ class _SectionHeader extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: PaisaTheme.sora(size: 15, weight: FontWeight.w700),
+                style: PaisaTheme.sora(
+                  size: 15,
+                  weight: FontWeight.w700,
+                  color: PaisaColors.ink,
+                ),
               ),
               if (trailing != null) ...[
                 const SizedBox(width: 8),
@@ -379,7 +387,7 @@ class _SectionHeader extends StatelessWidget {
               style: PaisaTheme.manrope(
                 size: 12,
                 weight: FontWeight.w700,
-                color: PaisaColors.credit,
+                color: PaisaColors.primary,
               ),
             ),
           ),
@@ -399,13 +407,10 @@ class _TxnCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: PaisaColors.card,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: PaisaColors.dividerAlt),
-      ),
+    return NeoSurface(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      radius: 16,
+      borderWidth: 1.5,
       child: Column(
         children: [
           for (var i = 0; i < transactions.length; i++) ...[
@@ -438,14 +443,10 @@ class _SoftEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return NeoSurface(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-      decoration: BoxDecoration(
-        color: PaisaColors.card,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: PaisaColors.dividerAlt),
-      ),
+      radius: 16,
       child: Column(
         children: [
           Text(
@@ -465,7 +466,7 @@ class _SoftEmpty extends StatelessWidget {
                 style: PaisaTheme.manrope(
                   size: 13,
                   weight: FontWeight.w700,
-                  color: PaisaColors.credit,
+                  color: PaisaColors.primary,
                 ),
               ),
             ),
@@ -506,14 +507,12 @@ class _EmptyHint extends StatelessWidget {
       subtitle = 'Tap “Scan SMS now” to import your bank alerts.';
     }
 
-    return Container(
+    return NeoSurface(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: PaisaColors.card,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: PaisaColors.dividerAlt),
-      ),
+      radius: 16,
+      borderColor: PaisaColors.primary,
+      borderWidth: 2,
       child: Column(
         children: [
           Text(scanning ? '🔎' : '📭', style: const TextStyle(fontSize: 32)),
@@ -521,7 +520,11 @@ class _EmptyHint extends StatelessWidget {
           Text(
             headline,
             textAlign: TextAlign.center,
-            style: PaisaTheme.manrope(size: 13, color: PaisaColors.muted),
+            style: PaisaTheme.sora(
+              size: 14,
+              weight: FontWeight.w700,
+              color: PaisaColors.ink,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -552,19 +555,23 @@ class _EmptyHint extends StatelessWidget {
                 onPressed: () => store.syncFromSms(),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: PaisaColors.primary,
-                  foregroundColor: Colors.white,
+                  foregroundColor: PaisaColors.inkOnAccent,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
+                    side: const BorderSide(
+                      color: PaisaColors.primary,
+                      width: 2.5,
+                    ),
                   ),
                   elevation: 0,
                 ),
                 child: Text(
-                  'Scan SMS now',
-                  style: PaisaTheme.manrope(
+                  'SCAN SMS NOW',
+                  style: PaisaTheme.sora(
                     size: 14,
-                    weight: FontWeight.w700,
-                    color: Colors.white,
+                    weight: FontWeight.w800,
+                    color: PaisaColors.inkOnAccent,
                   ),
                 ),
               ),
@@ -578,16 +585,19 @@ class _EmptyHint extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: PaisaColors.primary,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: const BorderSide(color: PaisaColors.primary),
+                    side: const BorderSide(
+                      color: PaisaColors.primary,
+                      width: 2,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
                   child: Text(
-                    'Open Settings',
-                    style: PaisaTheme.manrope(
+                    'OPEN SETTINGS',
+                    style: PaisaTheme.sora(
                       size: 14,
-                      weight: FontWeight.w700,
+                      weight: FontWeight.w800,
                       color: PaisaColors.primary,
                     ),
                   ),

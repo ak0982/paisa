@@ -58,17 +58,13 @@ class BudgetsScreen extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF123B2C), PaisaColors.primary],
+                    color: PaisaColors.primary,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: PaisaColors.inkOnAccent,
+                      width: 2.5,
                     ),
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x470B7A4B),
-                        blurRadius: 30,
-                        offset: Offset(0, 16),
-                      ),
-                    ],
+                    boxShadow: PaisaColors.hardShadow(offset: 5),
                   ),
                   child: Column(
                     children: [
@@ -80,11 +76,12 @@ class BudgetsScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Spent so far',
+                                  'SPENT SO FAR',
                                   style: PaisaTheme.manrope(
-                                    size: 12,
-                                    weight: FontWeight.w600,
-                                    color: PaisaColors.onGradientSecondary,
+                                    size: 10.5,
+                                    weight: FontWeight.w700,
+                                    color: PaisaColors.inkOnAccent,
+                                    letterSpacing: 1.2,
                                   ),
                                 ),
                                 Text(
@@ -92,7 +89,7 @@ class BudgetsScreen extends StatelessWidget {
                                   style: PaisaTheme.sora(
                                     size: 30,
                                     weight: FontWeight.w800,
-                                    color: Colors.white,
+                                    color: PaisaColors.inkOnAccent,
                                     letterSpacing: -0.5,
                                   ),
                                 ),
@@ -103,19 +100,21 @@ class BudgetsScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                'Budget',
+                                'BUDGET',
                                 style: PaisaTheme.manrope(
-                                  size: 12,
-                                  weight: FontWeight.w600,
-                                  color: PaisaColors.onGradientSecondary,
+                                  size: 9,
+                                  weight: FontWeight.w700,
+                                  color: PaisaColors.inkOnAccent
+                                      .withOpacity(0.7),
+                                  letterSpacing: 1,
                                 ),
                               ),
                               Text(
                                 formatInr(store.totalBudget),
                                 style: PaisaTheme.sora(
                                   size: 17,
-                                  weight: FontWeight.w700,
-                                  color: Colors.white,
+                                  weight: FontWeight.w800,
+                                  color: PaisaColors.inkOnAccent,
                                 ),
                               ),
                             ],
@@ -125,9 +124,9 @@ class BudgetsScreen extends StatelessWidget {
                       const SizedBox(height: 16),
                       PaisaProgressBar(
                         progress: ratio,
-                        color: PaisaColors.positiveHighlight,
+                        color: PaisaColors.inkOnAccent,
                         height: 9,
-                        trackColor: Colors.white.withOpacity(0.22),
+                        trackColor: PaisaColors.inkOnAccent.withOpacity(0.22),
                       ),
                       const SizedBox(height: 9),
                       Text(
@@ -135,7 +134,7 @@ class BudgetsScreen extends StatelessWidget {
                         style: PaisaTheme.manrope(
                           size: 12,
                           weight: FontWeight.w600,
-                          color: Colors.white.withOpacity(0.85),
+                          color: PaisaColors.inkOnAccent.withOpacity(0.85),
                         ),
                       ),
                     ],
@@ -159,8 +158,11 @@ class BudgetsScreen extends StatelessWidget {
                         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                         decoration: BoxDecoration(
                           color: PaisaColors.card,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: PaisaColors.dividerAlt),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: PaisaColors.border,
+                            width: 1.5,
+                          ),
                         ),
                         child: Column(
                           children: [
@@ -172,6 +174,10 @@ class BudgetsScreen extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: info.tintBg,
                                     borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: PaisaColors.inkOnAccent,
+                                      width: 2,
+                                    ),
                                   ),
                                   alignment: Alignment.center,
                                   child: Text(info.emoji,
@@ -323,8 +329,16 @@ class _EmptyBudgets extends StatelessWidget {
             onPressed: onSync,
             style: FilledButton.styleFrom(
               backgroundColor: PaisaColors.primary,
+              foregroundColor: PaisaColors.inkOnAccent,
             ),
-            child: const Text('Scan SMS'),
+            child: Text(
+              'SCAN SMS',
+              style: PaisaTheme.sora(
+                size: 13,
+                weight: FontWeight.w800,
+                color: PaisaColors.inkOnAccent,
+              ),
+            ),
           ),
         ],
       ),

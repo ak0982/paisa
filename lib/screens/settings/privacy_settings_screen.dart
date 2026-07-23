@@ -69,8 +69,8 @@ class PrivacySettingsScreen extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: smsGranted
-                                ? const Color(0xFFE3F0E7)
-                                : const Color(0xFFFFEDE7),
+                                ? PaisaColors.cardElevated
+                                : PaisaColors.cardElevated,
                             borderRadius: BorderRadius.circular(7),
                           ),
                           child: Text(
@@ -191,7 +191,7 @@ class _PrivacyGuaranteeCard extends StatelessWidget {
                   width: 34,
                   height: 34,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE3F0E7),
+                    color: PaisaColors.cardElevated,
                     borderRadius: BorderRadius.circular(11),
                   ),
                   child: const Icon(

@@ -38,13 +38,13 @@ class TransactionRow extends StatelessWidget {
         context.watch<AppSettings?>()?.maskMerchantNames ?? false;
     final info = transaction.categoryInfo;
     final amountColor =
-        transaction.isCredit ? PaisaColors.credit : PaisaColors.ink;
+        transaction.isCredit ? PaisaColors.credit : PaisaColors.debit;
     final merchantLabel =
         _displayMerchant(transaction.merchant, maskMerchants);
     final timeLabel = formatTxnTime(transaction.timestamp);
     final dateLabel = formatTxnDate(transaction.timestamp);
     final flowColor =
-        transaction.isCredit ? PaisaColors.credit : const Color(0xFF6B7C73);
+        transaction.isCredit ? PaisaColors.credit : PaisaColors.mutedCaption;
 
     return Padding(
       padding: EdgeInsets.symmetric(vertical: compact ? 10 : 11),
@@ -56,7 +56,8 @@ class TransactionRow extends StatelessWidget {
             height: compact ? 42 : 44,
             decoration: BoxDecoration(
               color: info.tintBg,
-              borderRadius: BorderRadius.circular(compact ? 13 : 14),
+              borderRadius: BorderRadius.circular(compact ? 12 : 13),
+              border: Border.all(color: PaisaColors.inkOnAccent, width: 2),
             ),
             alignment: Alignment.center,
             child: Text(info.emoji, style: TextStyle(fontSize: compact ? 18 : 19)),
@@ -73,6 +74,7 @@ class TransactionRow extends StatelessWidget {
                   style: PaisaTheme.manrope(
                     size: compact ? 13.5 : 14,
                     weight: FontWeight.w600,
+                    color: PaisaColors.ink,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -85,10 +87,12 @@ class TransactionRow extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: transaction.isCredit
-                              ? const Color(0xFFE8F8F0)
-                              : const Color(0xFFF0F3F1),
+                          color: PaisaColors.cardElevated,
                           borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: flowColor.withOpacity(0.5),
+                            width: 1.5,
+                          ),
                         ),
                         child: Text(
                           transaction.flowLabel,
@@ -118,7 +122,7 @@ class TransactionRow extends StatelessWidget {
                           style: PaisaTheme.manrope(
                             size: 10.5,
                             weight: FontWeight.w600,
-                            color: const Color(0xFFAAB8AF),
+                            color: PaisaColors.muted,
                           ),
                         ),
                       ],
@@ -161,7 +165,7 @@ class TransactionRow extends StatelessWidget {
                   style: PaisaTheme.manrope(
                     size: 9.5,
                     weight: FontWeight.w600,
-                    color: const Color(0xFFAAB8AF),
+                    color: PaisaColors.muted,
                   ),
                 ),
               ],

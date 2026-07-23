@@ -147,9 +147,15 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
     messenger.showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Text(
+          message,
+          style: PaisaTheme.manrope(
+            size: 13,
+            color: PaisaColors.inkOnAccent,
+          ),
+        ),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: PaisaColors.ink,
+        backgroundColor: PaisaColors.primary,
         duration: const Duration(seconds: 2),
       ),
     );
@@ -311,31 +317,33 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 onPressed: store.isLoading
                     ? null
                     : () => _handleSync(context, store),
-                elevation: 8,
+                elevation: 0,
                 backgroundColor: Colors.transparent,
                 child: Container(
                   width: 54,
                   height: 54,
                   decoration: BoxDecoration(
-                    gradient: PaisaColors.fabGradient,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x8012B981),
-                        blurRadius: 26,
-                        offset: Offset(0, 14),
-                      ),
-                    ],
+                    color: PaisaColors.primary,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: PaisaColors.inkOnAccent,
+                      width: 2.5,
+                    ),
+                    boxShadow: PaisaColors.hardShadow(offset: 4),
                   ),
                   child: store.isLoading
                       ? const Padding(
                           padding: EdgeInsets.all(14),
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: PaisaColors.inkOnAccent,
                           ),
                         )
-                      : const Icon(Icons.sync, color: Colors.white, size: 24),
+                      : const Icon(
+                          Icons.sync,
+                          color: PaisaColors.inkOnAccent,
+                          size: 24,
+                        ),
                 ),
               ),
             ),
@@ -462,16 +470,20 @@ class _FilterChip extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
           decoration: BoxDecoration(
-            color: active ? PaisaColors.primaryDeep : PaisaColors.card,
-            border: active ? null : Border.all(color: PaisaColors.border),
+            color: active ? PaisaColors.primary : PaisaColors.cardElevated,
+            border: Border.all(
+              color: active ? PaisaColors.primary : PaisaColors.border,
+              width: 1.5,
+            ),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
-            label,
+            label.toUpperCase(),
             style: PaisaTheme.manrope(
-              size: 12.5,
-              weight: active ? FontWeight.w700 : FontWeight.w600,
-              color: active ? Colors.white : const Color(0xFF42524A),
+              size: 11.5,
+              weight: FontWeight.w700,
+              color: active ? PaisaColors.inkOnAccent : PaisaColors.mutedCaption,
+              letterSpacing: 0.4,
             ),
           ),
         ),

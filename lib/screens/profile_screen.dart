@@ -77,9 +77,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     messenger.showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Text(
+          message,
+          style: PaisaTheme.manrope(
+            size: 13,
+            color: PaisaColors.inkOnAccent,
+          ),
+        ),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: PaisaColors.ink,
+        backgroundColor: PaisaColors.primary,
       ),
     );
   }
@@ -164,28 +170,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _SettingItem(
             icon: Icons.sync,
             label: 'Rescan SMS',
-            tint: Color(0xFFE3F5EC),
+            tint: PaisaColors.cardElevated,
             iconColor: PaisaColors.primary,
             action: _SettingAction.rescan,
           ),
           _SettingItem(
             icon: Icons.privacy_tip_outlined,
             label: 'Privacy Settings',
-            tint: Color(0xFFF3E8FF),
-            iconColor: Color(0xFF8B44D6),
+            tint: PaisaColors.cardElevated,
+            iconColor: PaisaColors.catShopping,
             action: _SettingAction.privacy,
           ),
           _SettingItem(
             icon: Icons.help_outline,
             label: 'Help & Support',
-            tint: Color(0xFFFDF3DD),
-            iconColor: Color(0xFFB4791A),
+            tint: PaisaColors.cardElevated,
+            iconColor: PaisaColors.warning,
             action: _SettingAction.help,
           ),
           _SettingItem(
             icon: Icons.logout,
             label: 'Logout',
-            tint: Color(0xFFFFEDE7),
+            tint: PaisaColors.cardElevated,
             iconColor: PaisaColors.overBudget,
             isDestructive: true,
             action: _SettingAction.logout,
@@ -233,20 +239,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 child: Row(
                   children: [
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        gradient: PaisaColors.fabGradient,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        appSettings.initials,
-                        style: PaisaTheme.sora(
-                          size: 20,
-                          weight: FontWeight.w700,
-                          color: Colors.white,
+                    Transform.rotate(
+                      angle: -0.05,
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: PaisaColors.primary,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: PaisaColors.inkOnAccent,
+                            width: 2.5,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          appSettings.initials,
+                          style: PaisaTheme.sora(
+                            size: 20,
+                            weight: FontWeight.w800,
+                            color: PaisaColors.inkOnAccent,
+                          ),
                         ),
                       ),
                     ),
@@ -278,7 +291,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const Icon(
                       Icons.chevron_right,
-                      color: Color(0xFFB4C2BA),
+                      color: PaisaColors.muted,
                       size: 20,
                     ),
                   ],
@@ -297,7 +310,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE3F0E7),
+                      color: PaisaColors.cardElevated,
                       borderRadius: BorderRadius.circular(7),
                     ),
                     child: Text(
@@ -435,7 +448,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : 'Paisa · version 1.0.0',
                   style: PaisaTheme.manrope(
                     size: 11.5,
-                    color: const Color(0xFFAAB8AF),
+                    color: PaisaColors.muted,
                   ),
                 ),
               ),
@@ -485,16 +498,20 @@ class _FilterChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
         decoration: BoxDecoration(
-          color: active ? PaisaColors.primaryDeep : PaisaColors.card,
-          border: active ? null : Border.all(color: PaisaColors.border),
+          color: active ? PaisaColors.primary : PaisaColors.cardElevated,
+          border: Border.all(
+            color: active ? PaisaColors.primary : PaisaColors.border,
+            width: 1.5,
+          ),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
-          '$label ($count)',
+          '$label ($count)'.toUpperCase(),
           style: PaisaTheme.manrope(
-            size: 12.5,
-            weight: active ? FontWeight.w700 : FontWeight.w600,
-            color: active ? Colors.white : const Color(0xFF42524A),
+            size: 11.5,
+            weight: FontWeight.w700,
+            color: active ? PaisaColors.inkOnAccent : PaisaColors.mutedCaption,
+            letterSpacing: 0.3,
           ),
         ),
       ),
@@ -581,7 +598,7 @@ class _BankRow extends StatelessWidget {
               icon: const Icon(
                 Icons.close,
                 size: 18,
-                color: Color(0xFFB4C2BA),
+                color: PaisaColors.muted,
               ),
             )
           else
@@ -680,7 +697,7 @@ class _SettingsRow extends StatelessWidget {
               const Icon(
                 Icons.chevron_right,
                 size: 18,
-                color: Color(0xFFC6D2CB),
+                color: PaisaColors.muted,
               ),
           ],
         ),

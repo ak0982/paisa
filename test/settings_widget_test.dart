@@ -286,7 +286,7 @@ void main() {
 
       expect(find.text('Rahul Kumar'), findsOneWidget);
       expect(find.text('rahul@paisa.app'), findsOneWidget);
-      expect(find.text('Save changes'), findsOneWidget);
+      expect(find.text('SAVE CHANGES'), findsOneWidget);
     });
 
     testWidgets('U55 Edit profile saves updated name', (tester) async {
@@ -294,7 +294,7 @@ void main() {
       await pump(tester, const EditProfileScreen());
 
       await tester.enterText(find.byType(TextFormField).first, 'New Name');
-      await tester.tap(find.text('Save changes'));
+      await tester.tap(find.text('SAVE CHANGES'));
       await tester.pumpAndSettle();
 
       expect(settings.userName, 'New Name');
@@ -305,7 +305,7 @@ void main() {
       await pump(tester, const EditProfileScreen());
 
       await tester.enterText(find.byType(TextFormField).first, '');
-      await tester.tap(find.text('Save changes'));
+      await tester.tap(find.text('SAVE CHANGES'));
       await tester.pumpAndSettle();
 
       expect(find.text('Please enter your name'), findsOneWidget);
@@ -317,7 +317,7 @@ void main() {
       await pump(tester, const EditProfileScreen());
 
       await tester.enterText(find.byType(TextFormField).at(1), 'not-an-email');
-      await tester.tap(find.text('Save changes'));
+      await tester.tap(find.text('SAVE CHANGES'));
       await tester.pumpAndSettle();
 
       expect(find.text('Enter a valid email or leave it blank'), findsOneWidget);
