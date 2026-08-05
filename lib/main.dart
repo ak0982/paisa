@@ -81,7 +81,13 @@ const int categorizerVersion = 4;
 // and CC "creditcard … used at" / payment-received patterns, discovery + logo,
 // _realBanks allowlist. Forces a rescan so HSBC SMS previously ignored as
 // unknown bank are picked up.
-const int transactionSchemaVersion = 23;
+// Bumped 23 -> 24: evidence from offline SMS analysis DB (fresh Redmi dump):
+// (1) live HSBC "creditcard … used at … for INR" was stuck at
+// noTransactionSignal — completed-txn signal + looser merchant capture;
+// (2) ICICI USD card spends + CC refunds; (3) Axis cashback credits;
+// (4) bill/EMI "is due" reminders no longer count as txn signals (were
+// parseFailed noise). Forces a rescan.
+const int transactionSchemaVersion = 24;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

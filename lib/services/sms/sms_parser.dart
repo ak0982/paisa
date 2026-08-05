@@ -101,7 +101,12 @@ class SmsParser {
     r'credited with rs\.?\s*[\d,]+.*(?:on \d|against reversal)|'
     r'deposited in (?:\w+ ){0,3}bank|'
     r'credit card (?:xx)?\d{4} debited for|'
-    r'spent using icici bank card|'
+    r'spent using (?:\w+\s+)+bank card|'
+    // Live HSBC India CC: "HSBC creditcard xxxxx3740 used at MERCHANT for INR …"
+    r'credit\s*card\s+[x*\d]+\s+used at|'
+    r'used at .+ for\s+(?:inr|rs\.?)|'
+    r'cashback of\s+(?:inr|rs\.?).+credited to your|'
+    r'refund of\s+(?:inr|rs\.?).+credited to|'
     r'a/c x?\d{4} debited by .*trf to mbk ccbp|'
     r'reversal of .*credited to .*credit card|'
     r'received\s+rs\.?\s*[\d,]+.*in your (?:kotak|hdfc|sbi|icici|axis|bank|a/c|account)|'
@@ -171,6 +176,12 @@ class SmsParser {
     if (isNonBankWalletMovement(trimmed)) return false;
     if (isPromoOrOfferSms(trimmed, sender: sender)) return false;
 
+    // Bill-due / EMI-due reminders mention amounts but are not completed txns.
+    // Without this, `_bankAlertPattern`'s "payment of INR" pushes them to
+    // parseFailed (evidence: Axis/ICICI due SMS in paisa_sms_analysis.db).
+    final lower = trimmed.toLowerCase();
+    if (_looksLikeDueReminder(lower)) return false;
+
     // Transactional bank/UPI alerts in India are delivered from registered DLT
     // sender headers (e.g. VM-HDFCBK), never from personal 10-digit numbers.
     // Reject personal senders BEFORE the completed-signal shortcut, otherwise a
@@ -186,6 +197,21 @@ class SmsParser {
       return true;
     }
 
+    return false;
+  }
+
+  static bool _looksLikeDueReminder(String lower) {
+    if (lower.contains('ignore if paid')) return true;
+    if (RegExp(r'\bis due on\b').hasMatch(lower) &&
+        !hasCompletedTransactionSignal(lower)) {
+      return true;
+    }
+    if (RegExp(r'\b(?:total due|minimum due|min(?:imum)? amount due)\b')
+            .hasMatch(lower) &&
+        !RegExp(r'\b(?:spent|debited|used at|credited|received payment)\b')
+            .hasMatch(lower)) {
+      return true;
+    }
     return false;
   }
 
@@ -652,10 +678,11 @@ class SmsParser {
         merchantGroup: 2,
         amountGroup: 3,
       ),
-      // Credit card spend: "Your HSBC creditcard xxxxx1234 used at AMAZON for INR 305.00"
+      // Credit card spend (live inbox evidence):
+      // "HSBC creditcard xxxxx3740 used at zepto marketplace private for INR 9975.00 on 28/07/26.Limit Rs …"
       _SmsPattern(
         RegExp(
-          r'HSBC\s+credit\s*card\s+([Xx*\d]+)\s+used at\s+([A-Za-z0-9 .&-]{2,40}?)\s+for\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          r'HSBC\s+credit\s*card\s+([Xx*\d]+)\s+used at\s+(.+?)\s+for\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
           caseSensitive: false,
         ),
         accountGroup: 1,
@@ -741,6 +768,36 @@ class SmsParser {
         amountGroup: 1,
         accountGroup: 2,
         merchantGroup: 3,
+      ),
+      // Live dump: "USD 23.60 spent using ICICI Bank Card XX2009 on 30-Jul-26 on ANTHROPIC* CLAU. Avl Limit: INR …"
+      _SmsPattern(
+        RegExp(
+          r'(?:USD|EUR|GBP)\s+(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent using ICICI Bank Card (?:XX|xx)?(\d{4}) on \d+-\w+-\d+ on ([A-Za-z0-9 .*]+?)(?:\.|,)\s*Avl',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Live dump: "IRCTC … refund of Rs 80.36 credited to ICICI Bank Credit Card XX0003"
+      _SmsPattern(
+        RegExp(
+          r'refund of\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+credited to ICICI Bank Credit Card (?:XX|xx)?(\d{4})',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // Live dump: "Cashback of INR 83 has been credited to your Axis Bank Flipkart Visa Credit Card XX8341"
+      _SmsPattern(
+        RegExp(
+          r'Cashback of\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+has been credited to your .+?Credit Card (?:XX|xx)?(\d{4})',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
       ),
       // ICICI CC UPI debit: Credit Card XX0003 debited for INR 50.00 on ... for UPI-xxx-MERCHANT
       _SmsPattern(

@@ -48,8 +48,12 @@ my_sms.txt
 my_sms_live.txt
 *_sms_live.txt
 sms_analysis_report.txt
+paisa_sms_gap_report.md
+paisa_sms_analysis.db
+*.sms_analysis.db
 # Local device screenshots / UI dumps from manual QA (may contain real SMS)
 test_artifacts/
+.local/
 
 # Android signing (belt-and-suspenders; also in android/.gitignore)
 *.jks

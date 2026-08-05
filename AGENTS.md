@@ -89,7 +89,7 @@ The user develops against a **physical Android device**. When operating on it:
 | `.github/workflows/flutter_ci.yml` | CI: `flutter analyze` + `flutter test` on push/PR to `main` (ISSUE-16). |
 | `test/fixtures/synthetic_sms_corpus.txt` | Synthetic SMS fixtures (no personal data) so gate coverage runs without the private dump. |
 | `docs/india_bank_sms_research.md` | RBI bank inventory, SMS taxonomy, public template notes, and parser expansion roadmap (research only). |
-| `tool/` | Standalone diagnostic scripts (audits, simulations) run against the SMS dump. |
+| `tool/` | Standalone diagnostic scripts (audits, simulations) run against the SMS dump. **SMS analysis loop:** `import_sms_dump.dart` → `reparse_sms_analysis.dart` → `report_sms_gaps.dart` writes `~/Downloads/paisa_sms_analysis.db` + redacted `paisa_sms_gap_report.md` (both gitignored). |
 | `test/` | ~378 tests (see §7). |
 | `code_review_by_fable_claude.md` | Fable/Claude code review that drove ISSUES 1–16 (historical evidence + proposed fixes). |
 
@@ -133,7 +133,7 @@ inboxes, with checkpointing (`sms_scan_state.dart`) for resume.
 
 `lib/main.dart` defines:
 
-- `const transactionSchemaVersion = **23**`
+- `const transactionSchemaVersion = **24**`
 - `const categorizerVersion = **4**`
 
 On launch, if either stored value is lower than the code constant **and** onboarding is complete,
@@ -162,6 +162,7 @@ installs keep stale data and your change appears to "do nothing."
 | 20 → 21 | **ISSUE-11:** kind evidence + spend stats keyed by `(bank, mask)`, not mask alone. |
 | 21 → 22 | Adversarial QA: bare 10-digit personal senders rejected; self-transfer KPI pairing needs distinct real `bank\|mask` legs; CCBP merchant wording excludes spend even if kind stays savings. |
 | 22 → 23 | **HSBC India:** sender/body mapping (`HSBCIN` / `HSBC*`), savings + debit-card + CC parse/discovery, `_realBanks` + logo. |
+| 23 → 24 | **Evidence from offline SMS analysis DB** (fresh dump → `~/Downloads/paisa_sms_analysis.db`): live HSBC `creditcard … used at … for INR` signal+parse; ICICI USD spends + CC refunds; Axis cashback; bill/EMI due reminders demoted from txn noise. |
 
 `categorizerVersion` remains **4** (rebuilds when categorizer rules change enough independently of
 schema). ISSUE-13's categorizer precision rode the schema bump 19 → 20 rather than a separate

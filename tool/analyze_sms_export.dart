@@ -5,39 +5,52 @@ import 'dart:io';
 import 'package:paisa_app/services/sms/parsed_sms_transaction.dart';
 import 'package:paisa_app/services/sms/sms_scan_pipeline.dart';
 
-class _ExportedSms {
-  _ExportedSms({
+/// One SMS row from an `adb shell content query …/sms/inbox` export.
+class AdbExportedSms {
+  AdbExportedSms({
     required this.row,
     required this.sender,
     required this.body,
     required this.dateMs,
+    this.smsId,
   });
 
   final int row;
   final String sender;
   final String body;
   final int dateMs;
+  /// Android Telephony `_id` when present in the export.
+  final String? smsId;
 }
 
-List<_ExportedSms> parseAdbSmsExport(String raw) {
-  final messages = <_ExportedSms>[];
+/// Parses adb inbox exports.
+///
+/// Supports both:
+/// - `Row: N address=…, body=…, date=…`
+/// - `Row: N _id=…, address=…, body=…, date=…`
+List<AdbExportedSms> parseAdbSmsExport(String raw) {
+  final messages = <AdbExportedSms>[];
   final blocks = raw.split(RegExp(r'(?=^Row: )', multiLine: true));
 
   for (final block in blocks) {
     final trimmed = block.trim();
     if (!trimmed.startsWith('Row: ')) continue;
 
-    final header = RegExp(r'^Row: (\d+) address=([^,]+), body=').firstMatch(trimmed);
+    final header = RegExp(
+      r'^Row: (\d+)(?: _id=([^,]+),)? address=([^,]+), body=',
+    ).firstMatch(trimmed);
     if (header == null) continue;
 
-    final dateMatch = RegExp(r', date=(\d+)\s*$', multiLine: true).firstMatch(trimmed);
+    final dateMatch =
+        RegExp(r', date=(\d+)\s*$', multiLine: true).firstMatch(trimmed);
     if (dateMatch == null) continue;
 
     final body = trimmed.substring(header.end, dateMatch.start).trim();
     messages.add(
-      _ExportedSms(
+      AdbExportedSms(
         row: int.parse(header.group(1)!),
-        sender: header.group(2)!,
+        smsId: header.group(2),
+        sender: header.group(3)!,
         body: body,
         dateMs: int.parse(dateMatch.group(1)!),
       ),
@@ -80,7 +93,7 @@ void main(List<String> args) {
 
   for (final msg in messages) {
     final input = SmsMessageInput(
-      id: '${msg.row}',
+      id: msg.smsId ?? '${msg.row}',
       sender: msg.sender,
       body: msg.body,
       timestamp: DateTime.fromMillisecondsSinceEpoch(msg.dateMs),

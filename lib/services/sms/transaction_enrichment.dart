@@ -88,6 +88,13 @@ abstract final class TransactionEnrichment {
     ).hasMatch(lower)) {
       return true;
     }
+    // Live HSBC: "HSBC creditcard xxxxx3740 used at … for INR …"
+    if (RegExp(
+      r'credit\s*card\s+[x*\d]+\s+used at',
+      caseSensitive: false,
+    ).hasMatch(lower)) {
+      return true;
+    }
     if (RegExp(r'spent on yes bank card', caseSensitive: false).hasMatch(lower)) {
       return true;
     }
