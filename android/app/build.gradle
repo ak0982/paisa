@@ -62,17 +62,29 @@ android {
             if (keystorePropertiesFile.exists()) {
                 keyAlias keystoreProperties['keyAlias']
                 keyPassword keystoreProperties['keyPassword']
+                // key.properties storeFile is relative to android/app/ (module dir)
                 storeFile file(keystoreProperties['storeFile'])
                 storePassword keystoreProperties['storePassword']
+                // Android 7+ requires v2; keep v1 for older devices; v3 for newer OEMs
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig keystorePropertiesFile.exists()
-                ? signingConfigs.release
-                : signingConfigs.debug
+            // Fail closed: never silently fall back to debug signing for release APKs
+            // (debug-signed sideloads are often rejected as "App not installed").
+            if (!keystorePropertiesFile.exists()) {
+                throw new GradleException(
+                    "Missing android/key.properties — release builds require the Paisa release keystore."
+                )
+            }
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            shrinkResources false
         }
     }
 }
