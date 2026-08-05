@@ -126,6 +126,13 @@ abstract final class TransactionEnrichment {
     if (lower.contains('spent using') && lower.contains('icici bank card')) {
       return true;
     }
+    // HSBC India: "HSBC creditcard xxxxx1234 used at MERCHANT for INR …"
+    if (RegExp(
+      r'hsbc\s+credit\s*card\s+[x*\d]+\s+used at',
+      caseSensitive: false,
+    ).hasMatch(lower)) {
+      return true;
+    }
     if (lower.contains('credited towards your') &&
         lower.contains('credit card')) {
       return true;

@@ -41,6 +41,7 @@ class SmsParser {
     RegExp(r'federal', caseSensitive: false),
     RegExp(r'idfc', caseSensitive: false),
     RegExp(r'lenden', caseSensitive: false),
+    RegExp(r'hsbc', caseSensitive: false),
   ];
 
   /// Body must look like a transaction alert, not a promo OTP message.
@@ -217,6 +218,11 @@ class SmsParser {
     'FRCHRG',
     'AMZNPAY',
     'AIRTEL',
+    // HSBC India DLT headers (community dump + live inbox: AX-/AD-/VM-HSBCIN*).
+    'HSBCIN',
+    'HSBCBK',
+    'HSBCEX',
+    'HSBCIM',
   ];
 
   static bool isOtpOnly(String body) {
@@ -265,6 +271,8 @@ class SmsParser {
         s.contains('FEDERAL')) {
       return 'Federal';
     }
+    // HSBC before generic substring traps; headers HSBCIN / HSBCBK / etc.
+    if (s.contains('HSBC')) return 'HSBC';
     if (s.contains('LENDEN')) return 'LenDenClub';
     final wallet = SmsKeywordLists.detectWalletProvider(sender);
     if (wallet != null) return wallet;
@@ -282,6 +290,7 @@ class SmsParser {
     if (RegExp(r'\bpnb\b').hasMatch(b) || b.contains('punjab national')) {
       return 'PNB';
     }
+    if (b.contains('hsbc')) return 'HSBC';
     if (b.contains('lendenclub')) return 'LenDenClub';
     final wallet = SmsKeywordLists.detectWalletProvider(body);
     if (wallet != null) return wallet;
@@ -467,6 +476,11 @@ class SmsParser {
 
   static String? _extractAccountFallback(String body) {
     final patterns = [
+      // HSBC India: "A/c 074-260***-006" — digits+hyphens+stars; last-4 of digits.
+      RegExp(
+        r'(?:a/c|acct)\s+([\d][\d\-*\s]{3,20}\d)',
+        caseSensitive: false,
+      ),
       RegExp(_account, caseSensitive: false),
       RegExp(
         r'(?:a/c|acct|account|A/C)\s*No\.?\s*[Xx*•]*(\d{4,})\b',
@@ -478,6 +492,11 @@ class SmsParser {
       ),
       RegExp(
         r'Kotak Bank\s+(?:A/?c|AC)\s+X?(\d{4,})\b',
+        caseSensitive: false,
+      ),
+      // HSBC creditcard / debit card masks: "creditcard xxxxx1234", "Debit Card XXXXX71xx"
+      RegExp(
+        r'(?:credit\s*card|debit\s+card)\s+([xX*\d]{4,})',
         caseSensitive: false,
       ),
     ];
@@ -570,6 +589,99 @@ class SmsParser {
         merchantGroup: 2,
         isCredit: true,
       ),
+      // --- HSBC India (sender HSBCIN / XX-HSBCIN; templates from public OSS samples
+      // + DLT headers HSBCIN/HSBCBK — Med–High conf for India phrasing; local dump
+      // had OTP/promo only, no live txn SMS) ---
+      // Outgoing NEFT/RTGS/IMPS confirmation (debit from HSBC, not income):
+      // "your NEFT transaction ... for INR 150,000.00 has been credited to the HDFC A/c … of NAME"
+      _SmsPattern(
+        RegExp(
+          r'(?:NEFT|RTGS|IMPS)\s+transaction.*?for\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+has been credited to the\s+\w+\s+A/c\s+[X\d*]+\s+of\s+([A-Za-z][A-Za-z .]{1,40}?)\s+on\s+',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        merchantGroup: 2,
+      ),
+      // Savings debit: "INR 1,234.56 is paid from your A/c 074-260***-006 to AMAZON on …"
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+is paid from (?:your\s+)?(?:A/?c|account)\s+([\d\-*\sXx]+?)\s+to\s+([A-Za-z0-9 .&-]{2,40}?)\s+on\s+',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Savings credit: "INR 50,000.00 is credited to your A/c 074-260***-006 as NEFT …"
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+is credited to your\s+(?:A/?c|account)\s+([\d\-*\sXx]+?)(?:\s+as\s+|\s+on\s+|\s*\.)',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // Savings credit alt: "A/c 074-260***-006 is credited with INR 5000.00 …"
+      _SmsPattern(
+        RegExp(
+          r'(?:A/?c|account)\s+([\d\-*\sXx]+?)\s+is credited with\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+        isCredit: true,
+      ),
+      // Debit card POS: "Thank you for using HSBC Debit Card XXXXX71xx for INR 305.00 … at IKEA"
+      _SmsPattern(
+        RegExp(
+          r'Thank you for using\s+HSBC\s+Debit Card\s+([Xx*\d]+)\s+(?:for\s+)?(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).*?\bat\s+([A-Za-z0-9 .&-]{2,40}?)(?:\s*\.|$)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Debit card alt order: "… Debit Card XXXXX71xx at IKEA . for INR 49.00"
+      _SmsPattern(
+        RegExp(
+          r'HSBC\s+Debit Card\s+([Xx*\d]+)\s+at\s+([A-Za-z0-9 .&-]{2,40}?)\s*\.\s*for\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        merchantGroup: 2,
+        amountGroup: 3,
+      ),
+      // Credit card spend: "Your HSBC creditcard xxxxx1234 used at AMAZON for INR 305.00"
+      _SmsPattern(
+        RegExp(
+          r'HSBC\s+credit\s*card\s+([Xx*\d]+)\s+used at\s+([A-Za-z0-9 .&-]{2,40}?)\s+for\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        merchantGroup: 2,
+        amountGroup: 3,
+      ),
+      // CC payment received: "Payment of Rs … received towards/on your HSBC Credit Card …"
+      _SmsPattern(
+        RegExp(
+          r'(?:Payment of|paid)\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).*(?:received (?:towards|on) your).*HSBC\s+Credit\s+Card\s+(?:ending\s+)?(?:with\s+)?(?:XX|xx|X|\*+)?(\d{4})',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // "spent on your HSBC Credit Card ending …" (majors cluster wording)
+      _SmsPattern(
+        RegExp(
+          r"(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent on your HSBC\s+(?:Bank\s+)?Credit Card ending (?:XX|xx)?(\d{4})\s+at\s+([A-Za-z0-9 .&'-]+)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
       // SBI UPI: Dear UPI user A/C X0429 debited by 3250.00 on date 04Jun26 trf to MERCHANT
       _SmsPattern(
         RegExp(
@@ -593,7 +705,7 @@ class SmsParser {
       // SBI Credit Card: Rs.605.29 spent on your SBI Credit Card ending 3452 at MERCHANT
       _SmsPattern(
         RegExp(
-          r"Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent on your (?:SBI|ICICI|Axis|HDFC|Kotak|IDFC(?:\s+FIRST)?)\s+(?:Bank\s+)?Credit Card ending (?:XX|xx)?(\d{4}) at ([A-Za-z0-9 .&'-]+)",
+          r"Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent on your (?:SBI|ICICI|Axis|HDFC|Kotak|IDFC(?:\s+FIRST)?|HSBC)\s+(?:Bank\s+)?Credit Card ending (?:XX|xx)?(\d{4}) at ([A-Za-z0-9 .&'-]+)",
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -603,7 +715,7 @@ class SmsParser {
       // IDFC: INR 80.00 spent on your IDFC FIRST Bank Credit Card ending XX7424 at HungerBox
       _SmsPattern(
         RegExp(
-          r"(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent on your (?:IDFC(?:\s+FIRST)?|HDFC|SBI|ICICI|Axis|Kotak)\s+(?:Bank\s+)?(?:\w+\s+)*Credit Card ending (?:XX|xx)?(\d{4}) at ([A-Za-z0-9 .&'-]+)",
+          r"(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent on your (?:IDFC(?:\s+FIRST)?|HDFC|SBI|ICICI|Axis|Kotak|HSBC)\s+(?:Bank\s+)?(?:\w+\s+)*Credit Card ending (?:XX|xx)?(\d{4}) at ([A-Za-z0-9 .&'-]+)",
           caseSensitive: false,
         ),
         amountGroup: 1,
@@ -643,7 +755,7 @@ class SmsParser {
       // CRED / generic: Payment credited towards bank Credit Card (no mask in SMS)
       _SmsPattern(
         RegExp(
-          r'Payment of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).*credited towards your (?:ICICI Bank|Bank of Baroda|HDFC Bank|Axis Bank) Credit Card',
+          r'Payment of (?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).*credited towards your (?:ICICI Bank|Bank of Baroda|HDFC Bank|Axis Bank|HSBC) Credit Card',
           caseSensitive: false,
         ),
         amountGroup: 1,

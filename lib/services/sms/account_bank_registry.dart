@@ -124,6 +124,7 @@ class AccountBankRegistry {
     if (RegExp(r'\baxis bank\b').hasMatch(lower)) return 'Axis';
     if (RegExp(r'\bkotak bank\b').hasMatch(lower)) return 'Kotak';
     if (RegExp(r'\bstate bank\b').hasMatch(lower)) return 'SBI';
+    if (RegExp(r'\bhsbc\b').hasMatch(lower)) return 'HSBC';
 
     return null;
   }
@@ -146,6 +147,7 @@ class AccountBankRegistry {
     if (s.contains('PHONEPE')) return 'PhonePe';
     if (s.contains('YES')) return 'Yes Bank';
     if (s.contains('IDFC')) return 'IDFC';
+    if (s.contains('HSBC')) return 'HSBC';
     if (s.contains('LENDEN')) return 'LenDenClub';
     return null;
   }
@@ -154,6 +156,11 @@ class AccountBankRegistry {
   static List<String> extractAccountLast4s(String body) {
     final found = <String>{};
     final patterns = [
+      // HSBC: A/c 074-260***-006
+      RegExp(
+        r'(?:a/c|acct)\s+([\d][\d\-*\s]{3,20}\d)',
+        caseSensitive: false,
+      ),
       RegExp(
         r'(?:a/c|acct|account|A/C)\s*[Xx*•]*(\d{4})\b',
         caseSensitive: false,
@@ -166,14 +173,20 @@ class AccountBankRegistry {
       RegExp(r'account\s+X+(\d{4})\b', caseSensitive: false),
       RegExp(r'Acct\s+XX(\d+)\b', caseSensitive: false),
       RegExp(r'Bank\s+AC\s+X(\d{4})\b', caseSensitive: false),
+      RegExp(
+        r'(?:credit\s*card|debit\s+card)\s+[xX*]*(\d{4})\b',
+        caseSensitive: false,
+      ),
     ];
 
     for (final pattern in patterns) {
       for (final match in pattern.allMatches(body)) {
         final raw = match.group(1);
         if (raw == null || raw.isEmpty) continue;
+        final digits = raw.replaceAll(RegExp(r'\D'), '');
+        if (digits.isEmpty) continue;
         final last4 =
-            raw.length <= 4 ? raw : raw.substring(raw.length - 4);
+            digits.length <= 4 ? digits.padLeft(4, '0') : digits.substring(digits.length - 4);
         if (last4.length == 4) found.add(last4);
       }
     }

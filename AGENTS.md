@@ -20,7 +20,7 @@ classifies each account, and surfaces spend/income summaries, budgets, insights 
 **with zero manual entry**.
 
 - **Domain:** Indian banks and payment providers (HDFC, SBI, ICICI, Axis, Kotak, IDFC, PNB,
-  Federal + its neobanks Fi/Jupiter, Yes Bank, IndusInd, BOB, plus major wallets/UPI apps).
+  Federal + its neobanks Fi/Jupiter, Yes Bank, IndusInd, BOB, HSBC, plus major wallets/UPI apps).
 - **Guiding goal:** **"record and classify every transaction."** Lists still show every money
   movement (including transfers). **Cashflow KPIs** (spend / income / savings rate) intentionally
   **exclude internal movement** (self-transfers, CCBP legs) — see ISSUE-4 in §5.2. Tracking in
@@ -133,7 +133,7 @@ inboxes, with checkpointing (`sms_scan_state.dart`) for resume.
 
 `lib/main.dart` defines:
 
-- `const transactionSchemaVersion = **22**`
+- `const transactionSchemaVersion = **23**`
 - `const categorizerVersion = **4**`
 
 On launch, if either stored value is lower than the code constant **and** onboarding is complete,
@@ -161,6 +161,7 @@ installs keep stale data and your change appears to "do nothing."
 | 19 → 20 | **ISSUE-13:** categorizer word boundaries; BBPS/CCBP → transfer; no NACH product hardcoding. |
 | 20 → 21 | **ISSUE-11:** kind evidence + spend stats keyed by `(bank, mask)`, not mask alone. |
 | 21 → 22 | Adversarial QA: bare 10-digit personal senders rejected; self-transfer KPI pairing needs distinct real `bank\|mask` legs; CCBP merchant wording excludes spend even if kind stays savings. |
+| 22 → 23 | **HSBC India:** sender/body mapping (`HSBCIN` / `HSBC*`), savings + debit-card + CC parse/discovery, `_realBanks` + logo. |
 
 `categorizerVersion` remains **4** (rebuilds when categorizer rules change enough independently of
 schema). ISSUE-13's categorizer precision rode the schema bump 19 → 20 rather than a separate
@@ -243,9 +244,9 @@ impossible). Limits are seeded once from historical spend suggestion, then owned
 
 ### 4.5 Supported banks / issuers / neobanks / wallets (from code)
 - **Banks:** HDFC, SBI, ICICI, Axis, Kotak, IDFC (FIRST), Yes Bank, IndusInd, PNB, Federal,
-  Canara (sender detection), Bank of Baroda (sender detection).
+  Canara (sender detection), Bank of Baroda (sender detection), **HSBC** (savings + CC).
 - **Credit-card issuers:** SBI, ICICI, Axis, HDFC, Kotak, IDFC (FIRST), Yes Bank, IndusInd, BOB
-  (BOBCARD). Card schemes detected in text: Visa, Mastercard, RuPay, Amex, Maestro, Diners.
+  (BOBCARD), **HSBC**. Card schemes detected in text: Visa, Mastercard, RuPay, Amex, Maestro, Diners.
 - **Neobanks:** Fi (`FEDFIB`) and Jupiter (`MYJPTR`) — both ride on **Federal Bank** savings
   accounts and resolve to `Federal`.
 - **Wallets / UPI providers:** Paytm, PhonePe, Google Pay (GPay), Amazon Pay, MobiKwik,

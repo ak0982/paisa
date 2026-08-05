@@ -61,17 +61,25 @@ class AccountDiscovery {
   static final _creditCardPatterns = <_CardPattern>[
     _CardPattern(
       RegExp(
-        r'(?:SBI|ICICI|Axis|HDFC|Kotak|IDFC(?:\s+FIRST)?|Yes(?:\s+Bank)?|IndusInd)\s+(?:Bank\s+)?Credit\s+Card\s+(?:no\.?\s*)?(?:ending\s+)?(?:XX|xx|\*{1,4})?(\d{4})\b',
+        r'(?:SBI|ICICI|Axis|HDFC|Kotak|IDFC(?:\s+FIRST)?|Yes(?:\s+Bank)?|IndusInd|HSBC)\s+(?:Bank\s+)?Credit\s+Card\s+(?:no\.?\s*)?(?:ending\s+)?(?:XX|xx|\*{1,4})?(\d{4})\b',
         caseSensitive: false,
       ),
       bankFromMatch: _bankFromCreditCardPrefix,
     ),
     _CardPattern(
       RegExp(
-        r'(?:SBI|ICICI|Axis|HDFC|Kotak|IDFC(?:\s+FIRST)?|Yes(?:\s+Bank)?|IndusInd)\s+(?:Bank\s+)?Credit\s+Card\s+ending\s+(\d{4})\b',
+        r'(?:SBI|ICICI|Axis|HDFC|Kotak|IDFC(?:\s+FIRST)?|Yes(?:\s+Bank)?|IndusInd|HSBC)\s+(?:Bank\s+)?Credit\s+Card\s+ending\s+(\d{4})\b',
         caseSensitive: false,
       ),
       bankFromMatch: _bankFromCreditCardPrefix,
+    ),
+    // HSBC "creditcard xxxxx1234 used at …"
+    _CardPattern(
+      RegExp(
+        r'HSBC\s+credit\s*card\s+[xX*]*(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: (_, __, ___) => 'HSBC',
     ),
     _CardPattern(
       RegExp(
@@ -153,9 +161,19 @@ class AccountDiscovery {
   ];
 
   static final _savingsPatterns = <_CardPattern>[
+    // HSBC India: "A/c 074-260***-006" / "paid from your A/c …" / "is credited with"
     _CardPattern(
       RegExp(
-        r'(?:deposited|debited|credited)\s+(?:in|to|from)\s+(?:HDFC|SBI|ICICI|Axis|Kotak|IDFC(?:\s+FIRST)?|Yes(?:\s+Bank)?|IndusInd)\s+Bank\s+(?:A/?c|Acct)\s*(?:XX|xx|\*{1,4})?(\d{4})\b',
+        r'(?:your\s+)?(?:A/?c|account)\s+([\d][\d\-*\s]{3,24}\d)\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromHsbcAcMask,
+      kind: AccountKind.savings,
+      last4FromLongMask: true,
+    ),
+    _CardPattern(
+      RegExp(
+        r'(?:deposited|debited|credited)\s+(?:in|to|from)\s+(?:HDFC|SBI|ICICI|Axis|Kotak|IDFC(?:\s+FIRST)?|Yes(?:\s+Bank)?|IndusInd|HSBC)\s+Bank\s+(?:A/?c|Acct)\s*(?:XX|xx|\*{1,4})?(\d{4})\b',
         caseSensitive: false,
       ),
       bankFromMatch: _bankFromSavingsMatch,
@@ -163,7 +181,7 @@ class AccountDiscovery {
     ),
     _CardPattern(
       RegExp(
-        r'(?:HDFC|SBI|ICICI|Axis|Kotak|IDFC(?:\s+FIRST)?)\s+Bank\s+(?:A/?c|Acct)\s*(?:XX|xx|\*{1,4})?(\d{4})\b',
+        r'(?:HDFC|SBI|ICICI|Axis|Kotak|IDFC(?:\s+FIRST)?|HSBC)\s+Bank\s+(?:A/?c|Acct)\s*(?:XX|xx|\*{1,4})?(\d{4})\b',
         caseSensitive: false,
       ),
       bankFromMatch: _bankFromSavingsMatch,
@@ -438,10 +456,14 @@ class AccountDiscovery {
 
   static String? _last4FromMatch(String? raw, bool fromLongMask) {
     if (raw == null || raw.isEmpty) return null;
-    if (fromLongMask && raw.length > 4) {
-      return raw.substring(raw.length - 4);
+    final digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return null;
+    if (digits.length >= 4) {
+      return digits.substring(digits.length - 4);
     }
-    return raw;
+    if (fromLongMask) return digits.padLeft(4, '0');
+    if (RegExp(r'^\d{4}$').hasMatch(raw)) return raw;
+    return null;
   }
 
   static bool _isValidLast4(String last4) {
@@ -477,6 +499,7 @@ class AccountDiscovery {
     if (prefix.contains('idfc')) return 'IDFC';
     if (prefix.contains('yes')) return 'Yes Bank';
     if (prefix.contains('indus')) return 'IndusInd';
+    if (prefix.contains('hsbc')) return 'HSBC';
     return _bankFromSenderOrBody(sender, body, match);
   }
 
@@ -496,7 +519,20 @@ class AccountDiscovery {
     if (snippet.contains('indus')) return 'IndusInd';
     if (snippet.contains('pnb')) return 'PNB';
     if (snippet.contains('federal')) return 'Federal';
+    if (snippet.contains('hsbc')) return 'HSBC';
     return _bankFromSenderOrBody(sender, body, match);
+  }
+
+  /// HSBC hyphen/star masks like `074-260***-006` — only attribute when sender/body
+  /// clearly says HSBC (avoid stealing unrelated A/c masks).
+  static String? _bankFromHsbcAcMask(
+    String sender,
+    String body,
+    RegExpMatch match,
+  ) {
+    final haystack = '${sender.toUpperCase()} ${body.toLowerCase()}';
+    if (haystack.contains('HSBC') || haystack.contains('hsbc')) return 'HSBC';
+    return null;
   }
 
   static String? _bankFromAccountDebitSms(
@@ -513,6 +549,7 @@ class AccountDiscovery {
     if (upper.contains('IDFC')) return 'IDFC';
     if (upper.contains('PNB')) return 'PNB';
     if (upper.contains('FED') || upper.contains('MYJPTR')) return 'Federal';
+    if (upper.contains('HSBC')) return 'HSBC';
     if (body.toLowerCase().contains('kotak bank')) return 'Kotak';
     return _bankFromSenderOrBody(sender, body, match);
   }
@@ -552,6 +589,7 @@ class AccountDiscovery {
         haystack.contains('federal')) {
       return 'Federal';
     }
+    if (haystack.contains('HSBC') || haystack.contains('hsbc')) return 'HSBC';
     return null;
   }
 

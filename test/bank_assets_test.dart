@@ -19,6 +19,7 @@ void main() {
         'assets/banks/bob.svg',
       );
       expect(BankAssets.assetPathFor('Canara'), 'assets/banks/canara.svg');
+      expect(BankAssets.assetPathFor('HSBC'), 'assets/banks/hsbc.svg');
     });
 
     test('maps aliases and account titles', () {
@@ -37,6 +38,8 @@ void main() {
         BankAssets.assetPathFor('federal bank loan'),
         'assets/banks/federal.svg',
       );
+      expect(BankAssets.assetPathFor('HSBC Bank'), 'assets/banks/hsbc.svg');
+      expect(BankAssets.assetPathFor('HSBC Savings'), 'assets/banks/hsbc.svg');
     });
 
     test('is case-insensitive', () {

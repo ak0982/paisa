@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Simplified HSBC-inspired hexagon mark (original recreation; not official artwork) -->
+  <rect width="64" height="64" rx="12" fill="#DB0011"/>
+  <path d="M32 10 L50 21 V43 L32 54 L14 43 V21 Z" fill="#FFFFFF"/>
+  <path d="M32 18 L44 25 V39 L32 46 L20 39 V25 Z" fill="#DB0011"/>
+</svg>

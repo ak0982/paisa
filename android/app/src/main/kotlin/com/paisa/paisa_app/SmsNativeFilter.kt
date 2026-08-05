@@ -18,13 +18,13 @@ object SmsNativeFilter {
         "ICICIT", "AXIS", "KOTAK", "KOTAKB", "PAYTM", "PHONEPE",
         "GPAY", "GOOGLEPAY", "GOOGLE", "BHIM", "YESBNK", "YESBANK", "INDUS",
         "PNB", "CANARA", "BARODA", "FEDERAL", "IDFC", "IDFCFB", "UPI", "NEFT",
-        "IMPS", "LENDEN"
+        "IMPS", "LENDEN", "HSBCIN", "HSBC"
     )
 
     private val bodyBankHints = listOf(
         "hdfc", "sbi", "icici", "axis bank", "axis", "kotak", "paytm",
         "phonepe", "google pay", "gpay", "yes bank", "indusind", "pnb",
-        "canara", "bank of baroda", "idfc"
+        "canara", "bank of baroda", "idfc", "hsbc"
     )
 
     private val bodyTxnHints = listOf(

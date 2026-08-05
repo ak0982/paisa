@@ -40,7 +40,7 @@ Ground truth: `lib/services/sms/sms_parser.dart`, `sms_scan_pipeline.dart`, `acc
 
 | Tier | Entities | Evidence in code |
 | --- | --- | --- |
-| **Rich parse** | HDFC, SBI (savings + UPI + CC + NACH/BBPS), ICICI (savings + CC + settlement), Axis (CC + generic debit), Kotak (UPI/NEFT/NACH/savings), IDFC FIRST (CC + savings phrasing), Yes Bank (CC), Federal (+ Fi `FEDFIB` / Jupiter `MYJPTR`) | Dedicated regex families in `sms_parser.dart`; discovery patterns for savings/CC/loan |
+| **Rich parse** | HDFC, SBI (savings + UPI + CC + NACH/BBPS), ICICI (savings + CC + settlement), Axis (CC + generic debit), Kotak (UPI/NEFT/NACH/savings), IDFC FIRST (CC + savings phrasing), Yes Bank (CC), Federal (+ Fi `FEDFIB` / Jupiter `MYJPTR`), **HSBC** (savings paid/credited + debit card + CC used-at) | Dedicated regex families in `sms_parser.dart`; discovery patterns for savings/CC/loan |
 | **Partial parse** | PNB (loan deposit / long masks / balance-style discovery), IndusInd (CC ending patterns / sender) | Some body regexes + discovery; not full debit/credit suite |
 | **Sender / thin only** | Canara, Bank of Baroda (BOBCARD payment phrasing exists for CC payment received) | `_detectBankFromSender` / pipeline `_senderHints`; AGENTS.md explicitly: “mostly sender-detection only” |
 | **Wallets / UPI apps** | Paytm, PhonePe, GPay, Amazon Pay, MobiKwik, Freecharge, Airtel Money, Ola Money, Jio Money, PayZapp | Sender + body wallet lists; cross-source dedupe with bank SMS |
@@ -146,7 +146,7 @@ Full foreign list is long (~44); most corporate/wholesale. Consumer SMS relevanc
 | DBS Bank India | Foreign WOS | `DBSBNK` | N | Med |
 | SBM Bank (India) | Foreign WOS | (variants; Niyo historically on SBM rails) | N | Med |
 | Citibank N.A. / Citi | Foreign | `CITIBK` | N | Med |
-| HSBC | Foreign | `HSBCIN` | N | Med |
+| HSBC | Foreign | `HSBCIN`, `HSBCBK`, `HSBCEX`, `HSBCIM` | Y-rich | Med–High | Savings + CC patterns; see §6.2 HSBC |
 | Standard Chartered | Foreign | `SCBANK` | N | Med |
 | American Express Banking Corp. | Foreign | Amex card alerts | N | Med |
 | Deutsche Bank | Foreign | (variants) | N | Low |
@@ -296,6 +296,20 @@ Confidence: **High** = multiple independent public samples or bank-confirmed hea
 - **Shapes:** CC ending patterns shared with majors; savings less covered in Paisa.  
 - **Sources:** Discovery regex list; OSS credit-card test mentions.
 
+#### HSBC India — Med–High (templates) / Low (local dump txn volume)
+- **Headers:** `HSBCIN` (primary; live inbox also `AX-HSBCIN`, `AD-HSBCIN-T`, `VM-HSBCIN*`); community DLT dump also lists `HSBCBK`, `HSBCEX`, `HSBCIM`.  
+- **Official:** HSBC India documents debit/credit/balance mobile alerts and mandatory CC transaction SMS ([business mobile alerts](https://www.business.hsbc.co.in/en-gb/campaigns/ways-to-bank/mobile-alerts); [CC FAQ / Secure Online Payments](https://www.hsbc.co.in/credit-cards/faq/)). Secondary guides name sender **`HSBCIN`** for post-txn CC SMS.  
+- **Local dump (`my_sms*.txt`):** only OTP / incomplete CC application / aggregator promos from `HSBCIN` — **no live savings or CC spend SMS** to validate against.  
+- **Body shapes (synthetic / OSS — anonymized):**  
+  - Savings debit: `HSBC: INR {amt} is paid from your A/c 074-260***-006 to {merchant} on {date}. Your Avl Bal is INR {bal} .`  
+  - Savings credit: `INR {amt} is credited to your A/c … as NEFT from …` or `A/c … is credited with INR {amt} … with UTR …`  
+  - Debit card: `Thank you for using HSBC Debit Card XXXXX71xx for INR {amt} on {date} at {merchant} .`  
+  - Credit card: `Your HSBC creditcard xxxxx1234 used at {merchant} for INR {amt} on {date}.`  
+  - Outgoing NEFT (expense, not income): `your NEFT transaction … for INR {amt} has been credited to the {OTHERBANK} A/c … of {NAME}`  
+  - CC payment received: majors-style `Payment of Rs … received towards your HSBC Credit Card ending XX####`  
+- **Confidence:** Med–High for India phrasing via [PennyWise `HSBCBankParser`](https://github.com/sarim2000/pennywiseai-tracker) test fixtures + DLT headers; **Low** for production template drift until a real HSBC inbox validates. Egypt EGP variants exist in OSS but are out of Paisa INR scope.  
+- **Paisa:** Y-rich as of schema **23** (parser + discovery + `_realBanks` + logo).
+
 ### 6.3 High-value missing / thin banks
 
 #### Canara — Med (header) / Low (body in Paisa)
@@ -328,9 +342,9 @@ Confidence: **High** = multiple independent public samples or bank-confirmed hea
 - High inclusion / DBT / cash-point credits.  
 - Distinct product vocabulary (`IPPB`, AePS, etc.) — plan dedicated tests.
 
-#### Foreign retail (Citi, HSBC, StanChart, DBS, Amex) — Med
+#### Foreign retail (Citi, StanChart, DBS, Amex) — Med
 - Often English “INR … debited from A/c…” (see OSS example in [transaction-sms-parser README](https://github.com/saurabhgupta050890/transaction-sms-parser)).  
-- Lower mass-market volume than PSUs but affluent users.
+- Lower mass-market volume than PSUs but affluent users. **HSBC India is now Y-rich** (see §6.2).
 
 ### 6.4 Open-source cross-checks (ideas only — no dependency)
 
@@ -345,7 +359,7 @@ Confidence: **High** = multiple independent public samples or bank-confirmed hea
 
 ### 7.1 Supported well (keep investing in template drift tests)
 
-HDFC, SBI, ICICI, Axis, Kotak, IDFC FIRST, Yes (CC), Federal (+ Fi/Jupiter), major wallets (PhonePe/GPay/Paytm).
+HDFC, SBI, ICICI, Axis, Kotak, IDFC FIRST, Yes (CC), Federal (+ Fi/Jupiter), **HSBC** (savings + CC), major wallets (PhonePe/GPay/Paytm).
 
 ### 7.2 Recognized thinly
 
@@ -376,7 +390,7 @@ Rough priority by likely SMS volume / card presence among Indian Android users:
 14. Ujjivan SFB  
 15. Airtel Payments Bank / Fino (payments-bank cluster)
 
-Honorable mentions: Central Bank, Bank of Maharashtra, IOB, DBS India, HSBC/StanChart/Citi for niche users.
+Honorable mentions: Central Bank, Bank of Maharashtra, IOB, DBS India, StanChart/Citi for niche users (HSBC now Y-rich).
 
 ### 7.4 Recommended next parser expansion order (top 15)
 
@@ -426,6 +440,9 @@ VM-UNIONB	INR 1,500.00 debited from A/c XX7788 on 12-07-26 towards UPI/merchant@
 
 # Canara-style (hypothetical)
 AX-CANBNK	Rs.320.00 debited from Canara Bank A/c XX5510 on 11-07-26. Info: PHONEPE. Avl Bal Rs.4,100.00
+
+# HSBC India savings debit (synthetic; fictional mask)
+VM-HSBCIN-S	HSBC: INR 1,234.56 is paid from your A/c 074-260***-006 to AMAZON on 20-Dec-25. Your Avl Bal is INR 98,765.44 .
 ```
 
 ### B. Credit card
@@ -442,6 +459,9 @@ VM-IDFCFB	INR 80.00 spent on your IDFC FIRST Bank Credit Card ending XX7424 at H
 
 # ICICI CC payment received
 ICICIO	Payment of Rs 14,747.00 received on your ICICI Bank Credit Card XX2009 on 02-Jul-26.
+
+# HSBC CC spend (synthetic)
+AD-HSBCIN-S	Your HSBC creditcard xxxxx4821 used at AMAZON for INR 305.00 on 15-04-25.
 ```
 
 ### C. Noise (must not parse as txn)

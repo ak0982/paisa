@@ -448,6 +448,118 @@ void main() {
       expect(parsed.merchant.toLowerCase(), contains('mcdonalds'));
     });
 
+    // --- HSBC India (synthetic; fictional masks) ---
+    // Templates adapted from public OSS/parser samples (PennyWise HSBCBankParser /
+    // DLT header HSBCIN). Local dump had HSBCIN OTP/promo only — no live txn SMS.
+
+    test('parses HSBC savings debit (is paid from A/c)', () {
+      final parsed = SmsParser.parseTransaction(_msg(
+        sender: 'VM-HSBCIN-S',
+        body:
+            'HSBC: INR 1,234.56 is paid from your A/c 074-260***-006 to AMAZON '
+            'on 20-Dec-25. Your Avl Bal is INR 98,765.44 .',
+      ));
+      expect(parsed, isNotNull);
+      expect(parsed!.bank, 'HSBC');
+      expect(parsed.isCredit, false);
+      expect(parsed.amount, 1234.56);
+      expect(parsed.maskedAccount, '••••0006');
+      expect(parsed.merchant.toLowerCase(), contains('amazon'));
+    });
+
+    test('parses HSBC savings credit (is credited to A/c)', () {
+      final parsed = SmsParser.parseTransaction(_msg(
+        sender: 'HSBCIN',
+        body:
+            'HSBC: INR 50,000.00 is credited to your A/c 074-260***-006 as NEFT '
+            'from CHAS A/c ***6983 of Employer Pvt Ltd .',
+      ));
+      expect(parsed, isNotNull);
+      expect(parsed!.bank, 'HSBC');
+      expect(parsed.isCredit, true);
+      expect(parsed.amount, 50000);
+      expect(parsed.maskedAccount, '••••0006');
+    });
+
+    test('parses HSBC A/c is credited with INR', () {
+      final parsed = SmsParser.parseTransaction(_msg(
+        sender: 'AX-HSBCIN',
+        body:
+            'HSBC: A/c 074-260***-006 is credited with INR 5,000.00 on 27NOV '
+            'at 06.33.02 with UTR CHASH00007392391 as NEFT from CHAS A/c ***6983 '
+            'of John Doe . Your Avl Bal is INR 15,000.50.',
+      ));
+      expect(parsed, isNotNull);
+      expect(parsed!.bank, 'HSBC');
+      expect(parsed.isCredit, true);
+      expect(parsed.amount, 5000);
+      expect(parsed.maskedAccount, '••••0006');
+    });
+
+    test('parses HSBC debit card purchase as expense', () {
+      final parsed = SmsParser.parseTransaction(_msg(
+        sender: 'VM-HSBCIN',
+        body:
+            'HSBC: Thank you for using HSBC Debit Card XXXXX7199 for INR 305.00 '
+            'on 15-Dec-25 at IKEA INDIA .',
+      ));
+      expect(parsed, isNotNull);
+      expect(parsed!.bank, 'HSBC');
+      expect(parsed.isCredit, false);
+      expect(parsed.amount, 305);
+      expect(parsed.maskedAccount, '••••7199');
+      expect(parsed.merchant.toLowerCase(), contains('ikea'));
+    });
+
+    test('parses HSBC credit card spend (creditcard used at)', () {
+      final parsed = SmsParser.parseTransaction(_msg(
+        sender: 'AD-HSBCIN-S',
+        body:
+            'Your HSBC creditcard xxxxx4821 used at AMAZON for INR 305.00 on 15-04-25.',
+      ));
+      expect(parsed, isNotNull);
+      expect(parsed!.bank, 'HSBC');
+      expect(parsed.isCredit, false);
+      expect(parsed.amount, 305);
+      expect(parsed.maskedAccount, '••••4821');
+      expect(parsed.merchant.toLowerCase(), contains('amazon'));
+    });
+
+    test('parses HSBC credit card payment received', () {
+      final parsed = SmsParser.parseTransaction(_msg(
+        sender: 'VM-HSBCIN-S',
+        body:
+            'Payment of Rs 12,500.00 received towards your HSBC Credit Card '
+            'ending XX4821 on 02-Jul-26.',
+      ));
+      expect(parsed, isNotNull);
+      expect(parsed!.bank, 'HSBC');
+      expect(parsed.isCredit, true);
+      expect(parsed.amount, 12500);
+      expect(parsed.maskedAccount, '••••4821');
+    });
+
+    test('parses HSBC outgoing NEFT as debit (not income)', () {
+      final parsed = SmsParser.parseTransaction(_msg(
+        sender: 'VM-HSBCIN-S',
+        body:
+            'HSBC: Dear HSBC Customer, your NEFT transaction with reference '
+            'number HSBCN00106726185 for INR 15,000.00 has been credited to the '
+            'HDFC A/c XXXXXXXXXX6956 of Ravi Kumar on 01-01-2026 at 15:36:47 .',
+      ));
+      expect(parsed, isNotNull);
+      expect(parsed!.bank, 'HSBC');
+      expect(parsed.isCredit, false);
+      expect(parsed.amount, 15000);
+      expect(parsed.merchant.toLowerCase(), contains('ravi'));
+    });
+
+    test('maps HSBCIN sender to HSBC bank', () {
+      expect(SmsParser.isFinancialSender('VM-HSBCIN-S'), isTrue);
+      expect(SmsParser.isFinancialSender('AX-HSBCIN'), isTrue);
+      expect(SmsParser.isFinancialSender('AD-HSBCIN-T'), isTrue);
+    });
+
     // ISSUE-3: personal 10-digit senders never send real bank alerts. A scam
     // text mimicking a debit alert must be rejected even though it carries a
     // completed-transaction phrase ("debited").

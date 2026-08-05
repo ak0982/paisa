@@ -77,6 +77,8 @@ abstract final class SmsScanPipeline {
     'ICICIT',
     'IDFCFB',
     'KOTAKB',
+    'HSBCIN',
+    'HSBC',
   ];
 
   static const _bodyBankHints = [
@@ -96,6 +98,7 @@ abstract final class SmsScanPipeline {
     'canara',
     'bank of baroda',
     'idfc',
+    'hsbc',
   ];
 
   static const _bodyTxnHints = [

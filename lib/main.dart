@@ -76,7 +76,12 @@ const int categorizerVersion = 4;
 // two distinct real bank|mask legs (stops LenDenClub/P2P credits from zeroing
 // merchant UPI spend); (3) CCBP/bill-payment merchant wording excludes spend
 // even when enrichment left accountKind=savings.
-const int transactionSchemaVersion = 22;
+// Bumped 22 -> 23: HSBC India first-class support — sender/body bank mapping
+// (HSBCIN / HSBC*), savings "is paid from" / "is credited to|with" / debit-card
+// and CC "creditcard … used at" / payment-received patterns, discovery + logo,
+// _realBanks allowlist. Forces a rescan so HSBC SMS previously ignored as
+// unknown bank are picked up.
+const int transactionSchemaVersion = 23;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -185,5 +185,30 @@ void main() {
       // Whatever is discovered must not be the counterparty mask.
       expect(found?.mask, isNot('••••2470'));
     });
+
+    test('detects HSBC savings from hyphen/star A/c mask', () {
+      final found = AccountDiscovery.discover(
+        sender: 'VM-HSBCIN-S',
+        body:
+            'HSBC: INR 1,234.56 is paid from your A/c 074-260***-006 to AMAZON '
+            'on 20-Dec-25. Your Avl Bal is INR 98,765.44 .',
+      );
+      expect(found, isNotNull);
+      expect(found!.kind, AccountKind.savings);
+      expect(found.bank, 'HSBC');
+      expect(found.mask, '••••0006');
+    });
+
+    test('detects HSBC credit card from creditcard used-at SMS', () {
+      final found = AccountDiscovery.discover(
+        sender: 'AD-HSBCIN-S',
+        body:
+            'Your HSBC creditcard xxxxx4821 used at AMAZON for INR 305.00 on 15-04-25.',
+      );
+      expect(found, isNotNull);
+      expect(found!.kind, AccountKind.creditCard);
+      expect(found.bank, 'HSBC');
+      expect(found.mask, '••••4821');
+    });
   });
 }
