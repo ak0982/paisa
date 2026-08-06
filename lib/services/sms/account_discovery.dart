@@ -81,6 +81,14 @@ class AccountDiscovery {
       ),
       bankFromMatch: (_, __, ___) => 'HSBC',
     ),
+    // Slice CC: "spent on your credit card xx7185 at … - slice"
+    _CardPattern(
+      RegExp(
+        r'spent on your credit card\s*(?:xx|XX|X{2,}|\*+)?(\d{3,4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromSliceCard,
+    ),
     _CardPattern(
       RegExp(
         r'Credit Card\s+(?:no\.?\s*)?(?:[Xx]{1,4})?(\d{4})\b',
@@ -161,6 +169,26 @@ class AccountDiscovery {
   ];
 
   static final _savingsPatterns = <_CardPattern>[
+    // Slice SFB: "sent from a/c xx0856" / "received in a/c XXX856" / "slice A/c xx0856"
+    // Trailing digits may be 3 or 4; pad short tails (856 → 0856) via last4FromLongMask.
+    _CardPattern(
+      RegExp(
+        r'(?:sent from|received in|from)\s+(?:slice\s+)?a/c\s*(?:xx|XX|X{2,}|\*+)?(\d{3,4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromSliceSavings,
+      kind: AccountKind.savings,
+      last4FromLongMask: true,
+    ),
+    _CardPattern(
+      RegExp(
+        r'received in slice\s+A/c\s*(?:xx|XX|X{2,}|\*+)?(\d{3,4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: (_, __, ___) => 'Slice',
+      kind: AccountKind.savings,
+      last4FromLongMask: true,
+    ),
     // HSBC India: "A/c 074-260***-006" / "paid from your A/c …" / "is credited with"
     _CardPattern(
       RegExp(
@@ -485,6 +513,30 @@ class AccountDiscovery {
     ).hasMatch(body);
   }
 
+  /// Slice CC alerts end with " - slice" or come from SLCEIT/SLCBNK senders.
+  static String? _bankFromSliceCard(
+    String sender,
+    String body,
+    RegExpMatch match,
+  ) {
+    final haystack = '${sender.toUpperCase()} ${body.toLowerCase()}';
+    if (haystack.contains('SLCEIT') ||
+        haystack.contains('SLCBNK') ||
+        haystack.contains('SLICE') ||
+        RegExp(r'\bslice\b').hasMatch(body.toLowerCase())) {
+      return 'Slice';
+    }
+    return null;
+  }
+
+  static String? _bankFromSliceSavings(
+    String sender,
+    String body,
+    RegExpMatch match,
+  ) {
+    return _bankFromSliceCard(sender, body, match);
+  }
+
   static String? _bankFromCreditCardPrefix(
     String sender,
     String body,
@@ -550,6 +602,11 @@ class AccountDiscovery {
     if (upper.contains('PNB')) return 'PNB';
     if (upper.contains('FED') || upper.contains('MYJPTR')) return 'Federal';
     if (upper.contains('HSBC')) return 'HSBC';
+    if (upper.contains('SLCEIT') ||
+        upper.contains('SLCBNK') ||
+        upper.contains('SLICE')) {
+      return 'Slice';
+    }
     if (body.toLowerCase().contains('kotak bank')) return 'Kotak';
     return _bankFromSenderOrBody(sender, body, match);
   }
@@ -560,6 +617,14 @@ class AccountDiscovery {
     RegExpMatch match,
   ) {
     final haystack = '${sender.toUpperCase()} ${body.toLowerCase()}';
+    // Prefer DLT headers / trailing " - slice" so unrelated "slice" wording
+    // in other banks' SMS does not steal the bank.
+    if (haystack.contains('SLCEIT') ||
+        haystack.contains('SLCBNK') ||
+        haystack.contains('SLICE') ||
+        RegExp(r'-\s*slice\s*$').hasMatch(body.toLowerCase().trim())) {
+      return 'Slice';
+    }
     if (haystack.contains('HDFC') || haystack.contains('hdfc')) return 'HDFC';
     if (haystack.contains('SBICRD') ||
         haystack.contains('SBI') ||

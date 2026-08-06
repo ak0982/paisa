@@ -18,20 +18,20 @@ object SmsNativeFilter {
         "ICICIT", "AXIS", "KOTAK", "KOTAKB", "PAYTM", "PHONEPE",
         "GPAY", "GOOGLEPAY", "GOOGLE", "BHIM", "YESBNK", "YESBANK", "INDUS",
         "PNB", "CANARA", "BARODA", "FEDERAL", "IDFC", "IDFCFB", "UPI", "NEFT",
-        "IMPS", "LENDEN", "HSBCIN", "HSBC"
+        "IMPS", "LENDEN", "HSBCIN", "HSBC", "SLCEIT", "SLCBNK", "SLICE"
     )
 
     private val bodyBankHints = listOf(
         "hdfc", "sbi", "icici", "axis bank", "axis", "kotak", "paytm",
         "phonepe", "google pay", "gpay", "yes bank", "indusind", "pnb",
-        "canara", "bank of baroda", "idfc", "hsbc"
+        "canara", "bank of baroda", "idfc", "hsbc", "slice"
     )
 
     private val bodyTxnHints = listOf(
         "debited", "credited", "spent", "paid", "received", "withdrawn",
         "deposited", "upi", "neft", "imps", "rtgs", "a/c", "acct", "account",
         "bal ", "balance", "rs.", "rs ", "inr ", "₹", "credit card", "emi",
-        "loan a/c", "card ending"
+        "loan a/c", "card ending", "sent from"
     )
 
     fun isFinancialSender(sender: String): Boolean {

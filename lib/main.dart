@@ -87,7 +87,11 @@ const int categorizerVersion = 4;
 // (2) ICICI USD card spends + CC refunds; (3) Axis cashback credits;
 // (4) bill/EMI "is due" reminders no longer count as txn signals (were
 // parseFailed noise). Forces a rescan.
-const int transactionSchemaVersion = 24;
+// Bumped 24 -> 25: Slice Small Finance Bank (live SLCEIT dump + SLCBNK):
+// "Rs sent from a/c" / "received in a/c|slice A/c" / IMPS / AutoPay / CC
+// "spent on your credit card xx####"; sender hints + discovery + logo;
+// failed-UPI-refunded alerts ignored. Forces a rescan.
+const int transactionSchemaVersion = 25;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

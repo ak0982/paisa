@@ -133,7 +133,7 @@ inboxes, with checkpointing (`sms_scan_state.dart`) for resume.
 
 `lib/main.dart` defines:
 
-- `const transactionSchemaVersion = **24**`
+- `const transactionSchemaVersion = **25**`
 - `const categorizerVersion = **4**`
 
 On launch, if either stored value is lower than the code constant **and** onboarding is complete,
@@ -163,6 +163,7 @@ installs keep stale data and your change appears to "do nothing."
 | 21 → 22 | Adversarial QA: bare 10-digit personal senders rejected; self-transfer KPI pairing needs distinct real `bank\|mask` legs; CCBP merchant wording excludes spend even if kind stays savings. |
 | 22 → 23 | **HSBC India:** sender/body mapping (`HSBCIN` / `HSBC*`), savings + debit-card + CC parse/discovery, `_realBanks` + logo. |
 | 23 → 24 | **Evidence from offline SMS analysis DB** (fresh dump → `~/Downloads/paisa_sms_analysis.db`): live HSBC `creditcard … used at … for INR` signal+parse; ICICI USD spends + CC refunds; Axis cashback; bill/EMI due reminders demoted from txn noise. |
+| 24 → 25 | **Slice Small Finance Bank** (SLCEIT / SLCBNK): UPI send/receive, IMPS, AutoPay, CC spend; failed-refunded UPI ignored; discovery + logo. |
 
 `categorizerVersion` remains **4** (rebuilds when categorizer rules change enough independently of
 schema). ISSUE-13's categorizer precision rode the schema bump 19 → 20 rather than a separate
@@ -245,7 +246,7 @@ impossible). Limits are seeded once from historical spend suggestion, then owned
 
 ### 4.5 Supported banks / issuers / neobanks / wallets (from code)
 - **Banks:** HDFC, SBI, ICICI, Axis, Kotak, IDFC (FIRST), Yes Bank, IndusInd, PNB, Federal,
-  Canara (sender detection), Bank of Baroda (sender detection), **HSBC** (savings + CC).
+  Canara (sender detection), Bank of Baroda (sender detection), **HSBC** (savings + CC), **Slice** SFB (savings UPI/IMPS + CC).
 - **Credit-card issuers:** SBI, ICICI, Axis, HDFC, Kotak, IDFC (FIRST), Yes Bank, IndusInd, BOB
   (BOBCARD), **HSBC**. Card schemes detected in text: Visa, Mastercard, RuPay, Amex, Maestro, Diners.
 - **Neobanks:** Fi (`FEDFIB`) and Jupiter (`MYJPTR`) — both ride on **Federal Bank** savings

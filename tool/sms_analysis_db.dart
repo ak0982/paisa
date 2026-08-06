@@ -75,6 +75,11 @@ String senderBankKey(String address) {
   // Trim trailing -P/-S/-T channel suffix already partly handled
   core = core.split('-').first;
   if (core.contains('HSBC')) return 'HSBC';
+  if (core.contains('SLCE') ||
+      core.contains('SLCBNK') ||
+      core.contains('SLICE')) {
+    return 'Slice';
+  }
   if (core.contains('HDFC')) return 'HDFC';
   if (core.contains('SBI') || core == 'SBIINB' || core == 'SBICRD') return 'SBI';
   if (core.contains('ICICI') || core.contains('ICICIB')) return 'ICICI';

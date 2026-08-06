@@ -122,7 +122,7 @@ RBI summary table (Banks in India page): Au, Capital, Equitas, ESAF, Suryoday, U
 | Capital Small Finance Bank | SFB | (variants) | N | Low |
 | Shivalik Small Finance Bank | SFB | (variants) | N | Low |
 | Unity Small Finance Bank | SFB | (variants) | N | Low |
-| slice Small Finance Bank | SFB | (variants; also BNPL/card SMS historically) | N | Low–Med |
+| slice Small Finance Bank | SFB | `SLCEIT`, `SLCBNK`, body ` - slice` | Y (v25) | High (live dump) |
 
 **Note:** Fino has **in-principle** RBI approval (Dec 2025) to convert from Payments Bank → SFB; until licensing completes it remains a PB in operational SMS terms. Source: [Fino disclosure / RBI press](https://www.fino.bank.in/files/fino/media/post_attachments/sites/default/files/uploads/pages/announcements-intimation/cover_5_12_2025.pdf).
 

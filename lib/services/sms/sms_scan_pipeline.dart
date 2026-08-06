@@ -79,6 +79,9 @@ abstract final class SmsScanPipeline {
     'KOTAKB',
     'HSBCIN',
     'HSBC',
+    'SLCEIT',
+    'SLCBNK',
+    'SLICE',
   ];
 
   static const _bodyBankHints = [
@@ -99,6 +102,7 @@ abstract final class SmsScanPipeline {
     'bank of baroda',
     'idfc',
     'hsbc',
+    'slice',
   ];
 
   static const _bodyTxnHints = [
@@ -118,6 +122,7 @@ abstract final class SmsScanPipeline {
     'card ending',
     'emi',
     'upi',
+    'sent from',
     'neft',
     'imps',
     'rtgs',

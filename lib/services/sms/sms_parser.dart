@@ -107,6 +107,13 @@ class SmsParser {
     r'used at .+ for\s+(?:inr|rs\.?)|'
     r'cashback of\s+(?:inr|rs\.?).+credited to your|'
     r'refund of\s+(?:inr|rs\.?).+credited to|'
+    // Slice SFB (live dump SLCEIT / public SLCBNK):
+    // "Rs. X sent from a/c xx0856 …" / "received in a/c|slice A/c …" / IMPS
+    r'sent from a/c|'
+    r'received in (?:slice\s+)?a/c|'
+    r'imps payment of\s+(?:inr|rs\.?)|'
+    r'successfully paid\s+(?:inr|rs\.?)|'
+    r'spent on your credit card\s+(?:xx|x{2,})?\d{3,4}|'
     r'a/c x?\d{4} debited by .*trf to mbk ccbp|'
     r'reversal of .*credited to .*credit card|'
     r'received\s+rs\.?\s*[\d,]+.*in your (?:kotak|hdfc|sbi|icici|axis|bank|a/c|account)|'
@@ -175,6 +182,21 @@ class SmsParser {
     if (isOtpOnly(trimmed)) return false;
     if (isNonBankWalletMovement(trimmed)) return false;
     if (isPromoOrOfferSms(trimmed, sender: sender)) return false;
+
+    // Failed UPI that was refunded is not a successful ledger entry
+    // (Slice: "UPI Payment of Rs. … has failed. Any debited amount has been refunded").
+    final lowerEarly = trimmed.toLowerCase();
+    if (lowerEarly.contains('has failed') &&
+        (lowerEarly.contains('refunded') || lowerEarly.contains('failed'))) {
+      return false;
+    }
+    // Pending UPI status updates are not completed ledger entries
+    // (Slice: "UPI payment of Rs. … is pending. The status will be updated…").
+    if (lowerEarly.contains('is pending') &&
+        (lowerEarly.contains('upi') ||
+            lowerEarly.contains('status will be updated'))) {
+      return false;
+    }
 
     // Bill-due / EMI-due reminders mention amounts but are not completed txns.
     // Without this, `_bankAlertPattern`'s "payment of INR" pushes them to
@@ -249,6 +271,10 @@ class SmsParser {
     'HSBCBK',
     'HSBCEX',
     'HSBCIM',
+    // Slice Small Finance Bank (DLT: SLCEIT historic app + SLCBNK SFB)
+    'SLCEIT',
+    'SLCBNK',
+    'SLICE',
   ];
 
   static bool isOtpOnly(String body) {
@@ -299,6 +325,12 @@ class SmsParser {
     }
     // HSBC before generic substring traps; headers HSBCIN / HSBCBK / etc.
     if (s.contains('HSBC')) return 'HSBC';
+    // Slice SFB — SLCEIT (app era) / SLCBNK (bank alerts) / SLICE
+    if (s.contains('SLCEIT') ||
+        s.contains('SLCBNK') ||
+        s.contains('SLICE')) {
+      return 'Slice';
+    }
     if (s.contains('LENDEN')) return 'LenDenClub';
     final wallet = SmsKeywordLists.detectWalletProvider(sender);
     if (wallet != null) return wallet;
@@ -317,6 +349,16 @@ class SmsParser {
       return 'PNB';
     }
     if (b.contains('hsbc')) return 'HSBC';
+    // Slice alerts usually end with " - slice"
+    if (RegExp(r'-\s*slice\s*$', caseSensitive: false).hasMatch(b.trim()) &&
+        (b.contains('a/c') ||
+            b.contains('credit card') ||
+            b.contains('upi ref') ||
+            b.contains('neft') ||
+            b.contains('sent from') ||
+            b.contains('received in'))) {
+      return 'Slice';
+    }
     if (b.contains('lendenclub')) return 'LenDenClub';
     final wallet = SmsKeywordLists.detectWalletProvider(body);
     if (wallet != null) return wallet;
@@ -703,6 +745,70 @@ class SmsParser {
       _SmsPattern(
         RegExp(
           r"(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent on your HSBC\s+(?:Bank\s+)?Credit Card ending (?:XX|xx)?(\d{4})\s+at\s+([A-Za-z0-9 .&'-]+)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // --- Slice Small Finance Bank (live dump SLCEIT + public SLCBNK) ---
+      // Account masks may show 3 or 4 trailing digits (e.g. xx0856 / XXX856).
+      // UPI debit: "Rs. 550 sent from a/c xx0856 on 18-May-26 to CREW SPORTS (UPI Ref: …) - slice"
+      _SmsPattern(
+        RegExp(
+          r'Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+sent from a/c\s*(?:xx|XX|X{2,}|\*+)?(\d{3,4})\s+on\s+\S+\s+to\s+(.+?)\s*\(',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Credit NEFT/generic: "Rs. 3,735.60 received in a/c XXX856 from NAME on 11-May-26 (NEFT Ref …)"
+      _SmsPattern(
+        RegExp(
+          r'Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+received in a/c\s*(?:xx|XX|X{2,}|\*+)?(\d{3,4})\s+from\s+(.+?)\s+on\s+',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+        isCredit: true,
+      ),
+      // Credit UPI/IMPS: "received in slice A/c … via UPI" / "received in A/c … via IMPS"
+      _SmsPattern(
+        RegExp(
+          r'Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+received in (?:slice\s+)?A/c\s*(?:xx|XX|X{2,}|\*+)?(\d{3,4})\s+on\s+\S+\s+from\s+(.+?)\s+via\s+(?:UPI|IMPS)',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+        isCredit: true,
+      ),
+      // IMPS debit: "IMPS payment of Rs. 99,990 from A/c xx0856 done on … to NAME is successful"
+      _SmsPattern(
+        RegExp(
+          r'IMPS payment of\s+Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+from\s+A/c\s*(?:xx|XX|X{2,}|\*+)?(\d{3,4})\s+done on\s+\S+\s+to\s+(.+?)\s+is successful',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // AutoPay: "Successfully paid Rs.1 from slice a/c XX2743 to OpenAI LLC on … via UPI AutoPay"
+      _SmsPattern(
+        RegExp(
+          r'Successfully paid\s+Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+from slice\s+a/c\s*(?:xx|XX|X{2,}|\*+)?(\d{3,4})\s+to\s+(.+?)\s+on\s+',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // CC spend (SLCBNK): "Rs. 124 spent on your credit card xx7185 at MERCHANT on 18-Jun-26 (UPI Ref: …)"
+      _SmsPattern(
+        RegExp(
+          r'Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent on your credit card\s*(?:xx|XX|X{2,}|\*+)?(\d{3,4})\s+at\s+(.+?)\s+on\s+',
           caseSensitive: false,
         ),
         amountGroup: 1,

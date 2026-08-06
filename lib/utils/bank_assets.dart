@@ -23,6 +23,7 @@ abstract final class BankAssets {
     'bob': 'bob.svg',
     'canara': 'canara.svg',
     'hsbc': 'hsbc.svg',
+    'slice': 'slice.svg',
   };
 
   /// Alias → canonical slug. Longer aliases are matched first.
@@ -48,6 +49,9 @@ abstract final class BankAssets {
     'kotak mahindra bank': 'kotak',
     'hsbc bank': 'hsbc',
     'hsbc india': 'hsbc',
+    'slice bank': 'slice',
+    'slice small finance': 'slice',
+    'slice small finance bank': 'slice',
     'bob': 'bob',
     'sbi': 'sbi',
     'hdfc': 'hdfc',
@@ -61,6 +65,7 @@ abstract final class BankAssets {
     'indusind': 'indusind',
     'canara': 'canara',
     'hsbc': 'hsbc',
+    'slice': 'slice',
   };
 
   static List<MapEntry<String, String>>? _sortedAliases;

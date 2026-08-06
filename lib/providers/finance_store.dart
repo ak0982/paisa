@@ -1089,6 +1089,7 @@ class FinanceStore extends ChangeNotifier {
     'IDFC',
     'Federal',
     'HSBC',
+    'Slice',
   };
 
   static bool _isRealBankAccount(String bank, String maskedAccount) {

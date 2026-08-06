@@ -29,5 +29,6 @@ of the user's own accounts in this private app.
 | `bob.svg` | Bank of Baroda, BOB, BOBCARD |
 | `canara.svg` | Canara |
 | `hsbc.svg` | HSBC (simplified hexagon mark; original recreation) |
+| `slice.svg` | Slice Small Finance Bank (simplified purple mark; original recreation) |
 
 Unknown banks fall back to a letter avatar in `BankLogo`.
