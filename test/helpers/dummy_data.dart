@@ -13,7 +13,7 @@ SmsMessageInput dummySms({
     id: id,
     sender: sender,
     body: body,
-    timestamp: timestamp ?? DateTime(2026, 7, 7, 12, 0),
+    timestamp: timestamp ?? dummyNowMonth(day: 7, hour: 12),
   );
 }
 
@@ -42,7 +42,39 @@ Transaction dummyTxn({
   );
 }
 
+/// A timestamp in the calendar month that is [monthsAgo] before [DateTime.now].
+///
+/// Shared fixtures use this so Home / Reports "this month" KPIs stay aligned
+/// with wall-clock date instead of rotting when a hardcoded month rolls over.
+DateTime dummyNowMonth({
+  int monthsAgo = 0,
+  int day = 1,
+  int hour = 0,
+  int minute = 0,
+}) {
+  final now = DateTime.now();
+  final first = DateTime(now.year, now.month - monthsAgo, 1);
+  final lastDay = DateTime(first.year, first.month + 1, 0).day;
+  return DateTime(
+    first.year,
+    first.month,
+    day.clamp(1, lastDay),
+    hour,
+    minute,
+  );
+}
+
+/// Inclusive start / end of the calendar month [monthsAgo] before now.
+(DateTime start, DateTime end) dummyMonthBounds({int monthsAgo = 0}) {
+  final start = dummyNowMonth(monthsAgo: monthsAgo, day: 1);
+  final end = DateTime(start.year, start.month + 1, 0, 23, 59, 59, 999);
+  return (start, end);
+}
+
 /// Rich dummy dataset spanning multiple months, banks, and categories.
+///
+/// Month 0 = current calendar month (the former hardcoded July 2026 slice).
+/// Months 1–3 = prior months (former June / May / April).
 List<Transaction> dummyTransactionHistory() {
   return [
     dummyTxn(
@@ -51,7 +83,7 @@ List<Transaction> dummyTransactionHistory() {
       amount: 486,
       isCredit: false,
       category: SpendCategory.food,
-      timestamp: DateTime(2026, 7, 5, 13, 20),
+      timestamp: dummyNowMonth(day: 5, hour: 13, minute: 20),
     ),
     dummyTxn(
       id: '2',
@@ -61,7 +93,7 @@ List<Transaction> dummyTransactionHistory() {
       category: SpendCategory.shopping,
       bank: 'SBI',
       maskedAccount: '••••8890',
-      timestamp: DateTime(2026, 7, 6, 10, 0),
+      timestamp: dummyNowMonth(day: 6, hour: 10),
     ),
     dummyTxn(
       id: '3',
@@ -69,7 +101,7 @@ List<Transaction> dummyTransactionHistory() {
       amount: 68000,
       isCredit: true,
       category: SpendCategory.income,
-      timestamp: DateTime(2026, 7, 1, 9, 0),
+      timestamp: dummyNowMonth(day: 1, hour: 9),
     ),
     dummyTxn(
       id: '4',
@@ -78,7 +110,7 @@ List<Transaction> dummyTransactionHistory() {
       isCredit: false,
       category: SpendCategory.emi,
       accountKind: AccountKind.loan,
-      timestamp: DateTime(2026, 7, 3, 8, 0),
+      timestamp: dummyNowMonth(day: 3, hour: 8),
     ),
     dummyTxn(
       id: '5',
@@ -88,7 +120,7 @@ List<Transaction> dummyTransactionHistory() {
       category: SpendCategory.travel,
       bank: 'Axis',
       maskedAccount: '••••2015',
-      timestamp: DateTime(2026, 7, 7, 18, 30),
+      timestamp: dummyNowMonth(day: 7, hour: 18, minute: 30),
     ),
     dummyTxn(
       id: '6',
@@ -98,7 +130,7 @@ List<Transaction> dummyTransactionHistory() {
       category: SpendCategory.bills,
       bank: 'Paytm',
       maskedAccount: '',
-      timestamp: DateTime(2026, 6, 15, 11, 0),
+      timestamp: dummyNowMonth(monthsAgo: 1, day: 15, hour: 11),
     ),
     dummyTxn(
       id: '7',
@@ -106,7 +138,7 @@ List<Transaction> dummyTransactionHistory() {
       amount: 649,
       isCredit: false,
       category: SpendCategory.entertainment,
-      timestamp: DateTime(2026, 6, 20, 0, 0),
+      timestamp: dummyNowMonth(monthsAgo: 1, day: 20),
     ),
     dummyTxn(
       id: '8',
@@ -114,7 +146,7 @@ List<Transaction> dummyTransactionHistory() {
       amount: 450,
       isCredit: false,
       category: SpendCategory.health,
-      timestamp: DateTime(2026, 5, 10, 16, 0),
+      timestamp: dummyNowMonth(monthsAgo: 2, day: 10, hour: 16),
     ),
     dummyTxn(
       id: '9',
@@ -122,7 +154,7 @@ List<Transaction> dummyTransactionHistory() {
       amount: 10000,
       isCredit: false,
       category: SpendCategory.atm,
-      timestamp: DateTime(2026, 5, 5, 14, 0),
+      timestamp: dummyNowMonth(monthsAgo: 2, day: 5, hour: 14),
     ),
     dummyTxn(
       id: '10',
@@ -130,7 +162,7 @@ List<Transaction> dummyTransactionHistory() {
       amount: 5000,
       isCredit: false,
       category: SpendCategory.transfer,
-      timestamp: DateTime(2026, 4, 1, 12, 0),
+      timestamp: dummyNowMonth(monthsAgo: 3, day: 1, hour: 12),
     ),
     dummyTxn(
       id: '11c',
@@ -140,7 +172,7 @@ List<Transaction> dummyTransactionHistory() {
       category: SpendCategory.income,
       bank: 'SBI',
       maskedAccount: '••••8890',
-      timestamp: DateTime(2026, 5, 20, 9, 0),
+      timestamp: dummyNowMonth(monthsAgo: 2, day: 20, hour: 9),
     ),
     dummyTxn(
       id: '11b',
@@ -150,7 +182,7 @@ List<Transaction> dummyTransactionHistory() {
       category: SpendCategory.shopping,
       bank: 'SBI',
       maskedAccount: '••••8890',
-      timestamp: DateTime(2026, 6, 10, 9, 0),
+      timestamp: dummyNowMonth(monthsAgo: 1, day: 10, hour: 9),
     ),
     dummyTxn(
       id: '11',
@@ -158,7 +190,7 @@ List<Transaction> dummyTransactionHistory() {
       amount: 15000,
       isCredit: true,
       category: SpendCategory.income,
-      timestamp: DateTime(2026, 4, 15, 10, 0),
+      timestamp: dummyNowMonth(monthsAgo: 3, day: 15, hour: 10),
     ),
     dummyTxn(
       id: '12',
@@ -166,7 +198,7 @@ List<Transaction> dummyTransactionHistory() {
       amount: 650,
       isCredit: false,
       category: SpendCategory.food,
-      timestamp: DateTime(2026, 7, 7, 20, 0),
+      timestamp: dummyNowMonth(day: 7, hour: 20),
     ),
   ];
 }

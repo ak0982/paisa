@@ -469,28 +469,23 @@ void main() {
       store.seedTransactions(dummyTransactionHistory());
     });
 
-    test('T116 June-only report', () {
-      final report = store.buildReport(
-        DateTime(2026, 6, 1),
-        DateTime(2026, 6, 30, 23, 59, 59),
-      );
+    test('T116 prior-month-only report', () {
+      final (start, end) = dummyMonthBounds(monthsAgo: 1);
+      final report = store.buildReport(start, end);
       expect(report.transactionCount, 3);
       expect(report.spent, 649 + 299);
     });
 
-    test('T117 May report includes ATM', () {
-      final report = store.buildReport(
-        DateTime(2026, 5, 1),
-        DateTime(2026, 5, 31, 23, 59, 59),
-      );
+    test('T117 two-months-ago report includes ATM', () {
+      final (start, end) = dummyMonthBounds(monthsAgo: 2);
+      final report = store.buildReport(start, end);
       expect(report.categorySpending.containsKey(SpendCategory.atm), isTrue);
     });
 
-    test('T118 Q2 2026 report Apr-Jun', () {
-      final report = store.buildReport(
-        DateTime(2026, 4, 1),
-        DateTime(2026, 6, 30, 23, 59, 59),
-      );
+    test('T118 prior three months report (excl. current)', () {
+      final (start, _) = dummyMonthBounds(monthsAgo: 3);
+      final (_, end) = dummyMonthBounds(monthsAgo: 1);
+      final report = store.buildReport(start, end);
       expect(report.transactionCount, 8);
       expect(report.income, greaterThan(0));
     });
@@ -504,7 +499,7 @@ void main() {
           amount: 10000,
           isCredit: true,
           category: SpendCategory.income,
-          timestamp: DateTime(2026, 7, 1),
+          timestamp: dummyNowMonth(day: 1),
         ),
         dummyTxn(
           id: 'd',
@@ -512,32 +507,28 @@ void main() {
           amount: 50,
           isCredit: false,
           category: SpendCategory.food,
-          timestamp: DateTime(2026, 7, 2),
+          timestamp: dummyNowMonth(day: 2),
         ),
       ]);
       expect(store.savingsRate, lessThanOrEqualTo(1.0));
     });
 
-    test('T120 Daily average for July', () {
-      final report = store.buildReport(
-        DateTime(2026, 7, 1),
-        DateTime(2026, 7, 31, 23, 59, 59),
-      );
+    test('T120 Daily average for current month', () {
+      final (start, end) = dummyMonthBounds();
+      final report = store.buildReport(start, end);
       expect(report.dailyAverage, greaterThan(0));
     });
 
     test('T121 Highest day spend positive', () {
-      final report = store.buildReport(
-        DateTime(2026, 7, 1),
-        DateTime(2026, 7, 31, 23, 59, 59),
-      );
+      final (start, end) = dummyMonthBounds();
+      final report = store.buildReport(start, end);
       expect(report.highestDaySpend, greaterThan(0));
     });
 
     test('T122 Income sources sorted descending', () {
       final report = store.buildReport(
-        DateTime(2026, 1, 1),
-        DateTime(2026, 12, 31, 23, 59, 59),
+        DateTime(2000, 1, 1),
+        DateTime(2100, 12, 31, 23, 59, 59),
       );
       if (report.incomeSources.length >= 2) {
         expect(
@@ -548,21 +539,17 @@ void main() {
     });
 
     test('T123 Category spending sorted high to low', () {
-      final report = store.buildReport(
-        DateTime(2026, 7, 1),
-        DateTime(2026, 7, 31, 23, 59, 59),
-      );
+      final (start, end) = dummyMonthBounds();
+      final report = store.buildReport(start, end);
       final values = report.categorySpending.values.toList();
       for (var i = 0; i < values.length - 1; i++) {
         expect(values[i], greaterThanOrEqualTo(values[i + 1]));
       }
     });
 
-    test('T124 April bonus credit in income sources', () {
-      final report = store.buildReport(
-        DateTime(2026, 4, 1),
-        DateTime(2026, 4, 30, 23, 59, 59),
-      );
+    test('T124 earliest-month bonus credit in income sources', () {
+      final (start, end) = dummyMonthBounds(monthsAgo: 3);
+      final report = store.buildReport(start, end);
       expect(report.income, 15000);
     });
 

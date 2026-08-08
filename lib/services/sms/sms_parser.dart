@@ -102,6 +102,9 @@ class SmsParser {
     r'deposited in (?:\w+ ){0,3}bank|'
     r'credit card (?:xx)?\d{4} debited for|'
     r'spent using (?:\w+\s+)+bank card|'
+    // Live Axis CC: "Spent INR 663\nAxis Bank Card no. XX8341\n…"
+    r'spent\s+(?:inr|rs\.?)\s*[\d,]+|'
+    r'axis bank card no\.|'
     // Live HSBC India CC: "HSBC creditcard xxxxx3740 used at MERCHANT for INR …"
     r'credit\s*card\s+[x*\d]+\s+used at|'
     r'used at .+ for\s+(?:inr|rs\.?)|'
@@ -149,9 +152,9 @@ class SmsParser {
 
   /// Strong bank alert verbs — used for trusted senders only.
   static final _bankAlertPattern = RegExp(
-    r'(debited|credited|spent\s+on|paid\s+to|sent\s+rs|withdrawn|deposited|'
-    r'depositing|payment of\s+(?:inr|rs)|has a credit by|is debited to|'
-    r'received\s+rs\.?\s*[\d,]+.*in your)',
+    r'(debited|credited|spent\s+on|spent\s+(?:inr|rs\.?)|paid\s+to|sent\s+rs|'
+    r'withdrawn|deposited|depositing|payment of\s+(?:inr|rs)|has a credit by|'
+    r'is debited to|received\s+rs\.?\s*[\d,]+.*in your)',
     caseSensitive: false,
   );
 
@@ -1003,6 +1006,27 @@ class SmsParser {
         accountGroup: 2,
         merchantGroup: 3,
       ),
+      // Live Axis CC (multiline → spaces): "Spent INR 663 Axis Bank Card no. XX8341
+      // 10-12-25 20:42:01 IST MYNTRA Avl Limit: INR …"
+      _SmsPattern(
+        RegExp(
+          r"Spent\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+Axis Bank Card no\.?\s*(?:XX|xx)?(\d{4})\s+\d{1,2}-\d{1,2}-\d{2,4}\s+\d{1,2}:\d{2}:\d{2}\s+IST\s+([A-Za-z0-9 *._&'-]+?)\s+Avl",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Axis / major bank CC: "INR 1,200.00 spent on Axis Bank Card XX8341 at AMAZON"
+      _SmsPattern(
+        RegExp(
+          r"(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent on (?:your\s+)?(?:Axis|HDFC|ICICI|SBI|Kotak)\s+Bank Card (?:XX|xx|X)?(\d{4})\s+at\s+([A-Za-z0-9 .&'*_-]+)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
       // Kotak NACH: INR 25,797.00 is debited to your Account XXXXXX3649 towards HDFC BANK
       _SmsPattern(
         RegExp(
@@ -1151,9 +1175,10 @@ class SmsParser {
         merchantGroup: 3,
       ),
       // ICICI: Acct XX123 debited for Rs 500.00 on 07-Jul-25; Swiggy credited
+      // Also accept "Acc" (fixture / truncated spelling seen in some alerts).
       _SmsPattern(
         RegExp(
-          "(?:Acct|A/c|Account)\\s*(?:XX|xx|\\*\\*|••)?\\s*$acct\\s+debited\\s+for\\s+$cur$amt.*?(?:;|/|-)\\s*([A-Za-z0-9 .&'\\-]+?)\\s+credited",
+          "(?:Acct|Acc|A/c|Account)\\s*(?:XX|xx|\\*\\*|••)?\\s*$acct\\s+debited\\s+for\\s+$cur$amt.*?(?:;|/|-)\\s*([A-Za-z0-9 .&'\\-]+?)\\s+credited",
           caseSensitive: false,
         ),
         amountGroup: 2,

@@ -550,7 +550,7 @@ void main() {
     });
 
     test('S53 Monthly spent excludes credits', () {
-      // July debits: 486+2499+8500+312+650 = 12447
+      // Current-month debits: 486+2499+8500+312+650 = 12447
       expect(store.monthlySpent, 12447);
     });
 
@@ -562,9 +562,8 @@ void main() {
       expect(store.savingsRate, closeTo(0.817, 0.01));
     });
 
-    test('S56 transactionsInRange July 2026', () {
-      final start = DateTime(2026, 7, 1);
-      final end = DateTime(2026, 7, 31, 23, 59, 59);
+    test('S56 transactionsInRange current month', () {
+      final (start, end) = dummyMonthBounds();
       expect(store.transactionsInRange(start, end).length, 6);
     });
 
@@ -577,52 +576,48 @@ void main() {
       expect(report.spent, 0);
     });
 
-    test('S58 Full year 2026 report totals', () {
+    test('S58 Full history report totals', () {
       final report = store.buildReport(
-        DateTime(2026, 1, 1),
-        DateTime(2026, 12, 31, 23, 59, 59),
+        DateTime(2000, 1, 1),
+        DateTime(2100, 12, 31, 23, 59, 59),
       );
       expect(report.transactionCount, 14);
       expect(report.income, greaterThan(0));
       expect(report.spent, greaterThan(0));
     });
 
-    test('S59 Top category in July is EMI or food', () {
-      final report = store.buildReport(
-        DateTime(2026, 7, 1),
-        DateTime(2026, 7, 31, 23, 59, 59),
-      );
+    test('S59 Top category in current month is EMI or food', () {
+      final (start, end) = dummyMonthBounds();
+      final report = store.buildReport(start, end);
       expect(report.topCategory, isNotNull);
       expect(report.categorySpending.length, greaterThan(0));
     });
 
     test('S60 Top merchants max 5', () {
       final report = store.buildReport(
-        DateTime(2026, 1, 1),
-        DateTime(2026, 12, 31, 23, 59, 59),
+        DateTime(2000, 1, 1),
+        DateTime(2100, 12, 31, 23, 59, 59),
       );
       expect(report.topMerchants.length, lessThanOrEqualTo(5));
     });
 
     test('S61 Income sources from credits', () {
       final report = store.buildReport(
-        DateTime(2026, 1, 1),
-        DateTime(2026, 12, 31, 23, 59, 59),
+        DateTime(2000, 1, 1),
+        DateTime(2100, 12, 31, 23, 59, 59),
       );
       expect(report.incomeSources, isNotEmpty);
       expect(report.incomeSources.first.$2, greaterThan(0));
     });
 
     test('S62 Net = income - spent', () {
-      final report = store.buildReport(
-        DateTime(2026, 7, 1),
-        DateTime(2026, 7, 31, 23, 59, 59),
-      );
+      final (start, end) = dummyMonthBounds();
+      final report = store.buildReport(start, end);
       expect(report.net, report.income - report.spent);
     });
 
     test('S63 Single-day range boundary', () {
-      final day = DateTime(2026, 7, 7);
+      final day = dummyNowMonth(day: 7);
       final report = store.buildReport(
         DateTime(day.year, day.month, day.day),
         DateTime(day.year, day.month, day.day, 23, 59, 59),
@@ -655,10 +650,8 @@ void main() {
     test('S67 Inverted date range still works', () {
       final store = FinanceStore();
       store.seedTransactions(dummyTransactionHistory());
-      final report = store.buildReport(
-        DateTime(2026, 7, 31),
-        DateTime(2026, 7, 1),
-      );
+      final (start, end) = dummyMonthBounds();
+      final report = store.buildReport(end, start);
       expect(report.isEmpty, isTrue);
     });
 
@@ -671,7 +664,7 @@ void main() {
           amount: 100,
           isCredit: false,
           category: SpendCategory.food,
-          timestamp: DateTime(2026, 7, 1),
+          timestamp: dummyNowMonth(day: 1),
         ),
         dummyTxn(
           id: 'b',
@@ -679,13 +672,11 @@ void main() {
           amount: 200,
           isCredit: false,
           category: SpendCategory.food,
-          timestamp: DateTime(2026, 7, 2),
+          timestamp: dummyNowMonth(day: 2),
         ),
       ]);
-      final report = store.buildReport(
-        DateTime(2026, 7, 1),
-        DateTime(2026, 7, 31, 23, 59, 59),
-      );
+      final (start, end) = dummyMonthBounds();
+      final report = store.buildReport(start, end);
       expect(report.topMerchants.first.$1, 'Swiggy');
       expect(report.topMerchants.first.$3, 300);
     });
@@ -693,7 +684,10 @@ void main() {
     test('S69 earliestTransactionDate correct', () {
       final store = FinanceStore();
       store.seedTransactions(dummyTransactionHistory());
-      expect(store.earliestTransactionDate, DateTime(2026, 4, 1, 12, 0));
+      expect(
+        store.earliestTransactionDate,
+        dummyNowMonth(monthsAgo: 3, day: 1, hour: 12),
+      );
     });
 
     test('S70 foodDeltaVsLastMonth when no prev data', () {

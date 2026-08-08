@@ -47,9 +47,17 @@ void main() {
       );
 
       expect(find.text('Food'), findsOneWidget);
-      // Insights now cover the full history; label reflects earliest txn month
-      // (Apr 2026 in the dummy dataset) rather than a fixed "Last 12 months".
-      expect(find.text('Since Apr 2026'), findsOneWidget);
+      // Insights cover full history; label reflects earliest txn month
+      // (3 calendar months before now in the dummy dataset).
+      final earliest = dummyNowMonth(monthsAgo: 3, day: 1, hour: 12);
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      expect(
+        find.text('Since ${months[earliest.month - 1]} ${earliest.year}'),
+        findsOneWidget,
+      );
       expect(find.text('Swiggy'), findsOneWidget);
       expect(find.text('Zomato'), findsOneWidget);
     });
@@ -57,10 +65,8 @@ void main() {
     testWidgets('with range only shows category txs in that period',
         (tester) async {
       final store = FinanceStore()..seedTransactions(dummyTransactionHistory());
-      final range = DateTimeRange(
-        start: DateTime(2026, 6, 1),
-        end: DateTime(2026, 6, 30, 23, 59, 59, 999),
-      );
+      final (start, end) = dummyMonthBounds(monthsAgo: 1);
+      final range = DateTimeRange(start: start, end: end);
 
       await pump(
         tester,
@@ -108,10 +114,8 @@ void main() {
     testWidgets('merchant filter shows only matching debits in range',
         (tester) async {
       final store = FinanceStore()..seedTransactions(dummyTransactionHistory());
-      final range = DateTimeRange(
-        start: DateTime(2026, 7, 1),
-        end: DateTime(2026, 7, 31, 23, 59, 59, 999),
-      );
+      final (start, end) = dummyMonthBounds();
+      final range = DateTimeRange(start: start, end: end);
 
       await pump(
         tester,
@@ -132,10 +136,8 @@ void main() {
 
     testWidgets('merchant match is case-insensitive', (tester) async {
       final store = FinanceStore()..seedTransactions(dummyTransactionHistory());
-      final range = DateTimeRange(
-        start: DateTime(2026, 7, 1),
-        end: DateTime(2026, 7, 31, 23, 59, 59, 999),
-      );
+      final (start, end) = dummyMonthBounds();
+      final range = DateTimeRange(start: start, end: end);
 
       await pump(
         tester,
@@ -156,10 +158,8 @@ void main() {
     testWidgets('income source filter shows only matching credits in range',
         (tester) async {
       final store = FinanceStore()..seedTransactions(dummyTransactionHistory());
-      final range = DateTimeRange(
-        start: DateTime(2026, 7, 1),
-        end: DateTime(2026, 7, 31, 23, 59, 59, 999),
-      );
+      final (start, end) = dummyMonthBounds();
+      final range = DateTimeRange(start: start, end: end);
 
       await pump(
         tester,
@@ -262,7 +262,7 @@ void main() {
 
       expect(find.text('Top merchants'), findsOneWidget);
 
-      // Amazon is a July debit in the dummy set; tap the merchant name in the list.
+      // Amazon is a current-month debit in the dummy set; tap the merchant name.
       await tester.ensureVisible(find.text('Amazon').first);
       await tester.tap(find.text('Amazon').first);
       await tester.pumpAndSettle();

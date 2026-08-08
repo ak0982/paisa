@@ -91,7 +91,18 @@ const int categorizerVersion = 4;
 // "Rs sent from a/c" / "received in a/c|slice A/c" / IMPS / AutoPay / CC
 // "spent on your credit card xx####"; sender hints + discovery + logo;
 // failed-UPI-refunded alerts ignored. Forces a rescan.
-const int transactionSchemaVersion = 25;
+// Bumped 25 -> 26: account drilldown completeness — canonicalize bank aliases
+// (BOB→Bank of Baroda), keep CCBP on the funding account (no remap to card),
+// attach unambiguous same-bank maskless orphans to the unique account of that
+// kind. Forces a rescan so stored CCBP/alias rows rewrite.
+// Bumped 26 -> 27: account-owning bank vs SMS sender — registry learns Slice,
+// does not learn from ICICI settlements, seeds votes from discoveries + pre-
+// rescan ownership; You buckets rematch Bank/wrong-bank same last-4 into the
+// unique real owner. Forces a rescan so Slice•0856 absorbs relay credits.
+// Bumped 27 -> 28: loan product association — discover loan masks before linked
+// savings; NACH/EMI remaps onto loan mask only when known (never issuer bank +
+// funding mask); opening a loan account lists associated EMI debits.
+const int transactionSchemaVersion = 28;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -5,7 +5,8 @@ import 'sms_parser.dart';
 /// Enriches parsed SMS transactions with account masks, kinds, and labels.
 abstract final class TransactionEnrichment {
   static final _creditCardBody = RegExp(
-    r'credit\s+card|card ending|card\s+x\d{4}|yes\s+bank\s+card|bobcard|ccbp',
+    r'credit\s+card|card ending|card\s+x\d{4}|yes\s+bank\s+card|'
+    r'axis bank card|bank card no\.|bobcard|ccbp',
     caseSensitive: false,
   );
 
@@ -98,6 +99,16 @@ abstract final class TransactionEnrichment {
     if (RegExp(r'spent on yes bank card', caseSensitive: false).hasMatch(lower)) {
       return true;
     }
+    // Live Axis: "Spent INR … Axis Bank Card no. XX8341" / "spent on Axis Bank Card"
+    if (RegExp(
+      r'(?:spent\s+(?:inr|rs\.?)|spent on).{0,40}axis bank card',
+      caseSensitive: false,
+    ).hasMatch(lower)) {
+      return true;
+    }
+    if (RegExp(r'axis bank card no\.', caseSensitive: false).hasMatch(lower)) {
+      return true;
+    }
     // Low-risk scheme-aware hint: "spent on … Visa/RuPay card …"
     final scheme = SmsKeywordLists.detectCardScheme(lower);
     if (scheme != null &&
@@ -160,6 +171,20 @@ abstract final class TransactionEnrichment {
   }) {
     final lower = body.toLowerCase();
     final last4 = SmsParser.extractAccountLast4(body);
+
+    // CCBP / MBK CCBP is a funding-account debit (pay the card), not activity
+    // on the card. Never remap onto a discovered card — keep the funding
+    // bank/mask (body last-4 is the funding A/c when present).
+    if (lower.contains('ccbp') || lower.contains('credit card bill')) {
+      final fundingMask = last4 != null
+          ? SmsParser.maskFromLast4(last4)
+          : parsedMask;
+      return (
+        bank: parsedBank,
+        mask: fundingMask.isNotEmpty ? fundingMask : parsedMask,
+      );
+    }
+
     if (last4 != null) {
       final mask = SmsParser.maskFromLast4(last4);
       final byMask = discoveries.where((d) => d.mask == mask).toList();
@@ -176,16 +201,7 @@ abstract final class TransactionEnrichment {
         (d) => d.kind == AccountKind.creditCard && d.bank.toLowerCase().contains('bob'),
       );
       if (bob.isNotEmpty) return (bank: bob.first.bank, mask: bob.first.mask);
-      return (bank: 'BOB', mask: parsedMask);
-    }
-
-    if (lower.contains('ccbp')) {
-      final cards = discoveries
-          .where((d) => d.kind == AccountKind.creditCard)
-          .toList();
-      if (cards.length == 1) {
-        return (bank: cards.first.bank, mask: cards.first.mask);
-      }
+      return (bank: 'Bank of Baroda', mask: parsedMask);
     }
 
     final cc = discoveries.where(
@@ -226,7 +242,9 @@ abstract final class TransactionEnrichment {
         lower.contains('tp ach');
   }
 
-  /// When EMI is paid via NACH from a savings account, show the loan account.
+  /// When EMI is paid via NACH / UPI from a savings account, attach it to the
+  /// loan product mask when known. Never rewrite bank without a loan mask
+  /// (that creates phantom keys like ICICI|fundingLast4).
   static ({String bank, String mask}) resolveLoanDisplay({
     required String body,
     required String parsedBank,
@@ -234,41 +252,94 @@ abstract final class TransactionEnrichment {
     required Iterable<DiscoveredAccount> discoveries,
   }) {
     final lower = body.toLowerCase();
+    final funding = (bank: parsedBank, mask: parsedMask);
+
+    String? loanLast4FromBody() {
+      final patterns = [
+        RegExp(
+          r'(?:personal|home|car|housing)\s+loan\s+(?:xx|XX)?(\d{4})\b',
+          caseSensitive: false,
+        ),
+        RegExp(
+          r'loan\s+a/?c\s*(?:xx|XX|x{2,})?(\d{4,})\b',
+          caseSensitive: false,
+        ),
+        RegExp(
+          r'against\s+(?:your\s+)?loan\s+a/?c\s*(?:xx|XX)?(\d{4})\b',
+          caseSensitive: false,
+        ),
+      ];
+      for (final p in patterns) {
+        final m = p.firstMatch(body);
+        if (m == null) continue;
+        final digits = m.group(1)!.replaceAll(RegExp(r'\D'), '');
+        if (digits.length < 4) continue;
+        return digits.substring(digits.length - 4);
+      }
+      return null;
+    }
 
     DiscoveredAccount? loanFor(String bankHint) {
       final matches = discoveries
           .where(
             (d) =>
                 d.kind == AccountKind.loan &&
+                d.mask.isNotEmpty &&
                 d.bank.toLowerCase().contains(bankHint),
           )
           .toList();
       return matches.isEmpty ? null : matches.first;
     }
 
-    if (lower.contains('nach-10-hdfc') ||
-        lower.contains('hdfc bank limited')) {
-      final loan = loanFor('hdfc');
-      return (bank: loan?.bank ?? 'HDFC', mask: loan?.mask ?? '');
-    }
-    if (lower.contains('tp ach icici') ||
-        lower.contains('nach-10-tp ach icici')) {
-      final loan = loanFor('icici');
-      return (bank: loan?.bank ?? 'ICICI', mask: loan?.mask ?? '');
-    }
-    if (lower.contains('idfc first bank')) {
-      final loan = loanFor('idfc');
-      return (bank: loan?.bank ?? 'IDFC', mask: loan?.mask ?? '');
-    }
-    if (lower.contains('loan ac')) {
-      final last4 = SmsParser.extractAccountLast4(body);
-      return (
-        bank: parsedBank,
-        mask: SmsParser.maskFromLast4(last4),
-      );
+    DiscoveredAccount? uniqueLoan() {
+      final loans = discoveries
+          .where((d) => d.kind == AccountKind.loan && d.mask.isNotEmpty)
+          .toList();
+      if (loans.length == 1) return loans.first;
+      return null;
     }
 
-    return (bank: parsedBank, mask: parsedMask);
+    final bodyLast4 = loanLast4FromBody();
+    if (bodyLast4 != null) {
+      final mask = SmsParser.maskFromLast4(bodyLast4);
+      final byMask = discoveries
+          .where((d) => d.kind == AccountKind.loan && d.mask == mask)
+          .toList();
+      if (byMask.isNotEmpty) {
+        return (bank: byMask.first.bank, mask: mask);
+      }
+      return (bank: parsedBank, mask: mask);
+    }
+
+    ({String bank, String mask})? remapToLoan(DiscoveredAccount? loan) {
+      if (loan == null || loan.mask.isEmpty) return null;
+      return (bank: loan.bank, mask: loan.mask);
+    }
+
+    if (lower.contains('nach-10-hdfc') ||
+        lower.contains('hdfc bank limited') ||
+        (lower.contains('nach') && lower.contains('hdfc'))) {
+      return remapToLoan(loanFor('hdfc')) ?? funding;
+    }
+    if (lower.contains('tp ach icici') ||
+        lower.contains('nach-10-tp ach icici') ||
+        (lower.contains('nach') && lower.contains('icici'))) {
+      return remapToLoan(loanFor('icici')) ?? funding;
+    }
+    if (lower.contains('idfc first bank') ||
+        (lower.contains('nach') && lower.contains('idfc'))) {
+      return remapToLoan(loanFor('idfc')) ?? funding;
+    }
+
+    // Generic EMI / MBK EMI from funding a/c → unique discovered loan if any.
+    if (lower.contains('mbk emi') ||
+        RegExp(r'\bemi\b').hasMatch(lower) ||
+        lower.contains('loan instal')) {
+      final remapped = remapToLoan(uniqueLoan()) ?? remapToLoan(loanFor(parsedBank.toLowerCase()));
+      if (remapped != null) return remapped;
+    }
+
+    return funding;
   }
 
   static String improveMerchant({

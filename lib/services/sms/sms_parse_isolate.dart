@@ -141,6 +141,14 @@ Pass1IsolateResult _discoverAndLearn(Map<String, dynamic> payload) {
     if (found != null) discoveries.add(found);
   }
 
+  // Seed ownership from discoveries before learning from candidates so
+  // beneficiary last-4s (e.g. Slice) beat ICICI relay senders.
+  registry.seedFromDiscoveries(
+    discoveries.map(
+      (d) => (bank: d.bank, mask: d.mask, smsHits: d.smsHits),
+    ),
+  );
+
   for (final raw in candidates) {
     registry.learn(
       raw['sender'] as String? ?? '',

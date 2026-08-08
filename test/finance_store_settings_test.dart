@@ -48,10 +48,8 @@ void main() {
     test('U42 buildReport on seeded data is not empty', () {
       final store = FinanceStore();
       store.seedTransactions(dummyTransactionHistory());
-      final report = store.buildReport(
-        DateTime(2026, 7, 1),
-        DateTime(2026, 7, 31, 23, 59, 59),
-      );
+      final (start, end) = dummyMonthBounds();
+      final report = store.buildReport(start, end);
       expect(report.isEmpty, isFalse);
       expect(report.transactionCount, greaterThan(0));
     });

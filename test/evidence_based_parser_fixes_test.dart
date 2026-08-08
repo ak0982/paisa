@@ -123,5 +123,28 @@ void main() {
       );
       expect(result.isParsed, isFalse);
     });
+
+    test('Axis live multiline Card no. spend parses', () {
+      const body =
+          'Spent INR 663\nAxis Bank Card no. XX8341\n10-12-25 20:42:01 IST\nMYNTRA\nAvl Limit: INR 96568.75\nNot you? SMS BLOCK 8341 to 919951860002';
+      final result = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: '8',
+          sender: 'JK-AXISBK-S',
+          body: body,
+          timestamp: DateTime(2025, 12, 10),
+        ),
+      );
+      expect(result.outcome, SmsPipelineOutcome.parsed);
+      expect(result.transaction!.bank, 'Axis');
+      expect(result.transaction!.amount, 663.0);
+      expect(result.transaction!.isCredit, isFalse);
+      expect(result.transaction!.maskedAccount, contains('8341'));
+      expect(result.transaction!.merchant.toUpperCase(), contains('MYNTRA'));
+      expect(
+        TransactionEnrichment.looksLikeCreditCardTransaction(body.toLowerCase()),
+        isTrue,
+      );
+    });
   });
 }

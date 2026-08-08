@@ -12,6 +12,7 @@ import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/bank_logo.dart';
 import 'edit_profile_screen.dart';
+import 'filtered_transactions_screen.dart';
 import 'onboarding/welcome_screen.dart';
 import 'settings/help_support_screen.dart';
 import 'settings/privacy_settings_screen.dart';
@@ -373,6 +374,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       for (var i = 0; i < accounts.length; i++) ...[
                         _BankRow(
                           account: accounts[i],
+                          onOpen: accounts[i].mask.isEmpty
+                              ? null
+                              : () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) =>
+                                          FilteredTransactionsScreen.account(
+                                        account: accounts[i],
+                                      ),
+                                    ),
+                                  );
+                                },
                           onHide: () async {
                             final confirmed = await showDialog<bool>(
                               context: context,
@@ -521,98 +534,123 @@ class _FilterChip extends StatelessWidget {
 }
 
 class _BankRow extends StatelessWidget {
-  const _BankRow({required this.account, this.onHide});
+  const _BankRow({required this.account, this.onOpen, this.onHide});
 
   final BankAccount account;
+  final VoidCallback? onOpen;
   final VoidCallback? onHide;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        children: [
-          BankLogo(
-            bank: account.name,
-            fallbackLetter: account.badge,
-            fallbackColor: account.color,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  account.name,
-                  style: PaisaTheme.manrope(
-                    size: 13.5,
-                    weight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  account.mask,
-                  style: PaisaTheme.manrope(
-                    size: 11,
-                    color: PaisaColors.mutedCaption,
-                  ),
-                ),
-                if (account.receivedTotal > 0 || account.spentTotal > 0)
-                  Text(
-                    _accountMoneyLine(account),
-                    style: PaisaTheme.manrope(
-                      size: 11,
-                      weight: FontWeight.w600,
-                      color: PaisaColors.mutedCaption,
-                    ),
-                  )
-                else if (account.activityCount > 0)
-                  Text(
-                    '${account.activityCount} SMS alerts',
-                    style: PaisaTheme.manrope(
-                      size: 11,
-                      weight: FontWeight.w600,
-                      color: PaisaColors.mutedCaption,
-                    ),
-                  ),
-              ],
+    final row = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            BankLogo(
+              bank: account.name,
+              fallbackLetter: account.badge,
+              fallbackColor: account.color,
             ),
-          ),
-          if (onHide != null)
-            IconButton(
-              tooltip: 'Not my account',
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              onPressed: onHide,
-              icon: const Icon(
-                Icons.close,
-                size: 18,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    account.name,
+                    style: PaisaTheme.manrope(
+                      size: 13.5,
+                      weight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    account.mask,
+                    style: PaisaTheme.manrope(
+                      size: 11,
+                      color: PaisaColors.mutedCaption,
+                    ),
+                  ),
+                  if (account.receivedTotal > 0 || account.spentTotal > 0)
+                    Text(
+                      _accountMoneyLine(account),
+                      style: PaisaTheme.manrope(
+                        size: 11,
+                        weight: FontWeight.w600,
+                        color: PaisaColors.mutedCaption,
+                      ),
+                    )
+                  else if (account.activityCount > 0)
+                    Text(
+                      '${account.activityCount} SMS alerts',
+                      style: PaisaTheme.manrope(
+                        size: 11,
+                        weight: FontWeight.w600,
+                        color: PaisaColors.mutedCaption,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (onOpen != null)
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 22,
                 color: PaisaColors.muted,
               ),
-            )
-          else
-            Row(
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: const BoxDecoration(
-                    color: PaisaColors.credit,
-                    shape: BoxShape.circle,
-                  ),
+            if (onHide != null)
+              IconButton(
+                tooltip: 'Not my account',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                onPressed: onHide,
+                icon: const Icon(
+                  Icons.close,
+                  size: 18,
+                  color: PaisaColors.muted,
                 ),
-                const SizedBox(width: 5),
-                Text(
-                  'Active',
-                  style: PaisaTheme.manrope(
-                    size: 10.5,
-                    weight: FontWeight.w600,
-                    color: PaisaColors.credit,
+              )
+            else if (onOpen == null)
+              Row(
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: PaisaColors.credit,
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                ),
-              ],
-            ),
-        ],
+                  const SizedBox(width: 5),
+                  Text(
+                    'Active',
+                    style: PaisaTheme.manrope(
+                      size: 10.5,
+                      weight: FontWeight.w600,
+                      color: PaisaColors.credit,
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+
+    if (onOpen == null) return row;
+
+    return Semantics(
+      button: true,
+      label: 'Open ${account.name} ${account.mask}',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onOpen,
+          borderRadius: BorderRadius.circular(12),
+          child: row,
+        ),
       ),
     );
   }

@@ -1,6 +1,6 @@
 /// Learns which bank owns an account (last 4 digits) from unambiguous SMS,
 /// then resolves misleading sender IDs — e.g. ICICI notifies credits into an
-/// SBI/HDFC beneficiary account.
+/// SBI/HDFC/Slice beneficiary account.
 class AccountBankRegistry {
   final Map<String, Map<String, int>> _votes = {};
 
@@ -30,13 +30,36 @@ class AccountBankRegistry {
   }
 
   /// Records bank hints from SMS where the owning bank is clear.
+  ///
+  /// Skips ICICI settlement / misleading-sender relays — those announce credits
+  /// into another bank's account and must not teach ICICI ownership onto the
+  /// beneficiary last-4.
   void learn(String sender, String body) {
+    if (isIciciSettlementNotification(sender, body)) return;
+    if (isMisleadingSenderBank(sender, body, _bankFromSender(sender) ?? '')) {
+      return;
+    }
+
     final bank = _detectUnambiguousBank(sender, body);
     if (bank == null) return;
 
     for (final last4 in extractAccountLast4s(body)) {
       _votes.putIfAbsent(last4, () => {});
       _votes[last4]![bank] = (_votes[last4]![bank] ?? 0) + 1;
+    }
+  }
+
+  /// Seeds ownership from discovered accounts (weighted by SMS hits).
+  void seedFromDiscoveries(
+    Iterable<({String bank, String mask, int smsHits})> discoveries,
+  ) {
+    for (final d in discoveries) {
+      final last4 = last4FromMask(d.mask);
+      if (last4 == null) continue;
+      if (d.bank.isEmpty || d.bank == 'Bank') continue;
+      final weight = d.smsHits < 1 ? 1 : d.smsHits;
+      _votes.putIfAbsent(last4, () => {});
+      _votes[last4]![d.bank] = (_votes[last4]![d.bank] ?? 0) + weight;
     }
   }
 
@@ -70,6 +93,8 @@ class AccountBankRegistry {
       if (known != null) {
         if (isIciciSettlementNotification(sender, body)) return known;
         if (isMisleadingSenderBank(sender, body, parsedBank)) return known;
+        // Placeholder / unknown bank on a known last-4 → owning bank.
+        if (parsedBank.isEmpty || parsedBank == 'Bank') return known;
       }
     }
 
@@ -112,9 +137,18 @@ class AccountBankRegistry {
   /// Bank explicitly named next to the account in the SMS body.
   static String? detectExplicitAccountBank(String body) {
     final lower = body.toLowerCase();
+    final trimmed = lower.trim();
+
+    // Slice SFB alerts usually end with " - slice" or say "slice A/c".
+    if (RegExp(r'-\s*slice\s*$').hasMatch(trimmed) ||
+        RegExp(r'\bslice\s+a/c\b').hasMatch(lower) ||
+        RegExp(r'received in slice\b').hasMatch(lower) ||
+        RegExp(r'from slice\s+a/c\b').hasMatch(lower)) {
+      return 'Slice';
+    }
 
     if (RegExp(r'(?:account|a/c)\s*-\s*sbi\b').hasMatch(lower) ||
-        RegExp(r'-sbi\s*$').hasMatch(lower.trim()) ||
+        RegExp(r'-sbi\s*$').hasMatch(trimmed) ||
         lower.contains('dear sbi') ||
         lower.contains('sbi upi user')) {
       return 'SBI';
@@ -148,6 +182,9 @@ class AccountBankRegistry {
     if (s.contains('YES')) return 'Yes Bank';
     if (s.contains('IDFC')) return 'IDFC';
     if (s.contains('HSBC')) return 'HSBC';
+    if (s.contains('SLCEIT') || s.contains('SLCBNK') || s.contains('SLICE')) {
+      return 'Slice';
+    }
     if (s.contains('LENDEN')) return 'LenDenClub';
     return null;
   }

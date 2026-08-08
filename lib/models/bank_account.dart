@@ -4,10 +4,12 @@ import '../services/sms/account_discovery.dart';
 
 class BankAccount {
   const BankAccount({
+    required this.bank,
     required this.name,
     required this.mask,
     required this.badge,
     required this.color,
+    required this.evidenceKey,
     this.isActive = true,
     this.receivedTotal = 0,
     this.spentTotal = 0,
@@ -15,10 +17,17 @@ class BankAccount {
     this.activityCount = 0,
   });
 
+  /// Display / preferred bank name.
+  final String bank;
   final String name;
   final String mask;
   final String badge;
   final Color color;
+
+  /// Stable stats key (`canonicalBank|mask` or mask-only) used to load
+  /// transactions for this row — not remapped display labels.
+  final String evidenceKey;
+
   final bool isActive;
   /// Total credits received into this savings account (all time in local data).
   final double receivedTotal;

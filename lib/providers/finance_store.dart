@@ -233,12 +233,49 @@ class FinanceStore extends ChangeNotifier {
     for (final t in txns) {
       final last4 = AccountBankRegistry.last4FromMask(t.maskedAccount);
       if (last4 == null) continue;
-      if (t.bank.isEmpty || t.bank == 'Bank') continue;
+      final bank = canonicalizeBank(t.bank);
+      if (bank.isEmpty || !_realBanks.contains(bank)) continue;
       final bucket = votes.putIfAbsent(last4, () => {});
-      bucket[t.bank] = (bucket[t.bank] ?? 0) + 1;
+      bucket[bank] = (bucket[bank] ?? 0) + 1;
     }
     return votes;
   }
+
+  static Map<String, Map<String, int>> _bankVotesFromDiscoveries(
+    List<DiscoveredAccount> discoveries,
+  ) {
+    final votes = <String, Map<String, int>>{};
+    for (final d in discoveries) {
+      final last4 = AccountBankRegistry.last4FromMask(d.mask);
+      if (last4 == null) continue;
+      final bank = canonicalizeBank(d.bank);
+      if (bank.isEmpty || !_realBanks.contains(bank)) continue;
+      final weight = d.smsHits < 1 ? 1 : d.smsHits;
+      final bucket = votes.putIfAbsent(last4, () => {});
+      bucket[bank] = (bucket[bank] ?? 0) + weight;
+    }
+    return votes;
+  }
+
+  static Map<String, Map<String, int>> _mergeBankVotes(
+    Map<String, Map<String, int>> a,
+    Map<String, Map<String, int>> b,
+  ) {
+    final out = <String, Map<String, int>>{
+      for (final e in a.entries) e.key: Map<String, int>.from(e.value),
+    };
+    for (final e in b.entries) {
+      final bucket = out.putIfAbsent(e.key, () => {});
+      for (final v in e.value.entries) {
+        bucket[v.key] = (bucket[v.key] ?? 0) + v.value;
+      }
+    }
+    return out;
+  }
+
+  /// Votes captured before a full rescan clears local data, so pass-1 learn
+  /// still knows Slice/HDFC/… ownership for beneficiary last-4s.
+  Map<String, Map<String, int>>? _rescanSeedVotes;
 
   // --- Launch scan coordination (ISSUE-7) ---
   //
@@ -289,6 +326,10 @@ class FinanceStore extends ChangeNotifier {
   /// Clears existing transactions first so phantom accounts from older parser
   /// versions cannot linger in Profile.
   Future<ScanResult> fullRescanFromSms() async {
+    _rescanSeedVotes = _mergeBankVotes(
+      _bankVotesFromTransactions(_transactions),
+      _bankVotesFromDiscoveries(_discoveredAccounts),
+    );
     await _db.clearAll();
     _transactions = [];
     _discoveredAccounts = [];
@@ -324,9 +365,14 @@ class FinanceStore extends ChangeNotifier {
       _permissionPermanentlyDenied = false;
 
       final scanState = await _db.getScanState();
+      final liveVotes = _bankVotesFromTransactions(_transactions);
+      final seedVotes = _rescanSeedVotes != null
+          ? _mergeBankVotes(_rescanSeedVotes!, liveVotes)
+          : liveVotes;
+      _rescanSeedVotes = null;
       final scanOptions = _smsReader.optionsFromState(
         scanState,
-        seedBankVotes: _bankVotesFromTransactions(_transactions),
+        seedBankVotes: seedVotes,
       );
       // Full scan reads the entire inbox (sinceMs == null). We persist 0
       // (epoch) as the effective "since" so it's clear the window is unbounded.
@@ -387,8 +433,12 @@ class FinanceStore extends ChangeNotifier {
             parsedMask: mask,
             discoveries: _discoveredAccounts,
           );
-          bank = loanDisplay.bank;
-          if (loanDisplay.mask.isNotEmpty) displayMask = loanDisplay.mask;
+          // Only rewrite identity when we have a real loan mask — never leave
+          // funding last-4 under a different issuer bank.
+          if (loanDisplay.mask.isNotEmpty) {
+            bank = loanDisplay.bank;
+            displayMask = loanDisplay.mask;
+          }
         } else if (accountKind == AccountKind.creditCard) {
           final ccDisplay = TransactionEnrichment.resolveCreditCardDisplay(
             body: message.body,
@@ -419,12 +469,13 @@ class FinanceStore extends ChangeNotifier {
           }
         }
 
+        final canonicalBank = canonicalizeBank(bank);
         transactionsToSave.add(
           Transaction(
             id: 'sms_${message.id}',
             smsId: message.id,
             merchant: merchant,
-            bank: bank,
+            bank: canonicalBank.isNotEmpty ? canonicalBank : bank,
             maskedAccount: displayMask,
             category: category,
             amount: parsed.amount,
@@ -1092,8 +1143,57 @@ class FinanceStore extends ChangeNotifier {
     'Slice',
   };
 
+  /// Normalize bank display aliases into a single key (e.g. BOB → Bank of Baroda).
+  static String canonicalizeBank(String bank) {
+    final b = bank.trim();
+    if (b.isEmpty || b == 'Bank') return '';
+    switch (b.toLowerCase()) {
+      case 'bob':
+      case 'baroda':
+      case 'bank of baroda':
+        return 'Bank of Baroda';
+      case 'hdfc bank':
+        return 'HDFC';
+      case 'sbi bank':
+      case 'state bank':
+      case 'state bank of india':
+        return 'SBI';
+      case 'icici bank':
+        return 'ICICI';
+      case 'axis bank':
+        return 'Axis';
+      case 'kotak bank':
+      case 'kotak mahindra':
+      case 'kotak mahindra bank':
+        return 'Kotak';
+      case 'yes bank':
+        return 'Yes Bank';
+      case 'idfc bank':
+      case 'idfc first':
+      case 'idfc first bank':
+        return 'IDFC';
+      case 'federal bank':
+        return 'Federal';
+      case 'hsbc bank':
+        return 'HSBC';
+      case 'slice':
+      case 'slice small finance bank':
+        return 'Slice';
+      case 'pnb':
+      case 'punjab national bank':
+        return 'PNB';
+      case 'canara bank':
+        return 'Canara';
+      case 'indusind bank':
+        return 'IndusInd';
+      default:
+        return b;
+    }
+  }
+
   static bool _isRealBankAccount(String bank, String maskedAccount) {
-    if (!_realBanks.contains(bank)) return false;
+    final canonical = canonicalizeBank(bank);
+    if (!_realBanks.contains(canonical)) return false;
     return _isRealMask(maskedAccount);
   }
 
@@ -1105,16 +1205,29 @@ class FinanceStore extends ChangeNotifier {
     return true;
   }
 
+  static bool _isMasklessOrUnknown(String mask) =>
+      mask.isEmpty || mask.contains('????');
+
   /// Whether a transaction should surface as a discovered account of [kind].
   ///
   /// Savings accounts must belong to a recognised bank. Credit-card and loan
   /// accounts are allowed for any non-wallet issuer (e.g. "BOB" card) as long as
   /// the mask is a real masked last-4, so cards from smaller issuers still show.
   static bool _isAccountTransaction(String bank, String mask, AccountKind kind) {
-    if (kind == AccountKind.savings) return _isRealBankAccount(bank, mask);
+    final canonical = canonicalizeBank(bank);
+    if (kind == AccountKind.savings) {
+      return _isRealBankAccount(canonical, mask);
+    }
     if (!_isRealMask(mask)) return false;
-    if (bank.isEmpty || _walletBanks.contains(bank)) return false;
+    if (canonical.isEmpty || _walletBanks.contains(canonical) || _walletBanks.contains(bank)) {
+      return false;
+    }
     return true;
+  }
+
+  static AccountKind _orphanKind(Transaction t) {
+    if (t.isCreditCardBillPayment) return AccountKind.savings;
+    return t.accountKind;
   }
 
   static String _kindLabel(AccountKind kind) {
@@ -1157,6 +1270,228 @@ class FinanceStore extends ChangeNotifier {
     'Bank',
   };
 
+  /// Public (bank|mask) key used to associate transactions with a You-section
+  /// account. Same last-4 at two banks stay separate. Banks are canonicalized.
+  static String accountEvidenceKey(String bank, String mask) =>
+      _AccountKindEvidence.evidenceKey(bank, mask);
+
+  /// All-time transactions for a You-section account.
+  ///
+  /// Prefer [evidenceKey] from [BankAccount.evidenceKey] so display-bank remaps
+  /// cannot empty the list. Uses the same association as [bankAccounts].
+  List<Transaction> transactionsForAccount({
+    String? evidenceKey,
+    String? bank,
+    String? mask,
+  }) {
+    final buckets = _ledgerAccountBuckets();
+    final key = evidenceKey ??
+        ((bank != null && mask != null && mask.isNotEmpty)
+            ? accountEvidenceKey(bank, mask)
+            : null);
+    if (key == null || key.isEmpty) return const [];
+    return List<Transaction>.from(buckets[key]?.txns ?? const []);
+  }
+
+  /// Groups ledger rows into You-section account buckets (exact mask match +
+  /// unambiguous same-bank maskless orphans + same-last4 relay rematch).
+  Map<String, _LedgerAccountBucket> _ledgerAccountBuckets({
+    Set<String> hiddenMasks = const {},
+  }) {
+    final kinds = _AccountKindEvidence();
+    final merged = mergeDiscoveries(_discoveredAccounts);
+    for (final d in merged.values) {
+      kinds.addDiscovery(d);
+    }
+    for (final t in _transactions) {
+      kinds.addTransaction(t);
+    }
+
+    final buckets = <String, _LedgerAccountBucket>{};
+    final orphans = <Transaction>[];
+    final assignedIds = <String>{};
+
+    for (final t in _transactions) {
+      if (hiddenMasks.contains(t.maskedAccount)) continue;
+
+      if (_isMasklessOrUnknown(t.maskedAccount)) {
+        orphans.add(t);
+        continue;
+      }
+
+      // EMI/NACH often still carries the funding savings mask. When there is
+      // exactly one discovered loan product, attribute those loan-kind rows to it.
+      if (t.accountKind == AccountKind.loan) {
+        final loans = merged.values
+            .where((d) => d.kind == AccountKind.loan && d.mask.isNotEmpty)
+            .toList();
+        if (loans.length == 1) {
+          final loan = loans.first;
+          final key = accountEvidenceKey(loan.bank, loan.mask);
+          final bucket = buckets.putIfAbsent(key, _LedgerAccountBucket.new);
+          final voteBank = canonicalizeBank(loan.bank);
+          bucket.add(
+            t,
+            voteBank: voteBank.isNotEmpty ? voteBank : loan.bank,
+            mask: loan.mask,
+            evidenceKey: key,
+          );
+          bucket.kind = AccountKind.loan;
+          assignedIds.add(t.id);
+          continue;
+        }
+      }
+
+      final kind = kinds.kindFor(t.bank, t.maskedAccount);
+      if (!_isAccountTransaction(t.bank, t.maskedAccount, kind)) {
+        // Weak bank (Bank / empty / non-allowlist) with a real mask — try rematch later.
+        orphans.add(t);
+        continue;
+      }
+
+      final key = accountEvidenceKey(t.bank, t.maskedAccount);
+      final bucket = buckets.putIfAbsent(key, _LedgerAccountBucket.new);
+      final voteBank = canonicalizeBank(t.bank);
+      bucket.add(
+        t,
+        voteBank: voteBank.isNotEmpty ? voteBank : t.bank,
+        mask: t.maskedAccount,
+        evidenceKey: key,
+      );
+      assignedIds.add(t.id);
+    }
+
+    // Index masked buckets by (canonicalBank, kind) for orphan attachment.
+    final byBankKind = <String, List<String>>{};
+    final byMask = <String, List<String>>{};
+    for (final entry in buckets.entries) {
+      final bucket = entry.value;
+      final majority = bucket.majorityBank;
+      final kind = kinds.kindFor(majority, bucket.mask);
+      bucket.kind = kind;
+      final cBank = canonicalizeBank(majority);
+      if (cBank.isEmpty) continue;
+      final bk = '${kind.name}|$cBank';
+      byBankKind.putIfAbsent(bk, () => []).add(entry.key);
+      byMask.putIfAbsent(bucket.mask, () => []).add(entry.key);
+    }
+
+    // Prefer discovery-backed owner when the same last-4 was split across banks
+    // (e.g. Slice native + ICICI relay mis-tagged as ICICI).
+    for (final entry in byMask.entries) {
+      final keys = entry.value;
+      if (keys.length <= 1) continue;
+      final mask = entry.key;
+      final discBanks = merged.values
+          .where(
+            (d) =>
+                d.mask == mask &&
+                d.kind == AccountKind.savings &&
+                _realBanks.contains(canonicalizeBank(d.bank)),
+          )
+          .map((d) => canonicalizeBank(d.bank))
+          .toSet();
+      if (discBanks.length != 1) continue;
+      final ownerBank = discBanks.first;
+      final ownerKey = accountEvidenceKey(ownerBank, mask);
+      final owner = buckets.putIfAbsent(ownerKey, () {
+        final b = _LedgerAccountBucket();
+        b.mask = mask;
+        b.evidenceKey = ownerKey;
+        b.kind = AccountKind.savings;
+        return b;
+      });
+      for (final key in List<String>.from(keys)) {
+        if (key == ownerKey) continue;
+        final donor = buckets[key];
+        if (donor == null) continue;
+        for (final t in List<Transaction>.from(donor.txns)) {
+          owner.add(
+            t,
+            voteBank: ownerBank,
+            mask: mask,
+            evidenceKey: ownerKey,
+          );
+          assignedIds.add(t.id);
+        }
+        buckets.remove(key);
+      }
+      owner.kind = AccountKind.savings;
+    }
+
+    // Rebuild indexes after discovery fold.
+    byBankKind.clear();
+    byMask.clear();
+    for (final entry in buckets.entries) {
+      final bucket = entry.value;
+      final majority = bucket.majorityBank;
+      final kind = bucket.kind ?? kinds.kindFor(majority, bucket.mask);
+      bucket.kind = kind;
+      final cBank = canonicalizeBank(majority);
+      if (cBank.isEmpty && bucket.txns.isNotEmpty) {
+        // Owner created only from fold — majority may still be empty until votes added.
+        continue;
+      }
+      if (cBank.isEmpty) continue;
+      byBankKind.putIfAbsent('${kind.name}|$cBank', () => []).add(entry.key);
+      byMask.putIfAbsent(bucket.mask, () => []).add(entry.key);
+    }
+
+    for (final t in orphans) {
+      if (assignedIds.contains(t.id)) continue;
+
+      // Same-mask rematch: Bank / wrong-bank / maskless → unique real owner.
+      if (!_isMasklessOrUnknown(t.maskedAccount)) {
+        final owners = byMask[t.maskedAccount]
+                ?.where((k) {
+                  final b = buckets[k];
+                  if (b == null) return false;
+                  final bank = canonicalizeBank(b.majorityBank);
+                  return bank.isNotEmpty && _realBanks.contains(bank);
+                })
+                .toList() ??
+            const <String>[];
+        if (owners.length == 1) {
+          final key = owners.first;
+          final bucket = buckets[key]!;
+          final ownerBank = canonicalizeBank(bucket.majorityBank);
+          final kind = bucket.kind ?? AccountKind.savings;
+          if (_isAccountTransaction(ownerBank, bucket.mask, kind)) {
+            bucket.add(
+              t,
+              voteBank: ownerBank,
+              mask: bucket.mask,
+              evidenceKey: key,
+            );
+            assignedIds.add(t.id);
+            continue;
+          }
+        }
+      }
+
+      final cBank = canonicalizeBank(t.bank);
+      if (cBank.isEmpty || _walletBanks.contains(cBank)) continue;
+
+      final kind = _orphanKind(t);
+      final candidates = byBankKind['${kind.name}|$cBank'];
+      if (candidates == null || candidates.length != 1) continue;
+
+      final key = candidates.first;
+      final bucket = buckets[key]!;
+      if (!_isAccountTransaction(cBank, bucket.mask, kind)) continue;
+
+      bucket.add(
+        t,
+        voteBank: cBank,
+        mask: bucket.mask,
+        evidenceKey: key,
+      );
+      assignedIds.add(t.id);
+    }
+
+    return buckets;
+  }
+
   List<BankAccount> bankAccounts({Set<String> hiddenMasks = const {}}) {
     final accountsByKey = <String, BankAccount>{};
     final merged = mergeDiscoveries(_discoveredAccounts);
@@ -1183,46 +1518,31 @@ class FinanceStore extends ChangeNotifier {
       kinds.addTransaction(t);
     }
 
-    // Group transactions per (bank, mask), routed by the dominant resolved kind
-    // so every account surfaces as exactly one row of its winning kind.
-    final statsByKey = <String, _SavingsStats>{};
-    for (final t in _transactions) {
-      if (hiddenMasks.contains(t.maskedAccount)) continue;
-      final kind = kinds.kindFor(t.bank, t.maskedAccount);
-      if (!_isAccountTransaction(t.bank, t.maskedAccount, kind)) continue;
-
-      final key = _AccountKindEvidence.evidenceKey(t.bank, t.maskedAccount);
-      final stats = statsByKey.putIfAbsent(key, _SavingsStats.new);
-      stats.bankVotes[t.bank] = (stats.bankVotes[t.bank] ?? 0) + 1;
-      stats.mask = t.maskedAccount;
-      stats.activityCount++;
-      if (t.isCredit) {
-        stats.received += t.amount;
-      } else {
-        stats.spent += t.amount;
-      }
-    }
-
-    for (final entry in statsByKey.entries) {
+    final buckets = _ledgerAccountBuckets(hiddenMasks: hiddenMasks);
+    // Rebuild kind on buckets (already set) and emit BankAccount rows.
+    for (final entry in buckets.entries) {
       final stats = entry.value;
       final mask = stats.mask;
       if (hiddenMasks.contains(mask)) continue;
       if (stats.activityCount < 1) continue;
 
-      final bank = stats.bankVotes.entries
-          .reduce((a, b) => a.value >= b.value ? a : b)
-          .key;
-      final kind = kinds.kindFor(bank, mask);
+      final bank = stats.majorityBank;
+      final kind = stats.kind ?? kinds.kindFor(bank, mask);
       final preferredBank = kinds.bankFor(bank, mask, kind) ?? bank;
-      final key = '${kind.name}|$preferredBank|$mask';
+      final displayBank = canonicalizeBank(preferredBank).isNotEmpty
+          ? canonicalizeBank(preferredBank)
+          : preferredBank;
+      final key = '${kind.name}|$displayBank|$mask';
 
       accountsByKey[key] = BankAccount(
-        name: '$preferredBank ${_kindLabel(kind)}',
+        bank: displayBank,
+        name: '$displayBank ${_kindLabel(kind)}',
         mask: mask,
-        badge: preferredBank.isNotEmpty
-            ? preferredBank[0].toUpperCase()
+        badge: displayBank.isNotEmpty
+            ? displayBank[0].toUpperCase()
             : _kindBadge(kind),
-        color: _bankColor(preferredBank),
+        color: _bankColor(displayBank),
+        evidenceKey: entry.key,
         receivedTotal: stats.received,
         spentTotal: stats.spent,
         kind: kind,
@@ -1234,26 +1554,30 @@ class FinanceStore extends ChangeNotifier {
       if (hiddenMasks.contains(d.mask)) continue;
       final resolvedKind = kinds.kindFor(d.bank, d.mask);
       final evidenceKey = _AccountKindEvidence.evidenceKey(d.bank, d.mask);
+      final dBank = canonicalizeBank(d.bank).isNotEmpty
+          ? canonicalizeBank(d.bank)
+          : d.bank;
 
       if (d.kind == AccountKind.savings) {
         // A discovered "savings" mask that transactions prove is a card/loan is
         // handled by the transaction loop above — skip the savings fallback.
         if (resolvedKind != AccountKind.savings) continue;
-        if (!_isRealBankAccount(d.bank, d.mask)) continue;
-        if (_walletBanks.contains(d.bank) && !statsByKey.containsKey(evidenceKey)) {
+        if (!_isRealBankAccount(dBank, d.mask)) continue;
+        if (_walletBanks.contains(dBank) && !buckets.containsKey(evidenceKey)) {
           continue;
         }
         if (d.smsHits < 2) continue;
-        final key = 'savings|${d.bank}|${d.mask}';
-        if (accountsByKey.containsKey(key) ||
-            statsByKey.containsKey(evidenceKey)) {
+        final key = 'savings|$dBank|${d.mask}';
+        if (accountsByKey.containsKey(key) || buckets.containsKey(evidenceKey)) {
           continue;
         }
         accountsByKey[key] = BankAccount(
-          name: '${d.bank} Savings',
+          bank: dBank,
+          name: '$dBank Savings',
           mask: d.mask,
-          badge: d.bank.isNotEmpty ? d.bank[0].toUpperCase() : 'B',
-          color: _bankColor(d.bank),
+          badge: dBank.isNotEmpty ? dBank[0].toUpperCase() : 'B',
+          color: _bankColor(dBank),
+          evidenceKey: evidenceKey,
           receivedTotal: d.receivedTotal,
           spentTotal: d.spentTotal,
           kind: AccountKind.savings,
@@ -1264,30 +1588,39 @@ class FinanceStore extends ChangeNotifier {
 
       if (d.kind == AccountKind.creditCard) {
         if (d.smsHits < 2) continue;
-        final key = d.key;
-        final existing = accountsByKey[key];
+        // Do not stack discovery totals onto an account that already has ledger
+        // rows — drilldown would look emptier than the You card.
+        if (buckets.containsKey(evidenceKey)) continue;
+        final key = 'creditCard|$dBank|${d.mask}';
+        if (accountsByKey.containsKey(key)) continue;
         accountsByKey[key] = BankAccount(
-          name: '${d.bank} Credit Card',
+          bank: dBank,
+          name: '$dBank Credit Card',
           mask: d.mask,
-          badge: d.bank.isNotEmpty ? d.bank[0].toUpperCase() : 'C',
-          color: _bankColor(d.bank),
-          spentTotal: (existing?.spentTotal ?? 0) + d.spentTotal,
-          receivedTotal: (existing?.receivedTotal ?? 0) + d.receivedTotal,
+          badge: dBank.isNotEmpty ? dBank[0].toUpperCase() : 'C',
+          color: _bankColor(dBank),
+          evidenceKey: evidenceKey,
+          spentTotal: d.spentTotal,
+          receivedTotal: d.receivedTotal,
           kind: AccountKind.creditCard,
-          activityCount: (existing?.activityCount ?? 0) + d.smsHits,
+          activityCount: d.smsHits,
         );
         continue;
       }
 
       if (d.kind == AccountKind.loan) {
         if (d.smsHits < 1) continue;
-        final key = d.key;
+        if (buckets.containsKey(evidenceKey)) continue;
+        final key = 'loan|$dBank|${d.mask}';
+        if (accountsByKey.containsKey(key)) continue;
         final label = d.accountLabel ?? 'Loan';
         accountsByKey[key] = BankAccount(
-          name: '${d.bank} $label',
+          bank: dBank,
+          name: '$dBank $label',
           mask: d.mask,
-          badge: d.bank.isNotEmpty ? d.bank[0].toUpperCase() : 'L',
-          color: _bankColor(d.bank),
+          badge: dBank.isNotEmpty ? dBank[0].toUpperCase() : 'L',
+          color: _bankColor(dBank),
+          evidenceKey: evidenceKey,
           spentTotal: d.spentTotal,
           receivedTotal: d.receivedTotal,
           kind: AccountKind.loan,
@@ -1351,12 +1684,38 @@ class FinanceStore extends ChangeNotifier {
   }
 }
 
-class _SavingsStats {
+class _LedgerAccountBucket {
   final bankVotes = <String, int>{};
+  final txns = <Transaction>[];
   String mask = '';
+  String evidenceKey = '';
+  AccountKind? kind;
   double received = 0;
   double spent = 0;
   int activityCount = 0;
+
+  String get majorityBank {
+    if (bankVotes.isEmpty) return '';
+    return bankVotes.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+  }
+
+  void add(
+    Transaction t, {
+    required String voteBank,
+    required String mask,
+    required String evidenceKey,
+  }) {
+    txns.add(t);
+    this.mask = mask;
+    this.evidenceKey = evidenceKey;
+    bankVotes[voteBank] = (bankVotes[voteBank] ?? 0) + 1;
+    activityCount++;
+    if (t.isCredit) {
+      received += t.amount;
+    } else {
+      spent += t.amount;
+    }
+  }
 }
 
 /// Aggregates per-(bank, mask) evidence for whether an account is a credit card,
@@ -1377,23 +1736,25 @@ class _AccountKindEvidence {
   final _loanBankVotes = <String, Map<String, int>>{};
 
   /// Composite evidence key. Falls back to mask-only when the bank is unknown
-  /// so sparse rows still participate.
+  /// so sparse rows still participate. Banks are canonicalized first.
   static String evidenceKey(String bank, String mask) {
-    if (bank.isEmpty || bank == 'Bank') return mask;
-    return '$bank|$mask';
+    final c = FinanceStore.canonicalizeBank(bank);
+    if (c.isEmpty) return mask;
+    return '$c|$mask';
   }
 
   void addDiscovery(DiscoveredAccount d) {
     if (d.mask.isEmpty) return;
     final key = evidenceKey(d.bank, d.mask);
+    final voteBank = FinanceStore.canonicalizeBank(d.bank);
     final weight = d.smsHits < 1 ? 1 : d.smsHits;
     switch (d.kind) {
       case AccountKind.creditCard:
         _cc[key] = (_cc[key] ?? 0) + weight;
-        _vote(_ccBankVotes, key, d.bank, weight);
+        _vote(_ccBankVotes, key, voteBank.isNotEmpty ? voteBank : d.bank, weight);
       case AccountKind.loan:
         _loan[key] = (_loan[key] ?? 0) + weight;
-        _vote(_loanBankVotes, key, d.bank, weight);
+        _vote(_loanBankVotes, key, voteBank.isNotEmpty ? voteBank : d.bank, weight);
       case AccountKind.savings:
         _savings[key] = (_savings[key] ?? 0) + weight;
     }
@@ -1402,6 +1763,8 @@ class _AccountKindEvidence {
   void addTransaction(Transaction t) {
     if (t.maskedAccount.isEmpty) return;
     final key = evidenceKey(t.bank, t.maskedAccount);
+    final voteBank = FinanceStore.canonicalizeBank(t.bank);
+    final bankLabel = voteBank.isNotEmpty ? voteBank : t.bank;
     switch (t.accountKind) {
       case AccountKind.creditCard:
         // A credit-card bill PAID FROM a bank account (CCBP/BBPS debit) is a
@@ -1413,11 +1776,11 @@ class _AccountKindEvidence {
           _savings[key] = (_savings[key] ?? 0) + 1;
         } else {
           _cc[key] = (_cc[key] ?? 0) + 1;
-          _vote(_ccBankVotes, key, t.bank, 1);
+          _vote(_ccBankVotes, key, bankLabel, 1);
         }
       case AccountKind.loan:
         _loan[key] = (_loan[key] ?? 0) + 1;
-        _vote(_loanBankVotes, key, t.bank, 1);
+        _vote(_loanBankVotes, key, bankLabel, 1);
       case AccountKind.savings:
         _savings[key] = (_savings[key] ?? 0) + 1;
     }

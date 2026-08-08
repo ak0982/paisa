@@ -10,8 +10,11 @@ void main() {
     test('insightsSince equals the earliest transaction date', () {
       final store = FinanceStore()
         ..seedTransactions(dummyTransactionHistory());
-      // Earliest txn in the dummy set is 2026-04-01.
-      expect(store.earliestTransactionDate, DateTime(2026, 4, 1, 12));
+      // Earliest txn in the dummy set is 3 calendar months before now.
+      expect(
+        store.earliestTransactionDate,
+        dummyNowMonth(monthsAgo: 3, day: 1, hour: 12),
+      );
       expect(store.insightsSince, store.earliestTransactionDate);
     });
 
@@ -51,7 +54,15 @@ void main() {
     test('insightsPeriodLabel is dynamic ("Since <month> <year>")', () {
       final store = FinanceStore()
         ..seedTransactions(dummyTransactionHistory());
-      expect(store.insightsPeriodLabel, 'Since Apr 2026');
+      final earliest = dummyNowMonth(monthsAgo: 3, day: 1, hour: 12);
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      expect(
+        store.insightsPeriodLabel,
+        'Since ${months[earliest.month - 1]} ${earliest.year}',
+      );
     });
 
     test('insightsPeriodLabel is "All time" when there is no data', () {

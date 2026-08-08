@@ -166,34 +166,44 @@ class MockData {
 
   static final bankAccounts = <BankAccount>[
     const BankAccount(
+      bank: 'HDFC',
       name: 'HDFC Savings',
       mask: '••••4321',
       badge: 'H',
       color: PaisaColors.bankHdfc,
+      evidenceKey: 'HDFC|••••4321',
     ),
     const BankAccount(
+      bank: 'ICICI',
       name: 'ICICI Credit Card',
       mask: '••••8890',
       badge: 'I',
       color: PaisaColors.bankIcici,
+      evidenceKey: 'ICICI|••••8890',
     ),
     const BankAccount(
+      bank: 'Axis',
       name: 'Axis Salary',
       mask: '••••2015',
       badge: 'A',
       color: PaisaColors.bankAxis,
+      evidenceKey: 'Axis|••••2015',
     ),
     const BankAccount(
+      bank: 'SBI',
       name: 'SBI Savings',
       mask: '••••3301',
       badge: 'S',
       color: PaisaColors.bankSbi,
+      evidenceKey: 'SBI|••••3301',
     ),
     const BankAccount(
+      bank: 'Kotak',
       name: 'Kotak 811',
       mask: '••••7756',
       badge: 'K',
       color: PaisaColors.bankKotak,
+      evidenceKey: 'Kotak|••••7756',
     ),
   ];
 

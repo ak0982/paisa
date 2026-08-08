@@ -73,6 +73,22 @@ class AccountDiscovery {
       ),
       bankFromMatch: _bankFromCreditCardPrefix,
     ),
+    // Live Axis spend: "Axis Bank Card no. XX8341" (no "Credit" in SMS)
+    _CardPattern(
+      RegExp(
+        r'Axis\s+Bank\s+Card\s+no\.?\s*(?:XX|xx|X)?(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: (_, __, ___) => 'Axis',
+    ),
+    // "spent on Axis Bank Card XX8341 at …"
+    _CardPattern(
+      RegExp(
+        r'(?:SBI|ICICI|Axis|HDFC|Kotak)\s+Bank\s+Card\s+(?:XX|xx|X)?(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromCreditCardPrefix,
+    ),
     // HSBC "creditcard xxxxx1234 used at …"
     _CardPattern(
       RegExp(
@@ -147,7 +163,7 @@ class AccountDiscovery {
     ),
     _CardPattern(
       RegExp(
-        r'(?:YES BANK|Yes Bank)\s+Card\s+X?(\d{4})\b',
+        r'(?:YES BANK|Yes Bank)\s+Card\s+(?:XX|xx|X)?(\d{4})\b',
         caseSensitive: false,
       ),
       bankFromMatch: (_, __, ___) => 'Yes Bank',
@@ -325,18 +341,82 @@ class AccountDiscovery {
     ),
     _CardPattern(
       RegExp(
-        r'(?:HDFC|SBI|ICICI|Axis|Kotak|IDFC(?:\s+FIRST)?)\s+Bank\s+Loan\s+A/?c\s*(\d{4,})\b',
+        r'(?:HDFC|SBI|ICICI|Axis|Kotak|IDFC(?:\s+FIRST)?|PNB)\s+Bank\s+Loan\s+A/?c\s*(\d{4,})\b',
         caseSensitive: false,
       ),
       bankFromMatch: _bankFromSavingsMatch,
       kind: AccountKind.loan,
     ),
+    // PNB / generic: "against Loan Ac XX0310" / "Loan Ac XX0310"
+    _CardPattern(
+      RegExp(
+        r'Loan\s+A/?c\s*(?:XX|xx|X{2,})?(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromSenderOrBody,
+      kind: AccountKind.loan,
+    ),
   ];
+
+  static bool _bodyLooksLikeLoan(String body) {
+    return RegExp(
+      r'\b(emi|loan\s+a/?c|personal\s+loan|home\s+loan|housing\s+loan|car\s+loan|loan\s+instal)\b',
+      caseSensitive: false,
+    ).hasMatch(body);
+  }
 
   static final _amount = RegExp(
     r'(?:INR|Rs\.?|₹)\s*(\d+(?:,\d+)*(?:\.\d{2})?)',
     caseSensitive: false,
   );
+
+  static DiscoveredAccount? _matchPatterns({
+    required List<_CardPattern> patterns,
+    required String sender,
+    required String normalized,
+    required String? owner,
+    required double? amount,
+    required bool isCredit,
+    required bool isDebit,
+    required AccountKind forceKind,
+  }) {
+    for (final pattern in patterns) {
+      final match = pattern.regex.firstMatch(normalized);
+      if (match == null) continue;
+      final raw = match.group(1);
+      if (raw == null) continue;
+      final last4 = pattern.last4FromLongMask
+          ? _last4FromMatch(raw, true)
+          : (raw.length > 4 ? raw.substring(raw.length - 4) : raw);
+      if (last4 == null || !_isValidLast4(last4)) continue;
+      final bank = pattern.bankFromMatch(sender, normalized, match);
+      if (bank == null) continue;
+      return DiscoveredAccount(
+        bank: bank,
+        mask: '••••$last4',
+        kind: forceKind,
+        ownerName: owner,
+        accountLabel: forceKind == AccountKind.loan
+            ? _loanLabel(normalized)
+            : forceKind == AccountKind.creditCard
+                ? 'Credit Card'
+                : null,
+        spentTotal: isDebit && amount != null ? amount : 0,
+        receivedTotal: isCredit && amount != null ? amount : 0,
+      );
+    }
+    return null;
+  }
+
+  static String _loanLabel(String body) {
+    final lower = body.toLowerCase();
+    if (lower.contains('home loan') || lower.contains('housing loan')) {
+      return 'Home Loan';
+    }
+    if (lower.contains('personal loan')) return 'Personal Loan';
+    if (lower.contains('car loan')) return 'Car Loan';
+    return 'Loan';
+  }
 
   /// Returns a discovered account or null when SMS is not account-identifying.
   static DiscoveredAccount? discover({
@@ -358,72 +438,56 @@ class AccountDiscovery {
       caseSensitive: false,
     ).hasMatch(normalized);
 
-    for (final pattern in _savingsPatterns) {
-      final match = pattern.regex.firstMatch(normalized);
-      if (match == null) continue;
-      final last4 = _last4FromMatch(match.group(1), pattern.last4FromLongMask);
-      if (last4 == null || !_isValidLast4(last4)) continue;
-      final bank = pattern.bankFromMatch(sender, normalized, match);
-      if (bank == null) continue;
-      return DiscoveredAccount(
-        bank: bank,
-        mask: '••••$last4',
-        kind: pattern.kind,
-        ownerName: owner,
-        spentTotal: isDebit && amount != null ? amount : 0,
-        receivedTotal: isCredit && amount != null ? amount : 0,
+    // Loan product SMS often also mention a linked savings A/c — try loan
+    // patterns first so Personal Loan XX1041 is not swallowed as savings XX3649.
+    if (_bodyLooksLikeLoan(normalized)) {
+      final loan = _matchPatterns(
+        patterns: _loanPatterns,
+        sender: sender,
+        normalized: normalized,
+        owner: owner,
+        amount: amount,
+        isCredit: isCredit,
+        isDebit: isDebit,
+        forceKind: AccountKind.loan,
       );
+      if (loan != null) return loan;
     }
 
-    for (final pattern in _creditCardPatterns) {
-      final match = pattern.regex.firstMatch(normalized);
-      if (match == null) continue;
-      final last4 = match.group(1);
-      if (last4 == null || !_isValidLast4(last4)) continue;
-      final bank = pattern.bankFromMatch(sender, normalized, match);
-      if (bank == null) continue;
-      return DiscoveredAccount(
-        bank: bank,
-        mask: '••••$last4',
-        kind: AccountKind.creditCard,
-        ownerName: owner,
-        accountLabel: 'Credit Card',
-        spentTotal: isDebit && amount != null ? amount : 0,
-        receivedTotal: isCredit && amount != null ? amount : 0,
-      );
-    }
+    final savings = _matchPatterns(
+      patterns: _savingsPatterns,
+      sender: sender,
+      normalized: normalized,
+      owner: owner,
+      amount: amount,
+      isCredit: isCredit,
+      isDebit: isDebit,
+      forceKind: AccountKind.savings,
+    );
+    if (savings != null) return savings;
 
-    for (final pattern in _loanPatterns) {
-      final match = pattern.regex.firstMatch(normalized);
-      if (match == null) continue;
-      final raw = match.group(1);
-      if (raw == null) continue;
-      final last4 = raw.length > 4 ? raw.substring(raw.length - 4) : raw;
-      if (!_isValidLast4(last4)) continue;
-      final bank = pattern.bankFromMatch(sender, normalized, match);
-      if (bank == null) continue;
-      return DiscoveredAccount(
-        bank: bank,
-        mask: '••••$last4',
-        kind: AccountKind.loan,
-        ownerName: owner,
-        accountLabel: _loanLabel(normalized),
-        spentTotal: isDebit && amount != null ? amount : 0,
-        receivedTotal: isCredit && amount != null ? amount : 0,
-      );
-    }
+    final cc = _matchPatterns(
+      patterns: _creditCardPatterns,
+      sender: sender,
+      normalized: normalized,
+      owner: owner,
+      amount: amount,
+      isCredit: isCredit,
+      isDebit: isDebit,
+      forceKind: AccountKind.creditCard,
+    );
+    if (cc != null) return cc;
 
-    return null;
-  }
-
-  static String _loanLabel(String body) {
-    final lower = body.toLowerCase();
-    if (lower.contains('home loan') || lower.contains('housing loan')) {
-      return 'Home Loan';
-    }
-    if (lower.contains('car loan')) return 'Car Loan';
-    if (lower.contains('personal loan')) return 'Personal Loan';
-    return 'Loan';
+    return _matchPatterns(
+      patterns: _loanPatterns,
+      sender: sender,
+      normalized: normalized,
+      owner: owner,
+      amount: amount,
+      isCredit: isCredit,
+      isDebit: isDebit,
+      forceKind: AccountKind.loan,
+    );
   }
 
   static bool ownerMatchesProfile(String? ownerName, String profileName) {
