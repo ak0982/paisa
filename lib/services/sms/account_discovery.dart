@@ -325,7 +325,7 @@ class AccountDiscovery {
     ),
     _CardPattern(
       RegExp(
-        r'EMI of Rs\.?\s*\d+(?:,\d+)*(?:\.\d{2})?\s+for\s+(?:ICICI Bank\s+)?(?:Personal Loan|Home Loan|Car Loan|Housing Loan)\s+(?:XX|xx)?(\d{4})\b',
+        r'EMI of Rs\.?\s*\d+(?:,\d+)*(?:\.\d{1,2})?\s+for\s+(?:ICICI Bank\s+)?(?:Personal Loan|Home Loan|Car Loan|Housing Loan)\s+(?:XX|xx)?(\d{4})\b',
         caseSensitive: false,
       ),
       bankFromMatch: _bankFromSenderOrBody,
@@ -366,7 +366,7 @@ class AccountDiscovery {
   }
 
   static final _amount = RegExp(
-    r'(?:INR|Rs\.?|₹)\s*(\d+(?:,\d+)*(?:\.\d{2})?)',
+    r'(?:INR|Rs\.?|₹)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
     caseSensitive: false,
   );
 
