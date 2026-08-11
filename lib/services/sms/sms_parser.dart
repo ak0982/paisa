@@ -380,7 +380,7 @@ class SmsParser {
     final fromSender = _detectBankFromSender(sender);
     if (fromSender != null &&
         RegExp(
-          r'debited to your account|your kotak bank a/c|from kotak bank ac',
+          r'debited (?:from|to) your account|your kotak bank a/c|from kotak bank ac',
           caseSensitive: false,
         ).hasMatch(body)) {
       return fromSender;
@@ -1027,10 +1027,11 @@ class SmsParser {
         accountGroup: 2,
         merchantGroup: 3,
       ),
-      // Kotak NACH: INR 25,797.00 is debited to your Account XXXXXX3649 towards HDFC BANK
+      // Kotak NACH: "is debited to|from your Account XXXXXX3649 towards NACH-…"
+      // Live dumps use both prepositions interchangeably.
       _SmsPattern(
         RegExp(
-          r"INR\s+(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+is debited to your Account\s+X+(\d{4,})\s+on.*?towards\s+([A-Za-z0-9 .&'-]+)",
+          r"INR\s+(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+is debited (?:from|to) your Account\s+X+(\d{4,})\s+on.*?towards\s+([A-Za-z0-9 .&'-]+)",
           caseSensitive: false,
         ),
         amountGroup: 1,

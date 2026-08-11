@@ -245,6 +245,14 @@ abstract final class TransactionEnrichment {
   /// When EMI is paid via NACH / UPI from a savings account, attach it to the
   /// loan product mask when known. Never rewrite bank without a loan mask
   /// (that creates phantom keys like ICICI|fundingLast4).
+  ///
+  /// Remap confidence order (same idea as CCBP / card routing):
+  /// 1. Explicit loan last-4 in the SMS body
+  /// 2. Mandate / beneficiary bank hint → **unique** loan at that bank
+  /// 3. Ambiguous payee (MBK EMI, bare "EMI") → **unique** loan overall only
+  ///
+  /// Never guess from the funding bank when multiple loans exist — that puts
+  /// e.g. HDFC UPI "To MBK EMI" (paying a PNB loan) onto the HDFC loan.
   static ({String bank, String mask}) resolveLoanDisplay({
     required String body,
     required String parsedBank,
@@ -279,6 +287,7 @@ abstract final class TransactionEnrichment {
       return null;
     }
 
+    /// Unique loan whose bank matches [bankHint], or null if 0 or 2+.
     DiscoveredAccount? loanFor(String bankHint) {
       final matches = discoveries
           .where(
@@ -288,7 +297,8 @@ abstract final class TransactionEnrichment {
                 d.bank.toLowerCase().contains(bankHint),
           )
           .toList();
-      return matches.isEmpty ? null : matches.first;
+      if (matches.length != 1) return null;
+      return matches.first;
     }
 
     DiscoveredAccount? uniqueLoan() {
@@ -316,6 +326,8 @@ abstract final class TransactionEnrichment {
       return (bank: loan.bank, mask: loan.mask);
     }
 
+    // NACH / ACH mandate beneficiary is a strong product-bank signal (not the
+    // funding bank). Only remap when that bank has exactly one loan mask.
     if (lower.contains('nach-10-hdfc') ||
         lower.contains('hdfc bank limited') ||
         (lower.contains('nach') && lower.contains('hdfc'))) {
@@ -331,11 +343,13 @@ abstract final class TransactionEnrichment {
       return remapToLoan(loanFor('idfc')) ?? funding;
     }
 
-    // Generic EMI / MBK EMI from funding a/c → unique discovered loan if any.
+    // Ambiguous funding-side EMI (MBK EMI / bare EMI): never use the funding
+    // bank as a loan hint — multi-loan users would contaminate the wrong loan.
+    // Product-side SMS ("against Loan Ac XX…") already carries the mask.
     if (lower.contains('mbk emi') ||
         RegExp(r'\bemi\b').hasMatch(lower) ||
         lower.contains('loan instal')) {
-      final remapped = remapToLoan(uniqueLoan()) ?? remapToLoan(loanFor(parsedBank.toLowerCase()));
+      final remapped = remapToLoan(uniqueLoan());
       if (remapped != null) return remapped;
     }
 

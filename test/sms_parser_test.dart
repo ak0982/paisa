@@ -421,6 +421,32 @@ void main() {
       expect(parsed.isCredit, false);
     });
 
+    test('parses Kotak NACH "debited from" (live wording)', () {
+      final parsed = SmsParser.parseTransaction(_msg(
+        sender: 'VK-KOTAKB-S',
+        body:
+            'INR 25,797.00 is debited from your Account XXXXXX3649 on '
+            '07/03/2026 towards NACH-10-HDFC BANK LIMITED Kotak Bank',
+      ));
+      expect(parsed, isNotNull);
+      expect(parsed!.bank, 'Kotak');
+      expect(parsed.maskedAccount, '••••3649');
+      expect(parsed.amount, 25797);
+      expect(parsed.isCredit, false);
+    });
+
+    test('parses Kotak NACH ICICI "debited from"', () {
+      final parsed = SmsParser.parseTransaction(_msg(
+        sender: 'VM-KOTAKB-S',
+        body:
+            'INR 26,408.00 is debited from your Account XXXXXX3649 on '
+            '05/03/2026 towards NACH-10-TP ACH ICICI BANK Kotak Bank',
+      ));
+      expect(parsed, isNotNull);
+      expect(parsed!.amount, 26408);
+      expect(parsed.maskedAccount, '••••3649');
+    });
+
     test('parses SBI NACH credit to account 6675', () {
       final parsed = SmsParser.parseTransaction(_msg(
         sender: 'VM-CBSSBI-S',

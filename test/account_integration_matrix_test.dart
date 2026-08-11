@@ -556,6 +556,59 @@ List<_Case> _loanEmiMatrix() {
     }
   }
 
+  // Multi-loan collision: ambiguous MBK EMI must not use funding bank.
+  const multiLoans = [
+    DiscoveredAccount(
+      bank: 'HDFC',
+      mask: '••••0855',
+      kind: AccountKind.loan,
+      smsHits: 5,
+    ),
+    DiscoveredAccount(
+      bank: 'ICICI',
+      mask: '••••1041',
+      kind: AccountKind.loan,
+      smsHits: 5,
+    ),
+    DiscoveredAccount(
+      bank: 'PNB',
+      mask: '••••0310',
+      kind: AccountKind.loan,
+      smsHits: 4,
+    ),
+  ];
+  for (var i = 0; i < 12; i++) {
+    out.add(
+      _Case('multi-loan MBK EMI keeps funding #$i', () {
+        final result = TransactionEnrichment.resolveLoanDisplay(
+          body:
+              'Sent Rs.${5000 + i}.39 From HDFC Bank A/C *5300 To MBK EMI On 01/0${(i % 9) + 1}/26',
+          parsedBank: 'HDFC',
+          parsedMask: '••••5300',
+          discoveries: multiLoans,
+        );
+        expect(result.bank, 'HDFC');
+        expect(result.mask, '••••5300');
+      }),
+    );
+  }
+  for (var i = 0; i < 8; i++) {
+    out.add(
+      _Case('multi-loan NACH HDFC still remaps #$i', () {
+        final result = TransactionEnrichment.resolveLoanDisplay(
+          body:
+              'INR ${25000 + i}.00 is debited from your Account XXXXXX3649 on '
+              '07/0${(i % 9) + 1}/2026 towards NACH-10-HDFC BANK LIMITED',
+          parsedBank: 'Kotak',
+          parsedMask: '••••3649',
+          discoveries: multiLoans,
+        );
+        expect(result.bank, 'HDFC');
+        expect(result.mask, '••••0855');
+      }),
+    );
+  }
+
   return out;
 }
 

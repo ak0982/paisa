@@ -102,7 +102,10 @@ const int categorizerVersion = 4;
 // Bumped 27 -> 28: loan product association — discover loan masks before linked
 // savings; NACH/EMI remaps onto loan mask only when known (never issuer bank +
 // funding mask); opening a loan account lists associated EMI debits.
-const int transactionSchemaVersion = 28;
+// Bumped 28 -> 29: multi-loan EMI association — never remap ambiguous MBK/generic
+// EMI via funding bank; NACH mandate bank requires a unique loan at that bank;
+// Kotak NACH accepts "debited from|to". Forces rescan so mis-bucketed rows rewrite.
+const int transactionSchemaVersion = 29;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

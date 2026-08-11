@@ -1321,6 +1321,9 @@ class FinanceStore extends ChangeNotifier {
 
       // EMI/NACH often still carries the funding savings mask. When there is
       // exactly one discovered loan product, attribute those loan-kind rows to it.
+      // With multiple loans, do NOT guess here — ingest-time resolveLoanDisplay
+      // must have already remapped via body mask or unique NACH beneficiary bank.
+      // Ambiguous MBK EMI stays on the funding account (same idea as CCBP).
       if (t.accountKind == AccountKind.loan) {
         final loans = merged.values
             .where((d) => d.kind == AccountKind.loan && d.mask.isNotEmpty)
