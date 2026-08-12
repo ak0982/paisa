@@ -275,8 +275,100 @@ void main() {
 
       expect(hdfcTx.map((t) => t.id).toSet(), {'hdfc-emi'});
       expect(hdfcTx.any((t) => t.amount == 5199.39), isFalse);
+      // Product SMS already covers ₹5199.39 — show only that row on PNB.
+      // Funding MBK debit stays on HDFC savings.
       expect(pnbTx.map((t) => t.id).toSet(), {'pnb5199'});
-      expect(pnbTx.first.amount, 5199.39);
+      expect(pnbTx.where((t) => t.amount == 5199.39).length, 1);
+      expect(pnbLoan.spentTotal, 5199.39);
+      expect(pnbLoan.activityCount, 1);
+
+      final hdfcSavings =
+          store.bankAccounts().firstWhere((a) => a.mask == '••••5300');
+      final savingsTx =
+          store.transactionsForAccount(evidenceKey: hdfcSavings.evidenceKey);
+      expect(savingsTx.map((t) => t.id).toSet(), {'mbk5199'});
+    });
+
+    test('multi-loan: MBK pairs only when product deposit anchors amount', () {
+      final store = FinanceStore()
+        ..seedDiscoveredAccounts([
+          const DiscoveredAccount(
+            bank: 'HDFC',
+            mask: '••••0855',
+            kind: AccountKind.loan,
+            smsHits: 5,
+          ),
+          const DiscoveredAccount(
+            bank: 'PNB',
+            mask: '••••0310',
+            kind: AccountKind.loan,
+            smsHits: 4,
+          ),
+          const DiscoveredAccount(
+            bank: 'HDFC',
+            mask: '••••5300',
+            kind: AccountKind.savings,
+            smsHits: 20,
+          ),
+        ])
+        ..seedTransactions([
+          Transaction(
+            id: 'mbk-orphan',
+            merchant: 'MBK EMI',
+            bank: 'HDFC',
+            maskedAccount: '••••5300',
+            category: SpendCategory.emi,
+            amount: 1111.11,
+            isCredit: false,
+            timestamp: DateTime(2026, 2, 27),
+            accountKind: AccountKind.loan,
+          ),
+          Transaction(
+            id: 'pnb-other',
+            merchant: 'Loan payment',
+            bank: 'PNB',
+            maskedAccount: '••••0310',
+            category: SpendCategory.emi,
+            amount: 5199.39,
+            isCredit: false,
+            timestamp: DateTime(2026, 2, 27),
+            accountKind: AccountKind.loan,
+          ),
+        ]);
+
+      final pnbLoan =
+          store.bankAccounts().firstWhere((a) => a.mask == '••••0310');
+      final pnbTx =
+          store.transactionsForAccount(evidenceKey: pnbLoan.evidenceKey);
+      // No product SMS for 1111.11 → funding EMI must not invent a link.
+      expect(pnbTx.map((t) => t.id).toSet(), {'pnb-other'});
+      expect(pnbTx.any((t) => t.id == 'mbk-orphan'), isFalse);
+    });
+
+    test('UPI destination last-4 remaps onto unique loan', () {
+      final result = TransactionEnrichment.resolveLoanDisplay(
+        body:
+            'HDFC Bank:Rs. 5200.00 debited from a/c *5300 on 21/12/25 to '
+            'a/c **0310 (UPI Ref No. 874150616776).',
+        parsedBank: 'HDFC',
+        parsedMask: '••••5300',
+        discoveries: const [
+          DiscoveredAccount(
+            bank: 'HDFC',
+            mask: '••••0855',
+            kind: AccountKind.loan,
+            smsHits: 5,
+          ),
+          DiscoveredAccount(
+            bank: 'PNB',
+            mask: '••••0310',
+            kind: AccountKind.loan,
+            smsHits: 4,
+          ),
+        ],
+      );
+      expect(result.bank, 'PNB');
+      expect(result.mask, '••••0310');
     });
 
     test('EMI on funding mask appears under unique loan account', () {

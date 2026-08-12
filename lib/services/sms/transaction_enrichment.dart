@@ -42,6 +42,12 @@ abstract final class TransactionEnrichment {
     // Loan payments often debit a savings account via NACH — detect from SMS body
     // before falling back to the debited account's discovered type.
     if (looksLikeLoanPayment(lower)) return AccountKind.loan;
+    if (looksLikeTransferToDiscoveredLoan(
+      body: body,
+      discoveries: discoveries,
+    )) {
+      return AccountKind.loan;
+    }
 
     if (looksLikeCreditCardTransaction(lower)) return AccountKind.creditCard;
 
@@ -76,6 +82,19 @@ abstract final class TransactionEnrichment {
       return true;
     }
     return false;
+  }
+
+  /// True when the body transfers toward a last-4 that is a known loan product.
+  static bool looksLikeTransferToDiscoveredLoan({
+    required String body,
+    required Iterable<DiscoveredAccount> discoveries,
+  }) {
+    final dest = destinationAccountLast4(body.toLowerCase());
+    if (dest == null) return false;
+    final mask = SmsParser.maskFromLast4(dest);
+    return discoveries.any(
+      (d) => d.kind == AccountKind.loan && d.mask == mask && d.mask.isNotEmpty,
+    );
   }
 
   static bool looksLikeCreditCardTransaction(String lower) {
@@ -326,6 +345,19 @@ abstract final class TransactionEnrichment {
       return (bank: loan.bank, mask: loan.mask);
     }
 
+    // UPI / NEFT destination last-4: "to a/c **0310" — only when that mask is
+    // a unique discovered loan (never guess across two loans sharing digits).
+    final destLast4 = destinationAccountLast4(lower);
+    if (destLast4 != null) {
+      final mask = SmsParser.maskFromLast4(destLast4);
+      final byMask = discoveries
+          .where((d) => d.kind == AccountKind.loan && d.mask == mask)
+          .toList();
+      if (byMask.length == 1) {
+        return (bank: byMask.first.bank, mask: mask);
+      }
+    }
+
     // NACH / ACH mandate beneficiary is a strong product-bank signal (not the
     // funding bank). Only remap when that bank has exactly one loan mask.
     if (lower.contains('nach-10-hdfc') ||
@@ -354,6 +386,25 @@ abstract final class TransactionEnrichment {
     }
 
     return funding;
+  }
+
+  /// Last-4 of a transfer destination when present, e.g. `to a/c **0310`.
+  static String? destinationAccountLast4(String lower) {
+    final patterns = [
+      RegExp(
+        r'to\s+(?:a/?c|acct|account)\s*(?:\*{1,}|\•+|x{2,})(\d{4})\b',
+        caseSensitive: false,
+      ),
+      RegExp(
+        r'to\s+(?:\*{2,}|\•{2,}|x{2,})(\d{4})\b',
+        caseSensitive: false,
+      ),
+    ];
+    for (final p in patterns) {
+      final m = p.firstMatch(lower);
+      if (m != null) return m.group(1);
+    }
+    return null;
   }
 
   static String improveMerchant({

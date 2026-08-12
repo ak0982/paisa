@@ -105,7 +105,9 @@ const int categorizerVersion = 4;
 // Bumped 28 -> 29: multi-loan EMI association — never remap ambiguous MBK/generic
 // EMI via funding bank; NACH mandate bank requires a unique loan at that bank;
 // Kotak NACH accepts "debited from|to". Forces rescan so mis-bucketed rows rewrite.
-const int transactionSchemaVersion = 29;
+// Bumped 29 -> 30: product↔funding payment links for You drilldown (amount+time
+// pairing; UPI destination last-4 → unique loan). Forces rescan for dest remap.
+const int transactionSchemaVersion = 30;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

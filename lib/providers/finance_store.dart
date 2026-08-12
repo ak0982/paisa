@@ -12,6 +12,7 @@ import '../data/sms_scan_state.dart';
 import '../services/sms/account_bank_registry.dart';
 import '../services/sms/account_discovery.dart';
 import '../services/sms/merchant_categorizer.dart';
+import '../services/sms/product_payment_linker.dart';
 import '../services/sms/sms_reader_service.dart';
 import '../services/sms/transaction_enrichment.dart';
 import '../theme/paisa_colors.dart';
@@ -1278,7 +1279,8 @@ class FinanceStore extends ChangeNotifier {
   /// All-time transactions for a You-section account.
   ///
   /// Prefer [evidenceKey] from [BankAccount.evidenceKey] so display-bank remaps
-  /// cannot empty the list. Uses the same association as [bankAccounts].
+  /// cannot empty the list. Uses the same association as [bankAccounts]
+  /// (including product↔funding EMI links).
   List<Transaction> transactionsForAccount({
     String? evidenceKey,
     String? bank,
@@ -1324,24 +1326,39 @@ class FinanceStore extends ChangeNotifier {
       // With multiple loans, do NOT guess here — ingest-time resolveLoanDisplay
       // must have already remapped via body mask or unique NACH beneficiary bank.
       // Ambiguous MBK EMI stays on the funding account (same idea as CCBP).
+      // If a product-side SMS already covers the same amount+window, keep the
+      // funding debit on savings — do not double-list the EMI under the loan.
       if (t.accountKind == AccountKind.loan) {
         final loans = merged.values
             .where((d) => d.kind == AccountKind.loan && d.mask.isNotEmpty)
             .toList();
         if (loans.length == 1) {
           final loan = loans.first;
-          final key = accountEvidenceKey(loan.bank, loan.mask);
-          final bucket = buckets.putIfAbsent(key, _LedgerAccountBucket.new);
-          final voteBank = canonicalizeBank(loan.bank);
-          bucket.add(
-            t,
-            voteBank: voteBank.isNotEmpty ? voteBank : loan.bank,
-            mask: loan.mask,
-            evidenceKey: key,
-          );
-          bucket.kind = AccountKind.loan;
-          assignedIds.add(t.id);
-          continue;
+          final onProduct = canonicalizeBank(t.bank) ==
+                  canonicalizeBank(loan.bank) &&
+              t.maskedAccount == loan.mask;
+          if (!onProduct &&
+              ProductPaymentLinker.productSideCoversFunding(
+                funding: t,
+                productBank: loan.bank,
+                productMask: loan.mask,
+                all: _transactions,
+              )) {
+            // fall through to funding-account assignment
+          } else {
+            final key = accountEvidenceKey(loan.bank, loan.mask);
+            final bucket = buckets.putIfAbsent(key, _LedgerAccountBucket.new);
+            final voteBank = canonicalizeBank(loan.bank);
+            bucket.add(
+              t,
+              voteBank: voteBank.isNotEmpty ? voteBank : loan.bank,
+              mask: loan.mask,
+              evidenceKey: key,
+            );
+            bucket.kind = AccountKind.loan;
+            assignedIds.add(t.id);
+            continue;
+          }
         }
       }
 
@@ -1492,7 +1509,51 @@ class FinanceStore extends ChangeNotifier {
       assignedIds.add(t.id);
     }
 
+    // Orphan funding EMI/CCBP under the product they paid (unique product, or
+    // no covering product SMS). Identity stays on the funding account. When a
+    // product ack already matches amount+time, funding stays on savings only.
+    _attachLinkedProductPayments(buckets);
+
     return buckets;
+  }
+
+  void _attachLinkedProductPayments(Map<String, _LedgerAccountBucket> buckets) {
+    final discoveries = mergeDiscoveries(_discoveredAccounts).values;
+    for (final entry in List<MapEntry<String, _LedgerAccountBucket>>.from(
+      buckets.entries,
+    )) {
+      final bucket = entry.value;
+      final kind = bucket.kind;
+      if (kind != AccountKind.loan && kind != AccountKind.creditCard) continue;
+      final productBank = canonicalizeBank(bucket.majorityBank);
+      if (productBank.isEmpty || bucket.mask.isEmpty) continue;
+
+      final linked = ProductPaymentLinker.linkedFundingTransactions(
+        productBank: productBank,
+        productMask: bucket.mask,
+        productKind: kind!,
+        all: _transactions,
+        discoveries: discoveries,
+      );
+      final existingIds = bucket.txns.map((t) => t.id).toSet();
+      for (final t in linked) {
+        if (existingIds.contains(t.id)) continue;
+        // Belt-and-suspenders: never double-count a paired product ack.
+        final covered = bucket.txns.any(
+          (a) =>
+              ProductPaymentLinker.amountsClose(a.amount, t.amount) &&
+              ProductPaymentLinker.withinPairingWindow(a.timestamp, t.timestamp),
+        );
+        if (covered) continue;
+        bucket.add(
+          t,
+          voteBank: productBank,
+          mask: bucket.mask,
+          evidenceKey: entry.key,
+        );
+        existingIds.add(t.id);
+      }
+    }
   }
 
   List<BankAccount> bankAccounts({Set<String> hiddenMasks = const {}}) {
