@@ -122,7 +122,11 @@ const int categorizerVersion = 5;
 // transferred" onto savings XX#### (4-digit only; 3-digit XX505 CMS left
 // unparsed); HDFC "spent via Debit Card" / BLOCK DC / CCBBPSNO kind is
 // savings, not creditCard (`ccbp` substring no longer flips debit-card BBPS).
-const int transactionSchemaVersion = 34;
+// Bumped 34 -> 35: same-source debit-card / CCBP / BBPS alert twins collapse
+// (HDFC Spent+Bal+BLOCK DC kept; ALERT "spent via Debit Card" sibling dropped).
+// SmartPay "Bill Paid:" receipts stay unparsed. Forces a full rescan so
+// already-stored twin rows are rebuilt without the duplicate.
+const int transactionSchemaVersion = 35;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

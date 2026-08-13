@@ -5,11 +5,11 @@ import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/bank_assets.dart';
 
-/// Circular / squircle bank mark for account rows.
+/// Rounded bank mark for account rows and drilldown headers.
 ///
-/// Shows a bundled SVG when [BankAssets] has a logo for [bank]; otherwise a
-/// letter on [fallbackColor]. Logos sit on a light plate so dark marks read on
-/// Neo-Vault's dark UI.
+/// Shows a bundled official logo when [BankAssets] has one for [bank];
+/// otherwise a letter on [fallbackColor]. Marks that are not already on a
+/// solid plate sit on a light square so dark artwork reads on Neo-Vault.
 class BankLogo extends StatelessWidget {
   const BankLogo({
     super.key,
@@ -32,6 +32,11 @@ class BankLogo extends StatelessWidget {
   /// Plate / letter background when falling back (defaults to primary).
   final Color? fallbackColor;
 
+  static const _lightPlate = Color(0xFFF4F5F7);
+
+  /// Slice SFB wordmark PNG is already on this magenta; match letterboxing.
+  static const _slicePlate = Color(0xFFC506C2);
+
   @override
   Widget build(BuildContext context) {
     final asset = BankAssets.assetPathFor(bank);
@@ -44,12 +49,18 @@ class BankLogo extends StatelessWidget {
       );
     }
 
-    final pad = size * 0.14;
+    final fullBleed = BankAssets.isFullBleed(bank);
+    final slug = BankAssets.resolveSlug(bank);
+    final plate = slug == 'slice' ? _slicePlate : _lightPlate;
+    final pad = fullBleed ? size * 0.04 : size * 0.12;
+    final inner = size - pad * 2;
+    final isPng = asset.toLowerCase().endsWith('.png');
+
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F5F7),
+        color: plate,
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: PaisaColors.border, width: 1),
       ),
@@ -57,13 +68,22 @@ class BankLogo extends StatelessWidget {
       alignment: Alignment.center,
       child: Padding(
         padding: EdgeInsets.all(pad),
-        child: SvgPicture.asset(
-          asset,
-          width: size - pad * 2,
-          height: size - pad * 2,
-          fit: BoxFit.contain,
-          semanticsLabel: '$bank logo',
-        ),
+        child: isPng
+            ? Image.asset(
+                asset,
+                width: inner,
+                height: inner,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.medium,
+                semanticLabel: '$bank logo',
+              )
+            : SvgPicture.asset(
+                asset,
+                width: inner,
+                height: inner,
+                fit: BoxFit.contain,
+                semanticsLabel: '$bank logo',
+              ),
       ),
     );
   }

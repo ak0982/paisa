@@ -1,6 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <!-- Simplified HDFC-inspired diagonal bar mark (original recreation) -->
-  <rect width="64" height="64" rx="12" fill="#004C8F"/>
-  <path d="M8 48 L40 8 L56 8 L24 48 Z" fill="#ED232A"/>
-  <path d="M18 48 L50 8 L56 8 L24 48 Z" fill="#FFFFFF" opacity="0.95"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <rect width="120" height="120" fill="#FF000F"/>
+  <rect x="19.044" y="19.137" width="82.524" height="81.466" fill="#FFFFFF"/>
+  <rect x="54.311" y="-1.763" width="12.696" height="121.763" fill="#FFFFFF"/>
+  <rect x="-1.763" y="53.652" width="123.232" height="12.696" fill="#FFFFFF"/>
+  <rect x="38.902" y="38.704" width="42.892" height="42.394" fill="#2B308A"/>
 </svg>

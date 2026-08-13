@@ -3,6 +3,9 @@
 /// Bank strings match what [SmsParser] / discovery emit (e.g. `SBI`, `Yes Bank`,
 /// `Bank of Baroda`, `Federal` for Fi/Jupiter). Matching is case-insensitive and
 /// accepts aliases plus account titles like `SBI Savings`.
+///
+/// Artwork is official brand marks (Wikimedia Commons / Simple Icons / Wikipedia
+/// infobox logos), cropped to the square symbol where the source is a wordmark.
 library;
 
 abstract final class BankAssets {
@@ -23,7 +26,19 @@ abstract final class BankAssets {
     'bob': 'bob.svg',
     'canara': 'canara.svg',
     'hsbc': 'hsbc.svg',
-    'slice': 'slice.svg',
+    'slice': 'slice.png',
+  };
+
+  /// Slugs whose artwork already includes a solid square / circle plate.
+  /// [BankLogo] uses a thinner inset so the mark can fill the avatar.
+  static const Set<String> _fullBleedSlugs = {
+    'hdfc',
+    'kotak',
+    'idfc',
+    'pnb',
+    'yes',
+    'federal',
+    'slice',
   };
 
   /// Alias → canonical slug. Longer aliases are matched first.
@@ -75,6 +90,12 @@ abstract final class BankAssets {
       ..sort((a, b) => b.key.length.compareTo(a.key.length)));
   }
 
+  /// Canonical slugs that have a bundled logo (`sbi`, `hdfc`, …).
+  static Iterable<String> get knownSlugs => _slugToFile.keys;
+
+  /// Bundled file names (`sbi.svg`, `slice.png`, …).
+  static Iterable<String> get bundledFiles => _slugToFile.values;
+
   /// Asset path for [bankOrName], or `null` when no logo is bundled.
   ///
   /// Accepts raw bank codes (`SBI`), account titles (`SBI Savings`), and
@@ -106,6 +127,12 @@ abstract final class BankAssets {
 
   /// Whether a bundled logo exists for [bankOrName].
   static bool hasLogo(String bankOrName) => assetPathFor(bankOrName) != null;
+
+  /// True when the asset already paints a solid brand plate (minimal inset).
+  static bool isFullBleed(String bankOrName) {
+    final slug = resolveSlug(bankOrName);
+    return slug != null && _fullBleedSlugs.contains(slug);
+  }
 
   /// Letter used when falling back (first alphanumeric of the bank name).
   static String fallbackLetter(String bankOrName, {String orElse = '?'}) {

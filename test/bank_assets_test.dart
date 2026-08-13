@@ -1,9 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:paisa_app/utils/bank_assets.dart';
 
 void main() {
   group('BankAssets', () {
-    test('maps canonical bank codes to SVG assets', () {
+    test('maps canonical bank codes to logo assets', () {
       expect(BankAssets.assetPathFor('SBI'), 'assets/banks/sbi.svg');
       expect(BankAssets.assetPathFor('HDFC'), 'assets/banks/hdfc.svg');
       expect(BankAssets.assetPathFor('ICICI'), 'assets/banks/icici.svg');
@@ -20,6 +22,24 @@ void main() {
       );
       expect(BankAssets.assetPathFor('Canara'), 'assets/banks/canara.svg');
       expect(BankAssets.assetPathFor('HSBC'), 'assets/banks/hsbc.svg');
+      expect(BankAssets.assetPathFor('Slice'), 'assets/banks/slice.png');
+    });
+
+    test('every known slug resolves to an existing bundled file', () {
+      expect(BankAssets.knownSlugs, isNotEmpty);
+      for (final slug in BankAssets.knownSlugs) {
+        final path = BankAssets.assetPathFor(slug);
+        expect(path, isNotNull, reason: slug);
+        final file = path!.replaceFirst(RegExp(r'^assets/banks/'), '');
+        expect(
+          File('assets/banks/$file').existsSync(),
+          isTrue,
+          reason: path,
+        );
+      }
+      for (final file in BankAssets.bundledFiles) {
+        expect(File('assets/banks/$file').existsSync(), isTrue, reason: file);
+      }
     });
 
     test('maps aliases and account titles', () {
@@ -40,6 +60,18 @@ void main() {
       );
       expect(BankAssets.assetPathFor('HSBC Bank'), 'assets/banks/hsbc.svg');
       expect(BankAssets.assetPathFor('HSBC Savings'), 'assets/banks/hsbc.svg');
+      expect(
+        BankAssets.assetPathFor('Slice Small Finance Bank'),
+        'assets/banks/slice.png',
+      );
+      expect(BankAssets.assetPathFor('BOBCARD'), 'assets/banks/bob.svg');
+    });
+
+    test('full-bleed slugs include square brand plates', () {
+      expect(BankAssets.isFullBleed('HDFC'), isTrue);
+      expect(BankAssets.isFullBleed('Slice'), isTrue);
+      expect(BankAssets.isFullBleed('SBI'), isFalse);
+      expect(BankAssets.isFullBleed('Unknown'), isFalse);
     });
 
     test('is case-insensitive', () {

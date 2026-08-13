@@ -1,6 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <!-- Simplified Federal Bank-inspired F mark (original recreation) -->
-  <rect width="64" height="64" rx="12" fill="#006B3F"/>
-  <path d="M16 14 H48 V24 H28 V30 H44 V40 H28 V50 H16 Z" fill="#FFFFFF"/>
-  <rect x="16" y="14" width="4" height="36" fill="#F5C518"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" fill="#004CBE"/>
+  <rect y="56" width="64" height="8" fill="#FF9C00"/>
+  <g transform="translate(8.2,4.5) scale(1.18)">
+    <path fill="#FFFFFF" d="m 20.39396,126.89019 h 18.310224 l 1.758244,-8.91681 H 22.126452 17.102543 11.953752 L 3.4137079,161.92949 H 13.586408 l 3.196166,-16.45215 H 32.42474 l 1.757891,-8.91681 H 18.515066 Z" transform="translate(-3.4,-117.97)"/>
+  </g>
 </svg>

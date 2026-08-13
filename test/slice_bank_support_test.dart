@@ -182,7 +182,7 @@ void main() {
     });
 
     test('logo asset resolves', () {
-      expect(BankAssets.assetPathFor('Slice'), 'assets/banks/slice.svg');
+      expect(BankAssets.assetPathFor('Slice'), 'assets/banks/slice.png');
     });
   });
 }

@@ -14,6 +14,8 @@ class Transaction {
     this.source = 'SMS',
     this.smsId,
     this.accountKind = AccountKind.savings,
+    this.isDebitCardAlertTwin = false,
+    this.isLeanDebitCardAlert = false,
   });
 
   final String id;
@@ -27,6 +29,14 @@ class Transaction {
   final DateTime timestamp;
   final String source;
   final AccountKind accountKind;
+
+  /// Ingest-only (not persisted). Debit-card / CCBP / BBPS spend alert that
+  /// may share an event with a same-account sibling SMS.
+  final bool isDebitCardAlertTwin;
+
+  /// Ingest-only (not persisted). Lean `ALERT: … spent via Debit Card` ping.
+  /// The richer `Spent … Bal … BLOCK DC` row is preferred when collapsing.
+  final bool isLeanDebitCardAlert;
 
   CategoryInfo get categoryInfo => CategoryInfo.forCategory(category);
 

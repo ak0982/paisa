@@ -449,6 +449,27 @@ void main() {
       );
     });
 
+    test('SmartPay Bill Paid receipt is not a transaction', () {
+      final result = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'bill-paid',
+          sender: 'JM-HDFCBK-S',
+          body:
+              'Bill Paid: HSBCBankCC Bill 3740 of Rs. 11254.82 paid on 07-Aug-26 via SmartPay. From HDFC Bank.',
+          timestamp: DateTime(2026, 8, 7),
+        ),
+      );
+      expect(result.isParsed, isFalse);
+      expect(
+        result.outcome,
+        anyOf(
+          SmsPipelineOutcome.noTransactionSignal,
+          SmsPipelineOutcome.parseFailed,
+          SmsPipelineOutcome.promo,
+        ),
+      );
+    });
+
     test('EMI due reminder and SmartPay failed debit do not parse', () {
       final due = SmsScanPipeline.process(
         SmsMessageInput(

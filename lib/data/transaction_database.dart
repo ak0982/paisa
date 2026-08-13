@@ -179,6 +179,19 @@ class TransactionDatabase {
     await batch.commit(noResult: true);
   }
 
+  /// Removes stored rows by primary key. No-op when [ids] is empty.
+  /// Used to drop same-event alert twins that were previously upserted.
+  Future<void> deleteByIds(Iterable<String> ids) async {
+    final list = ids.where((id) => id.isNotEmpty).toList();
+    if (list.isEmpty) return;
+    final db = await database;
+    final batch = db.batch();
+    for (final id in list) {
+      batch.delete('transactions', where: 'id = ?', whereArgs: [id]);
+    }
+    await batch.commit(noResult: true);
+  }
+
   Future<List<models.Transaction>> getAll() async {
     final db = await database;
     final rows = await db.query(

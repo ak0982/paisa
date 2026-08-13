@@ -125,6 +125,21 @@ abstract final class TransactionEnrichment {
     );
   }
 
+  /// Shape + richness of HDFC-style debit-card / BBPS spend alerts.
+  ///
+  /// Lean = `ALERT: … spent via Debit Card` security ping. Drop it when a
+  /// richer `Spent … BLOCK DC` sibling exists for the same event.
+  static ({bool isTwin, bool isLean}) cardAlertTwinHints(String body) {
+    final lower = body.toLowerCase();
+    final isLean = RegExp(
+          r'alert:\s*rs',
+          caseSensitive: false,
+        ).hasMatch(lower) &&
+        lower.contains('spent via') &&
+        lower.contains('debit card');
+    return (isTwin: isLean || looksLikeDebitCardSpend(lower), isLean: isLean);
+  }
+
   /// HDFC/SBI debit-card BBPS (BLOCK DC, "Debit Card", CCBBPSNO) must stay
   /// savings — not creditCard. Distinct from funding-side MBK CCBP bill pay.
   static bool looksLikeDebitCardSpend(String lower) {

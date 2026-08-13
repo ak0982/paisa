@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <!-- Simplified IDFC FIRST-inspired mark (original recreation) -->
-  <rect width="64" height="64" rx="12" fill="#9B1D20"/>
-  <path d="M14 16 H50 V26 H28 V30 H46 V40 H28 V48 H14 Z" fill="#FFFFFF"/>
-  <circle cx="48" cy="48" r="6" fill="#F5A623"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="11.97 11.98 47.05 47.05">
+  <rect x="0" y="0" width="71" height="71" fill="#9D1D27"/>
+  <path fill="#FEFEFE" fill-rule="evenodd" d="M 15.367188 15.367188 L 55.625 15.367188 L 55.625 55.636719 L 15.363281 55.636719 Z M 59.015625 11.976562 L 11.972656 11.976562 L 11.972656 59.023438 L 59.015625 59.023438 Z M 59.015625 11.976562"/>
+  <path fill="#FEFEFE" fill-rule="evenodd" d="M 19.671875 27.375 L 51.320312 27.375 L 51.320312 19.675781 L 19.671875 19.675781 Z M 19.671875 51.324219 L 27.371094 51.324219 L 27.371094 43.625 L 19.671875 43.625 Z M 19.671875 39.347656 L 39.34375 39.347656 L 39.34375 31.652344 L 19.671875 31.652344 Z"/>
 </svg>

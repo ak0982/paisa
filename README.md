@@ -166,14 +166,14 @@ End-to-end flow: **raw SMS → filters → parse → enrich → discover → sto
 
 ```dart
 const categorizerVersion = 5;
-const transactionSchemaVersion = 34;
+const transactionSchemaVersion = 35;
 ```
 
 If a stored stamp is lower **and** onboarding is complete, `FinanceStore` runs `fullRescanFromSms()` **after the first frame** (progress UI). **`store.init()` is also deferred** so the splash is never blocked on DB or SMS work. Fresh installs use onboarding’s own scan. Version stamps are written only after a successful rescan.
 
 Bump `transactionSchemaVersion` (with a changelog comment in `main.dart`) when parsing, enrichment, discovery, or classification changes. **Do not bump** for UI/perf-only work (lazy tabs, memoized account buckets, pairing index, throttled scan progress).
 
-Current schema **34** includes (among earlier ISSUE-1…14 / HSBC / Slice work): You-account drilldown + bank-alias canonicalize; ownership rematch; loan association; multi-loan “no funding-bank guess”; Kotak NACH `from|to`; product↔funding EMI links without double-counting; UPI dest last-4 → unique loan; R2 NACH beneficiary-only remap + fold/linker/discovery-merge fixes; SBI UPI comma amounts + PNB optional `of`; live-inbox parse gaps (HDFC On/From card, ICICI cashback/CMS, SBI e-mandate/reversals, Kotak CC, PNB charges, IDFC interest). Full table: [`AGENTS.md`](AGENTS.md).
+Current schema **35** includes (among earlier ISSUE-1…14 / HSBC / Slice work): You-account drilldown + bank-alias canonicalize; ownership rematch; loan association; multi-loan “no funding-bank guess”; Kotak NACH `from|to`; product↔funding EMI links without double-counting; UPI dest last-4 → unique loan; R2 NACH beneficiary-only remap + fold/linker/discovery-merge fixes; SBI UPI comma amounts + PNB optional `of`; live-inbox parse gaps (HDFC On/From card, ICICI cashback/CMS, SBI e-mandate/reversals, Kotak CC, PNB charges, IDFC interest); leftover HDFC debit-card BBPS kind + ICICI CC→savings refund; **same-source Spent vs ALERT debit-card twins collapse**. Full table: [`AGENTS.md`](AGENTS.md).
 
 ---
 
@@ -245,7 +245,7 @@ For display, memoized `bankAccounts()` / `_ledgerAccountBuckets()` group by cano
 - **Sender-first bank resolution.** Bank is resolved from the sender ID first, then the body, with `AccountBankRegistry` learning bank‑per‑mask across the inbox to correct misleading senders (e.g. ICICI relaying credits into another bank's account, LenDenClub settlements).
 - **Promo / scam filtering.** `SmsParser` + `BankPromoFilters` drop marketing ("pre‑approved", "apply now", "SmartEMI", "YONO offer", …) and obfuscated scams ("L0AN", "Appr0ve", fake wallet credits), while a completed‑transaction signal overrides the promo filter so real alerts with offer‑like wording still parse.
 - **Two-pass isolate scan.** Pass 1 collects candidates, learns bank ownership, and runs account discovery; pass 2 parses candidates in a **background isolate** (`sms_parse_isolate.dart`) so the UI stays responsive on large inboxes, with checkpointing for resumability.
-- **Schema versioning.** `transactionSchemaVersion` **34** / `categorizerVersion` **5** in `main.dart` force a full wipe‑and‑rebuild when **parse/classify** logic changes (see above). Perf/UI changes do not bump the schema.
+- **Schema versioning.** `transactionSchemaVersion` **35** / `categorizerVersion` **5** in `main.dart` force a full wipe‑and‑rebuild when **parse/classify** logic changes (see above). Perf/UI changes do not bump the schema.
 - **Shared sorting/formatting.** All lists sort and group through `transaction_sort.dart`. All INR uses `formatInr` (`decimalDigits: 2`). Stats share badges use `formatSharePercent`.
 - **Home lists vs KPIs.** Lists still show **every** cash movement (`countsTowardCashflowSummary`). Headline spend/income use `countsTowardSpend` / `countsTowardIncome` plus transfer pairing, so CCBP / self-transfers do not inflate the hero numbers.
 - **Launch performance.** Lazy keep-alive tabs; memoized You-account buckets; O(n) product-pairing index; non-blocking `init()` after first frame; throttled scan-progress listenable.

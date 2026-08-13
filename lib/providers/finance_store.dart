@@ -571,6 +571,8 @@ class FinanceStore extends ChangeNotifier {
         }
 
         final canonicalBank = canonicalizeBank(bank);
+        final twinHints =
+            TransactionEnrichment.cardAlertTwinHints(message.body);
         transactionsToSave.add(
           Transaction(
             id: 'sms_${message.id}',
@@ -584,6 +586,8 @@ class FinanceStore extends ChangeNotifier {
             timestamp: parsed.timestamp,
             source: 'SMS',
             accountKind: accountKind,
+            isDebitCardAlertTwin: twinHints.isTwin,
+            isLeanDebitCardAlert: twinHints.isLean,
           ),
         );
       }
@@ -591,9 +595,20 @@ class FinanceStore extends ChangeNotifier {
       if (transactionsToSave.isNotEmpty) {
         // Cross-source de-duplication: drop wallet-sourced mirrors of a
         // bank-sourced payment (one UPI payment → two SMS). See ISSUE-4.
-        final deduped =
+        final afterWallet =
             _dropCrossSourceDuplicates(transactionsToSave, _transactions);
-        await _db.upsertAll(deduped);
+        // Same-source debit-card / CCBP / BBPS alert twins (Spent vs ALERT).
+        final deduped =
+            _dropSameSourceAlertTwins(afterWallet, _transactions);
+        if (deduped.isNotEmpty) {
+          await _db.upsertAll(deduped);
+        }
+        // Dropped twin SMS ids must leave the DB — upsert would otherwise
+        // leave a previously stored ALERT row after a rescan/overlap.
+        final keptIds = deduped.map((t) => t.id).toSet();
+        await _db.deleteByIds(
+          afterWallet.where((t) => !keptIds.contains(t.id)).map((t) => t.id),
+        );
       }
 
       await _db.saveScanState(
@@ -663,6 +678,13 @@ class FinanceStore extends ChangeNotifier {
   ) =>
       _dropCrossSourceDuplicates(candidates, existing);
 
+  @visibleForTesting
+  List<Transaction> debugDropSameSourceAlertTwins(
+    List<Transaction> candidates,
+    List<Transaction> existing,
+  ) =>
+      _dropSameSourceAlertTwins(candidates, existing);
+
   /// Cross-source de-duplication (ISSUE-4).
   ///
   /// One UPI payment often produces two SMS — the bank's "debited from a/c"
@@ -715,6 +737,93 @@ class FinanceStore extends ChangeNotifier {
       keptByAmount.putIfAbsent((c.isCredit, c.amount), () => []).add(c);
     }
     return result;
+  }
+
+  /// Same-source debit-card / CCBP / BBPS alert-twin collapse (schema 35).
+  ///
+  /// HDFC (and similar) send two spend SMS for one debit-card / SmartPay
+  /// charge, seconds apart: a rich `Spent Rs … Bal Rs … BLOCK DC` row and a
+  /// lean `ALERT: … spent via Debit Card` security ping. Different SMS ids
+  /// would otherwise store both. Drop the lean ping when a same-bank,
+  /// same-mask, same-direction, paise-close, same-merchant twin exists within
+  /// [_selfTransferWindow].
+  ///
+  /// Two genuine same-amount purchases (different merchants, or two rich
+  /// Spent rows, or not alert-shaped) are both kept — ISSUE-4 still holds.
+  /// Opposite-direction legs (HDFC debit + HSBC payment-received) are not
+  /// twins.
+  List<Transaction> _dropSameSourceAlertTwins(
+    List<Transaction> candidates,
+    List<Transaction> existing,
+  ) {
+    // Keep rich Spent/BLOCK DC rows first so a lean ALERT sees them as peers.
+    final ordered = [...candidates]..sort(
+        (a, b) => (a.isLeanDebitCardAlert ? 1 : 0)
+            .compareTo(b.isLeanDebitCardAlert ? 1 : 0),
+      );
+
+    final result = <Transaction>[];
+    for (final c in ordered) {
+      if (_isLeanCardAlert(c) &&
+          _hasRichOrStoredAlertTwin(c, existing, result)) {
+        continue;
+      }
+      result.add(c);
+    }
+    return result;
+  }
+
+  bool _isLeanCardAlert(Transaction t) => t.isLeanDebitCardAlert;
+
+  bool _isAlertTwinShape(Transaction t) {
+    if (t.isDebitCardAlertTwin || t.isLeanDebitCardAlert) return true;
+    final m = t.merchant.toLowerCase();
+    return m.contains('ccbbpsno') ||
+        m.contains('ccbpsno') ||
+        m.contains('ccbbps') ||
+        m.contains('bbpsbill') ||
+        m.contains('dcsi-bbps');
+  }
+
+  bool _hasRichOrStoredAlertTwin(
+    Transaction lean,
+    List<Transaction> existing,
+    List<Transaction> kept,
+  ) {
+    for (final p in existing) {
+      if (p.id == lean.id) continue;
+      if (_isLeanCardAlert(p)) continue;
+      if (_areSameSourceAlertTwins(lean, p)) return true;
+    }
+    for (final p in kept) {
+      if (p.id == lean.id) continue;
+      if (_isLeanCardAlert(p)) continue;
+      if (_areSameSourceAlertTwins(lean, p)) return true;
+    }
+    return false;
+  }
+
+  bool _areSameSourceAlertTwins(Transaction a, Transaction b) {
+    if (a.isCredit != b.isCredit) return false;
+    if (!_isAlertTwinShape(a) || !_isAlertTwinShape(b)) return false;
+    if (!ProductPaymentLinker.amountsClose(a.amount, b.amount)) return false;
+    if (a.timestamp.difference(b.timestamp).abs() > _selfTransferWindow) {
+      return false;
+    }
+    final aBank = canonicalizeBank(a.bank);
+    final bBank = canonicalizeBank(b.bank);
+    if (aBank.isEmpty || bBank.isEmpty || aBank != bBank) return false;
+    final aLast4 = AccountBankRegistry.last4FromMask(a.maskedAccount);
+    final bLast4 = AccountBankRegistry.last4FromMask(b.maskedAccount);
+    if (aLast4 == null || bLast4 == null || aLast4 != bLast4) return false;
+    return _sameAlertMerchant(a.merchant, b.merchant);
+  }
+
+  static bool _sameAlertMerchant(String a, String b) {
+    final x = a.trim().toLowerCase();
+    final y = b.trim().toLowerCase();
+    if (x.isEmpty || y.isEmpty) return false;
+    return x == y;
   }
 
   // --- Date range analytics ---
