@@ -147,4 +147,200 @@ void main() {
       );
     });
   });
+
+  group('evidence-based parser fixes (schema 33)', () {
+    test('HDFC Spent On Bank Card parses CC spend with paise', () {
+      const body =
+          'Spent Rs.3035.4 On HDFC Bank Card 1949 At AIIMSOTHCRCARD On 2026-08-03:01:12:32.Not You? To Block+Reissue Call 18002586161/SMS BLOCK CC 1949 to 7308080808';
+      final result = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'hdfc-on',
+          sender: 'AD-HDFCBK-S',
+          body: body,
+          timestamp: DateTime(2026, 8, 3),
+        ),
+      );
+      expect(result.outcome, SmsPipelineOutcome.parsed);
+      expect(result.transaction!.amount, 3035.4);
+      expect(result.transaction!.isCredit, isFalse);
+      expect(result.transaction!.maskedAccount, '••••1949');
+      expect(result.transaction!.bank, 'HDFC');
+    });
+
+    test('HDFC Spent From Bank Card BLOCK DC is debit not CC', () {
+      const body =
+          'Spent Rs.31250 From HDFC Bank Card x3569 At CCBBPSNO On 2026-08-01:06:02:24 Bal Rs.55551.08 Not You? Call 18002586161/SMS BLOCK DC  3569 to 7308080808';
+      final result = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'hdfc-from',
+          sender: 'JX-HDFCBK-S',
+          body: body,
+          timestamp: DateTime(2026, 8, 1),
+        ),
+      );
+      expect(result.outcome, SmsPipelineOutcome.parsed);
+      expect(result.transaction!.amount, 31250);
+      expect(result.transaction!.maskedAccount, '••••3569');
+      expect(
+        TransactionEnrichment.looksLikeCreditCardTransaction(body.toLowerCase()),
+        isFalse,
+      );
+    });
+
+    test('ICICI cashback without mask parses credit', () {
+      const body =
+          'Congrats! Rs 134.09 cashback credited to ICICI Bank Credit Card on 16-Jul-26. For details check Card statement';
+      final result = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'icici-cb',
+          sender: 'JD-ICICIT-S',
+          body: body,
+          timestamp: DateTime(2026, 7, 16),
+        ),
+      );
+      expect(result.outcome, SmsPipelineOutcome.parsed);
+      expect(result.transaction!.amount, 134.09);
+      expect(result.transaction!.isCredit, isTrue);
+    });
+
+    test('ICICI merchant-prefix refund with your parses', () {
+      const body =
+          'app mpp juspay refund of Rs 1,715.36 credited to your ICICI Bank Credit Card XX0003 on 18-JUN-26.';
+      final result = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'icici-ref',
+          sender: 'AX-ICICIT-S',
+          body: body,
+          timestamp: DateTime(2026, 6, 18),
+        ),
+      );
+      expect(result.outcome, SmsPipelineOutcome.parsed);
+      expect(result.transaction!.amount, 1715.36);
+      expect(result.transaction!.isCredit, isTrue);
+      expect(result.transaction!.maskedAccount, '••••0003');
+    });
+
+    test('SBI CC reversal/cashback and e-mandate parse', () {
+      final reversal = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'sbi-rev',
+          sender: 'JM-SBICGV-S',
+          body:
+              'Rs. 1655.36 has been credited to your SBI Credit Card xxxx3452, towards reversal/cashback from PNB*IRCTC Ticketing Gurgaon IND for trxn. dated 02/08/2026',
+          timestamp: DateTime(2026, 8, 2),
+        ),
+      );
+      expect(reversal.transaction!.amount, 1655.36);
+      expect(reversal.transaction!.isCredit, isTrue);
+      expect(reversal.transaction!.maskedAccount, '••••3452');
+
+      final mandate = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'sbi-em',
+          sender: 'VA-SBICRD-S',
+          body:
+              'Transaction of Rs.2,340.58 at CURSORAIPOWEREDIDE against E-mandate (SiHub ID - YX9dLE6YW2) registered by you at merchant has been debited to your SBI Credit Card ending 3452 on 07-07-26.',
+          timestamp: DateTime(2026, 7, 7),
+        ),
+      );
+      expect(mandate.transaction!.amount, 2340.58);
+      expect(mandate.transaction!.isCredit, isFalse);
+      expect(mandate.transaction!.maskedAccount, '••••3452');
+    });
+
+    test('IDFC interest INR.4.00 and Kotak CC spend parse', () {
+      final interest = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'idfc-int',
+          sender: 'VM-IDFCFB-S',
+          body:
+              'Monthly interest of INR.4.00 earned on your Savings A/c XX0070 has been credited to your A/C on 31/07/26. New bal: INR.1,843.18. IDFC FIRST Bank',
+          timestamp: DateTime(2026, 7, 31),
+        ),
+      );
+      expect(interest.transaction!.amount, 4.00);
+      expect(interest.transaction!.isCredit, isTrue);
+      expect(interest.transaction!.maskedAccount, '••••0070');
+
+      final kotak = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'kotak-cc',
+          sender: 'AD-KOTAKB-S',
+          body:
+              'INR 282 spent on Kotak Credit Card x4310 on 02-Aug-2026 at SWIGGY PVT LTD FOOD2. Avl limit INR 451718 Fraud? https://www.kotak.bank.in/KBANKT/querytxn',
+          timestamp: DateTime(2026, 8, 2),
+        ),
+      );
+      expect(kotak.transaction!.amount, 282);
+      expect(kotak.transaction!.isCredit, isFalse);
+      expect(kotak.transaction!.maskedAccount, '••••4310');
+    });
+
+    test('LenDenClub leading-dot amount .85 parses as 0.85; empty dot does not', () {
+      final parsed = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'ld-dot',
+          sender: 'JD-ICICIT-S',
+          body:
+              'Dear TEST USER ,Your account XXXXXXXX0856 has been credited with amount .85 .Reference no- CMS5807350098 .Thanks, LENDENCLUB BORROWER REPAYMENT ISP LTD ACCOUNT',
+          timestamp: DateTime(2026, 8, 3),
+        ),
+      );
+      expect(parsed.outcome, SmsPipelineOutcome.parsed);
+      expect(parsed.transaction!.amount, 0.85);
+      expect(parsed.transaction!.maskedAccount, '••••0856');
+
+      final empty = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'ld-empty',
+          sender: 'JD-ICICIT-S',
+          body:
+              'Dear TEST USER ,Your account XXXXXXXX0856 has been credited with amount . .Reference no- CMS5807350098 .Thanks, LENDENCLUB BORROWER REPAYMENT ISP LTD ACCOUNT',
+          timestamp: DateTime(2026, 8, 3),
+        ),
+      );
+      expect(empty.isParsed, isFalse);
+    });
+
+    test('ICICI Account XX credited:Rs. CMS credit parses', () {
+      const body =
+          'ICICI Bank Account XX1505 credited:Rs. 60,775.86 on 07-May-26. Info CMS* CC RBI 10 H*ICICI BANK . Available Balance is Rs. 74,202.07.';
+      final result = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'icici-cms',
+          sender: 'VA-ICICIT-S',
+          body: body,
+          timestamp: DateTime(2026, 5, 7),
+        ),
+      );
+      expect(result.outcome, SmsPipelineOutcome.parsed);
+      expect(result.transaction!.amount, 60775.86);
+      expect(result.transaction!.isCredit, isTrue);
+      expect(result.transaction!.maskedAccount, '••••1505');
+    });
+
+    test('EMI due reminder and SmartPay failed debit do not parse', () {
+      final due = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'emi-due',
+          sender: 'JX-ICICIT-S',
+          body:
+              'EMI of Rs 26408.00 for ICICI Bank Personal Loan XX1041 is due on 05-Aug-26. Please maintain sufficient funds in your linked Account XX3649 to avoid 5% per annum penal charges. EMI will be debited on holidays too.',
+          timestamp: DateTime(2026, 8, 5),
+        ),
+      );
+      expect(due.isParsed, isFalse);
+
+      final smart = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'smartpay',
+          sender: 'JM-HDFCBK-S',
+          body:
+              "SmartPay Alert: IDFCBankCC Bill 6204969301 can't be auto debited as HDFC Bank received a bill of Rs. 0.00. Please pay via alternate method.",
+          timestamp: DateTime(2026, 8, 1),
+        ),
+      );
+      expect(smart.isParsed, isFalse);
+    });
+  });
 }

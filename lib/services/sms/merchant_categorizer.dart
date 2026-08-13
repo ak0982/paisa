@@ -165,21 +165,27 @@ class MerchantCategorizer {
         m.startsWith('nach');
   }
 
-  /// P2P/UPI moves, account-to-account, and card-bill payments — Transfer.
-  static bool _looksLikeTransfer(String merchant, String haystack) {
-    // Bank UPI "trf to MERCHANT" is a completed transfer for any merchant name.
+  /// Card-bill rails — must beat the `bills` keyword loop (ISSUE-13 / R2-1).
+  static bool _looksLikeCardBillTransfer(String merchant, String haystack) {
+    final m = merchant.toLowerCase();
+    return haystack.contains('ccbp') ||
+        haystack.contains('bbps') ||
+        haystack.contains('ccbbps') ||
+        haystack.contains('bbpsbill') ||
+        m.contains('ccbp') ||
+        m.contains('ccbbps') ||
+        m.contains('bbpsbill') ||
+        m.contains('mobikwikccbp');
+  }
+
+  /// Generic P2P / A2A wording. Runs *after* brand keywords so SBI-style
+  /// "trf to SWIGGY" stays food, not Transfer (R2-1).
+  static bool _looksLikeGenericTransfer(String merchant, String haystack) {
     if (RegExp(r'\btrf to\b', caseSensitive: false).hasMatch(haystack)) {
       return true;
     }
 
     if (RegExp(r'to a/c\s*[\*x]', caseSensitive: false).hasMatch(haystack)) {
-      return true;
-    }
-
-    if (haystack.contains('ccbp') ||
-        haystack.contains('bbps') ||
-        merchant.toLowerCase().contains('ccbp') ||
-        merchant.toLowerCase().contains('mobikwikccbp')) {
       return true;
     }
 
@@ -197,6 +203,17 @@ class MerchantCategorizer {
     }
 
     return false;
+  }
+
+  /// First matching non-income keyword, or null.
+  static SpendCategory? _matchNonIncomeKeyword(String haystack) {
+    for (final entry in _rules.entries) {
+      if (entry.key == SpendCategory.income) continue;
+      for (final keyword in entry.value) {
+        if (_keywordHits(haystack, keyword)) return entry.key;
+      }
+    }
+    return null;
   }
 
   /// Wallet / P2P platform credits (completed top-ups), not bank salary.
@@ -253,9 +270,16 @@ class MerchantCategorizer {
       }
     }
 
-    // ISSUE-13: check transfers BEFORE keyword rules so BBPS/CCBP card-bill
-    // debits are not swallowed by the old 'bbps' → bills keyword.
-    if (!isCredit && _looksLikeTransfer(merchant, haystack)) {
+    // ISSUE-13: CCBP/BBPS before keywords so card-bill debits stay Transfer.
+    // R2-1: brand keywords before generic "trf to" so "trf to SWIGGY" is food.
+    if (!isCredit && _looksLikeCardBillTransfer(merchant, haystack)) {
+      return SpendCategory.transfer;
+    }
+
+    final branded = _matchNonIncomeKeyword(haystack);
+    if (branded != null) return branded;
+
+    if (!isCredit && _looksLikeGenericTransfer(merchant, haystack)) {
       return SpendCategory.transfer;
     }
 
@@ -264,15 +288,6 @@ class MerchantCategorizer {
         RegExp(r'\bnach\b|\becs\b', caseSensitive: false).hasMatch(haystack) &&
         !_hasExplicitLoanSignal(haystack)) {
       return SpendCategory.bills;
-    }
-
-    for (final entry in _rules.entries) {
-      if (entry.key == SpendCategory.income) continue;
-      for (final keyword in entry.value) {
-        if (_keywordHits(haystack, keyword)) {
-          return entry.key;
-        }
-      }
     }
 
     return SpendCategory.other;

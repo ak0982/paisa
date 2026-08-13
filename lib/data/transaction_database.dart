@@ -229,8 +229,9 @@ class TransactionDatabase {
 
   /// Non-destructive upsert used by every sync (full and incremental).
   ///
-  /// Newly discovered accounts are inserted; accounts already present have their
-  /// aggregate counters accumulated. Crucially, accounts that are NOT in [items]
+  /// Newly discovered accounts are inserted; accounts already present keep
+  /// their counters (incremental 1h overlap would otherwise inflate sms_hits
+  /// on every sync — R2-6). Crucially, accounts that are NOT in [items]
   /// (e.g. because an incremental scan only read the last hour of messages) are
   /// left untouched instead of being deleted. A full rescan clears the table
   /// first (via [clearAll]) so this merges into an empty table and rebuilds the
@@ -247,9 +248,6 @@ class TransactionDatabase {
            sms_hits, spent_total, received_total)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(account_key) DO UPDATE SET
-          sms_hits = sms_hits + excluded.sms_hits,
-          spent_total = spent_total + excluded.spent_total,
-          received_total = received_total + excluded.received_total,
           account_label =
             COALESCE(discovered_accounts.account_label, excluded.account_label)
         ''',

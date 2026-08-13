@@ -61,6 +61,42 @@ void main() {
       expect(kind, AccountKind.loan);
     });
 
+    test('NACH SIP from funding bank is not remapped onto a loan (R2-2)', () {
+      const discoveries = [
+        DiscoveredAccount(
+          bank: 'HDFC',
+          mask: '••••1234',
+          kind: AccountKind.savings,
+        ),
+        DiscoveredAccount(
+          bank: 'HDFC',
+          mask: '••••0855',
+          kind: AccountKind.loan,
+          accountLabel: 'Home Loan',
+        ),
+      ];
+      const body =
+          'Rs 5000.00 debited from HDFC Bank A/c XX1234 towards '
+          'NACH-10-INDIAN CLEARING CORP';
+      expect(
+        TransactionEnrichment.resolveAccountKind(
+          bank: 'HDFC',
+          mask: '••••1234',
+          body: body,
+          discoveries: discoveries,
+        ),
+        AccountKind.savings,
+      );
+      final display = TransactionEnrichment.resolveLoanDisplay(
+        body: body,
+        parsedBank: 'HDFC',
+        parsedMask: '••••1234',
+        discoveries: discoveries,
+      );
+      expect(display.bank, 'HDFC');
+      expect(display.mask, '••••1234');
+    });
+
     test('PNB loan payment SMS parses', () {
       final body =
           'Thanks for depositing an amount of Rs. 5200 against your Loan Ac XX0310. Register for e-statement,if not done.-PNB';

@@ -236,11 +236,18 @@ class SmsReaderService {
     var bankCandidates = 0;
     var scanned = offset;
     final allCandidates = <SmsMessageInput>[];
-    final allRows = <SmsMessageInput>[];
+
+    Map<String, dynamic> rowMap(SmsMessageInput m) => {
+          'id': m.id,
+          'sender': m.sender,
+          'body': m.body,
+          'timestampMs': m.timestamp.millisecondsSinceEpoch,
+        };
 
     // Pass 1 — collect SMS pages (native work is already off the Android main
-    // thread). Discovery + registry learning run in a Dart isolate after the
-    // pages are collected so the UI isolate stays responsive (ISSUE-10).
+    // thread). Discover per batch so the whole inbox is never held + copied
+    // into one isolate payload (ISSUE-10 + R2-5). Learn after all discoveries
+    // so Slice beneficiary votes still beat later ICICI-relay candidates.
     while (scanned < total) {
       final batch = await fetchFilteredBatch(
         offset: offset,
@@ -252,7 +259,15 @@ class SmsReaderService {
 
       bankCandidates += batch.candidates.length;
       allCandidates.addAll(batch.candidates);
-      allRows.addAll(batch.allRows);
+
+      if (batch.allRows.isNotEmpty) {
+        final found = await discoverAndLearnInIsolate({
+          'allRows': batch.allRows.map(rowMap).toList(),
+          'candidates': const <Map<String, dynamic>>[],
+          'seedVotes': const <String, Map<String, int>>{},
+        });
+        discoveries.addAll(found.discoveries);
+      }
 
       offset += batch.rowsRead;
       scanned = offset;
@@ -272,19 +287,16 @@ class SmsReaderService {
       if (!batch.hasMore) break;
     }
 
-    Map<String, dynamic> rowMap(SmsMessageInput m) => {
-          'id': m.id,
-          'sender': m.sender,
-          'body': m.body,
-          'timestampMs': m.timestamp.millisecondsSinceEpoch,
-        };
-
+    final mergedDiscoveries = mergeDiscoveries(discoveries).values.toList();
     final pass1 = await discoverAndLearnInIsolate({
-      'allRows': allRows.map(rowMap).toList(),
+      'allRows': const <Map<String, dynamic>>[],
       'candidates': allCandidates.map(rowMap).toList(),
       'seedVotes': options.seedBankVotes,
+      'priorDiscoveries': [
+        for (final d in mergedDiscoveries)
+          {'bank': d.bank, 'mask': d.mask, 'smsHits': d.smsHits},
+      ],
     });
-    discoveries.addAll(pass1.discoveries);
 
     final registry = AccountBankRegistry()..seedVotes(pass1.votes);
 
@@ -355,7 +367,7 @@ class SmsReaderService {
 
     return SmsInboxScanResult(
       hits: hits,
-      discoveredAccounts: mergeDiscoveries(discoveries).values.toList(),
+      discoveredAccounts: mergedDiscoveries,
     );
   }
 

@@ -28,16 +28,20 @@ abstract final class ProductPaymentLinker {
   static bool withinPairingWindow(DateTime a, DateTime b) =>
       a.difference(b).abs() <= pairingWindow;
 
+  static final _loanFundingHint = RegExp(
+    r'\b(?:emi|nach|loan)\b',
+    caseSensitive: false,
+  );
+
   /// True when [t] looks like a payment toward a loan/EMI product.
   static bool looksLikeLoanFundingPayment(Transaction t) {
     if (t.isCredit) return false;
     if (t.accountKind == AccountKind.loan) return true;
     if (t.category == SpendCategory.emi) return true;
     final m = t.merchant.toLowerCase();
-    return m.contains('mbk emi') ||
-        m.contains('emi') ||
-        m.contains('nach') ||
-        m.contains('loan');
+    if (m.contains('mbk emi')) return true;
+    // Word-bound: "Premium" / "Chemist" / "Panache" are not EMI (R2-3).
+    return _loanFundingHint.hasMatch(m);
   }
 
   /// True when [t] looks like a payment toward a credit-card product (CCBP etc.).

@@ -66,7 +66,7 @@ void main() {
         reason: 'accounts from the full scan must survive an empty incremental');
   });
 
-  test('merge accumulates counters for a re-seen account', () async {
+  test('merge does not re-add counters for a re-seen account (R2-6)', () async {
     final db = freshDb();
 
     await db.mergeDiscoveredAccounts([
@@ -78,8 +78,8 @@ void main() {
 
     final rows = await db.getDiscoveredAccounts();
     expect(rows.length, 1);
-    expect(rows.single.smsHits, 3);
-    expect(rows.single.spentTotal, 150);
+    expect(rows.single.smsHits, 2);
+    expect(rows.single.spentTotal, 100);
     expect(rows.single.receivedTotal, 900);
   });
 

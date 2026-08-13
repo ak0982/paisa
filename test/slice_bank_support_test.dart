@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:paisa_app/services/sms/account_discovery.dart';
 import 'package:paisa_app/services/sms/parsed_sms_transaction.dart';
+import 'package:paisa_app/services/sms/sms_parser.dart';
 import 'package:paisa_app/services/sms/sms_scan_pipeline.dart';
 import 'package:paisa_app/utils/bank_assets.dart';
 
@@ -118,6 +119,21 @@ void main() {
       final result = SmsScanPipeline.process(
         SmsMessageInput(
           id: '6',
+          sender: 'AX-SLCEIT-S',
+          body: body,
+          timestamp: DateTime(2026, 6, 4),
+        ),
+      );
+      expect(result.isParsed, isFalse);
+    });
+
+    test('failed UPI that will be retried is not a transaction (R2-8)', () {
+      const body =
+          'UPI Payment of Rs. 28,300 from a/c xx0856 on 04-Jun-26 to BELI DEVI has failed. Please retry - slice';
+      expect(SmsParser.isRealTransactionSms('AX-SLCEIT-S', body), isFalse);
+      final result = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: '6c',
           sender: 'AX-SLCEIT-S',
           body: body,
           timestamp: DateTime(2026, 6, 4),

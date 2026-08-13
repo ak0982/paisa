@@ -94,9 +94,12 @@ List<SmsParseHit> _parseCandidates(List<Map<String, dynamic>> candidates) {
 /// ISSUE-10: discovery + registry learning off the UI isolate.
 ///
 /// [payload] keys:
-///   - `allRows`: every SMS row (for AccountDiscovery)
+///   - `allRows`: SMS rows for AccountDiscovery (one batch; do not send the
+///     whole inbox — R2-5)
 ///   - `candidates`: bank-like candidates (for AccountBankRegistry.learn)
 ///   - `seedVotes` (optional): prior votes from stored transactions (ISSUE-12)
+///   - `priorDiscoveries` (optional): discoveries from earlier batches so
+///     registry seeding still runs before learn when discovery is chunked
 Future<Pass1IsolateResult> discoverAndLearnInIsolate(
   Map<String, dynamic> payload,
 ) {
@@ -117,6 +120,7 @@ Pass1IsolateResult _discoverAndLearn(Map<String, dynamic> payload) {
   final allRows = (payload['allRows'] as List).cast<Map>();
   final candidates = (payload['candidates'] as List).cast<Map>();
   final seedRaw = payload['seedVotes'];
+  final priorRaw = payload['priorDiscoveries'];
 
   final registry = AccountBankRegistry();
   if (seedRaw is Map) {
@@ -141,13 +145,28 @@ Pass1IsolateResult _discoverAndLearn(Map<String, dynamic> payload) {
     if (found != null) discoveries.add(found);
   }
 
+  final priorSeeds = <({String bank, String mask, int smsHits})>[];
+  if (priorRaw is List) {
+    for (final raw in priorRaw) {
+      if (raw is! Map) continue;
+      priorSeeds.add(
+        (
+          bank: raw['bank'] as String? ?? '',
+          mask: raw['mask'] as String? ?? '',
+          smsHits: (raw['smsHits'] as num?)?.toInt() ?? 1,
+        ),
+      );
+    }
+  }
+
   // Seed ownership from discoveries before learning from candidates so
   // beneficiary last-4s (e.g. Slice) beat ICICI relay senders.
-  registry.seedFromDiscoveries(
-    discoveries.map(
+  registry.seedFromDiscoveries([
+    ...priorSeeds,
+    ...discoveries.map(
       (d) => (bank: d.bank, mask: d.mask, smsHits: d.smsHits),
     ),
-  );
+  ]);
 
   for (final raw in candidates) {
     registry.learn(

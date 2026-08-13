@@ -87,5 +87,31 @@ void main() {
         SpendCategory.food,
       );
     });
+
+    test('SBI trf-to brand merchant stays food not transfer (R2-1)', () {
+      expect(
+        MerchantCategorizer.categorize(
+          merchant: 'SWIGGY',
+          smsBody:
+              'Dear UPI user A/C X0429 debited by 500.00 on date 04Jun26 '
+              'trf to SWIGGY Refno 726571152867',
+          isCredit: false,
+        ),
+        SpendCategory.food,
+      );
+    });
+
+    test('SBI trf-to CCBP stays transfer (R2-1 / ISSUE-13)', () {
+      expect(
+        MerchantCategorizer.categorize(
+          merchant: 'MBK CCBP',
+          smsBody:
+              'Dear UPI user A/C X0429 debited by 500.00 on date 04Jun26 '
+              'trf to MBK CCBP Refno 101568018632',
+          isCredit: false,
+        ),
+        SpendCategory.transfer,
+      );
+    });
   });
 }

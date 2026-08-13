@@ -10,7 +10,7 @@ import 'screens/onboarding/welcome_screen.dart';
 import 'theme/paisa_theme.dart';
 
 /// Bumped when the categorizer's rules change enough to need a rebuild.
-const int categorizerVersion = 4;
+const int categorizerVersion = 5;
 
 // transactionSchemaVersion — bump (with a changelog line) whenever a change
 // affects parsing, enrichment, discovery or classification, so existing installs
@@ -107,7 +107,18 @@ const int categorizerVersion = 4;
 // Kotak NACH accepts "debited from|to". Forces rescan so mis-bucketed rows rewrite.
 // Bumped 29 -> 30: product↔funding payment links for You drilldown (amount+time
 // pairing; UPI destination last-4 → unique loan). Forces rescan for dest remap.
-const int transactionSchemaVersion = 30;
+// Bumped 30 -> 31: R2 review — NACH kind/remap only from beneficiary clause
+// (not funding bank); loan-linker word boundaries; same-last4 fold skips
+// card/loan donors; incremental discovery merge no longer re-adds counters.
+// Bumped 31 -> 32: SBI UPI/CCBP amounts accept thousands commas; PNB loan
+// deposit SMS accepts optional "of" ("amount Rs" and "amount of Rs").
+// Bumped 32 -> 33: live-inbox parse gaps — HDFC Spent Rs On/From Bank Card
+// (CC vs debit-card BBPS), ICICI cashback + "your" CC refunds, SBI CC
+// reversal/cashback + e-mandate + UPI/IMPS/CBS credits, Kotak CC spend,
+// PNB bank charges, IDFC savings interest + CC thank-you payment,
+// ICICI "Account XX credited:Rs." CMS credits.
+// Debit-card "BLOCK DC" discoveries stay savings, not credit card.
+const int transactionSchemaVersion = 33;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -42,7 +42,7 @@ classifies each account, and surfaces spend/income summaries, budgets, insights 
 ### Commands
 ```bash
 flutter pub get                 # install dependencies
-flutter test                    # full suite (~500 focused tests + ~1500 account-matrix cases)
+flutter test                    # full suite (~500 focused tests + ~3000 account-matrix cases)
 flutter test test/foo_test.dart # run a single suite
 flutter analyze                 # static analysis / lints (flutter_lints)
 flutter run                     # run on a connected Android device / emulator
@@ -76,7 +76,7 @@ The user develops against **physical Android devices**. When operating on them:
 ### Directory pointers
 | Area | What lives there |
 | --- | --- |
-| `lib/main.dart` | App bootstrap, provider wiring, **schema-version gate** (`transactionSchemaVersion` **30** / `categorizerVersion` **4**). `store.init()` + launch scan run **after first frame** (ISSUE-7, fully done). |
+| `lib/main.dart` | App bootstrap, provider wiring, **schema-version gate** (`transactionSchemaVersion` **33** / `categorizerVersion` **5**). `store.init()` + launch scan run **after first frame** (ISSUE-7, fully done). |
 | `lib/screens/` | Bottom-nav tabs: HOME (`dashboard_screen.dart`), MOVES (`transactions_screen.dart`), BUDGET (`budgets_screen.dart`), STATS (`insights_screen.dart` + `reports_screen.dart`), YOU (`profile_screen.dart`). Drill-downs: `category_transactions_screen.dart`, `filtered_transactions_screen.dart` (incl. You-account lists). Onboarding + settings (privacy / help only — no notification toggles). `main_shell.dart` uses **lazy keep-alive** tabs. |
 | `lib/widgets/` | `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `paisa_bottom_nav.dart`, `category_spend_chip.dart` (Home chips + Stats/Reports sticker grid / rim arc / TOP·mid·LOW badges), buttons/progress bars, `bank_logo.dart`. |
 | `lib/providers/finance_store.dart` | Core store: txns + discoveries, analytics, `bankAccounts()` / `_ledgerAccountBuckets()` (**memoized**), `_AccountKindEvidence` keyed by `bank\|mask`, You rematch + loan association, user budget limits, launch-scan, **throttled** `scanProgressListenable`. |
@@ -92,8 +92,9 @@ The user develops against **physical Android devices**. When operating on them:
 | `test/fixtures/synthetic_sms_corpus.txt` | Synthetic SMS fixtures (no personal data) so gate coverage runs without the private dump. |
 | `docs/india_bank_sms_research.md` | RBI bank inventory, SMS taxonomy, public template notes, and parser expansion roadmap (research only). |
 | `tool/` | Standalone diagnostic scripts (audits, simulations) run against the SMS dump. **SMS analysis loop:** `import_sms_dump.dart` → `reparse_sms_analysis.dart` → `report_sms_gaps.dart` writes `~/Downloads/paisa_sms_analysis.db` + redacted `paisa_sms_gap_report.md` (both gitignored). |
-| `test/` | ~500 focused tests + ~1500-case account matrix (see §7). |
-| `code_review_by_fable_claude.md` | Fable/Claude code review that drove ISSUES 1–16 (historical evidence + proposed fixes). |
+| `test/` | ~500 focused tests + ~3000-case account matrix (see §7). |
+| `code_review_by_fable_claude.md` | Fable/Claude round-1 review that drove ISSUES 1–16 (historical evidence + proposed fixes). |
+| `code_review_round2_by_fable_claude.md` | Fable/Claude round-2 review (R2-1…R2-10). P0/P1 items are fixed in code; P2 nits documented in §5.3. |
 
 ### End-to-end SMS data flow
 ```
@@ -135,8 +136,8 @@ inboxes, with checkpointing (`sms_scan_state.dart`) for resume.
 
 `lib/main.dart` defines:
 
-- `const transactionSchemaVersion = **30**`
-- `const categorizerVersion = **4**`
+- `const transactionSchemaVersion = **33**`
+- `const categorizerVersion = **5**`
 
 On launch, if either stored value is lower than the code constant **and** onboarding is complete,
 `FinanceStore` schedules `fullRescanFromSms()` **after the first frame** (with progress UI) —
@@ -177,10 +178,13 @@ installs keep stale data and your change appears to "do nothing."
 | 27 → 28 | **Loan product association**: discover loan masks before linked savings; NACH/EMI remaps onto loan mask only when known (never issuer bank + funding mask); opening a loan lists associated EMI debits. |
 | 28 → 29 | **Multi-loan EMI**: never remap ambiguous MBK/generic EMI via funding bank; NACH mandate bank requires a **unique** loan at that bank; **Kotak NACH** accepts `debited from\|to`. |
 | 29 → 30 | **Product↔funding payment links** for You drilldown (amount+time pairing; **UPI dest last-4** → unique loan). If a product-side SMS already covers the same amount in-window, the funding debit stays on savings only — **no double-count**. |
+| 30 → 31 | **R2 review:** NACH kind/remap only from the beneficiary clause (not the funding bank); loan-linker word boundaries; same-last4 ownership fold skips card/loan donors; incremental discovery merge does not re-add counters. |
+| 31 → 32 | SBI UPI/CCBP amounts accept thousands commas; PNB loan-deposit SMS accepts optional `of`. |
+| 32 → 33 | Live-inbox parse gaps: HDFC Spent Rs On/From Bank Card (CC vs debit-card BBPS), ICICI cashback + "your" CC refunds, SBI CC reversal/cashback + e-mandate + UPI/IMPS/CBS credits, Kotak CC spend, PNB bank charges, IDFC savings interest + CC thank-you payment, ICICI CMS `Account XX credited:Rs.`. Debit-card `BLOCK DC` discoveries stay savings. |
 
-`categorizerVersion` remains **4** (rebuilds when categorizer rules change enough independently of
-schema). ISSUE-13's categorizer precision rode the schema bump 19 → 20 rather than a separate
-categorizer bump.
+`categorizerVersion` is **5** (R2-1: brand keywords beat generic SBI-style `trf to`, while
+BBPS/CCBP stay Transfer ahead of bills). ISSUE-13's categorizer precision rode the schema bump
+19 → 20 rather than a separate categorizer bump.
 
 ---
 
@@ -214,7 +218,8 @@ categorizer bump.
   one drilldown row). Ambiguous same amount/time across two products → link neither. Lookups
   go through O(n) `ProductPairingIndex`.
 - `merchant_categorizer.dart` — maps merchant text → spend category. Short keywords use **word
-  boundaries**; BBPS/CCBP debits classify as **transfer** before bills keywords (ISSUE-13).
+  boundaries**; BBPS/CCBP debits classify as **transfer** before bills keywords (ISSUE-13);
+  brand keywords beat generic `trf to` so SBI "trf to SWIGGY" stays food (R2-1).
 - `sms_parse_isolate.dart` — background-isolate entry: discovery + registry learning +
   `SmsScanPipeline.process` + parse (ISSUE-2 + ISSUE-10).
 
@@ -246,8 +251,9 @@ unambiguous SMS and corrects **misleading senders**. It is **seeded from stored 
 scan start (ISSUE-12) so incremental syncs do not start with an empty registry.
 
 **Discovered-account persistence:** incremental sync uses `TransactionDatabase.mergeDiscoveredAccounts`
-(upsert / accumulate hits). Destructive replace is reserved for `fullRescanFromSms` /
-`clearAll`. Do **not** reintroduce delete-all-then-insert on the incremental path (ISSUE-1).
+(upsert new keys; **do not re-add** `sms_hits`/totals on conflict — the 1h overlap would inflate
+counters, R2-6). Destructive replace is reserved for `fullRescanFromSms` / `clearAll`. Do **not**
+reintroduce delete-all-then-insert on the incremental path (ISSUE-1).
 
 ### 4.3 Cashflow KPIs vs lists (ISSUE-4)
 - Lists / Home rows still show **every** transaction (`countsTowardCashflowSummary => true`).
@@ -376,6 +382,23 @@ Source report: `code_review_by_fable_claude.md`. Fixes landed as discrete commit
 
 Review report commit: `6c0741d`.
 
+### 5.3 Fable round 2 (R2-1…R2-10) — Aug 2026
+
+Source: `code_review_round2_by_fable_claude.md` (on `main`). Do **not** re-introduce these.
+
+| ID | Verdict | Notes |
+| --- | --- | --- |
+| **R2-1** | Fixed | Brand keywords before generic `trf to`; CCBP/BBPS still Transfer first. `categorizerVersion` **5**. |
+| **R2-2** | Fixed | Bare NACH is not loan-kind; remap only when the bank token is in the **beneficiary** clause and that bank has a unique loan. |
+| **R2-3** | Fixed | Linker uses word-bound `emi`/`nach`/`loan`; LIC Premium / Chemist / Panache are not EMI. |
+| **R2-4** | Fixed | Same-last4 fold **skips card/loan donors**. Strong-bank *savings* relays (Slice+ICICI) still fold — that is the intended rematch. |
+| **R2-5** | Fixed | Pass-1 discovery is chunked per SMS batch; learn isolate gets candidates + prior discoveries, not the whole inbox. |
+| **R2-6** | Fixed | Incremental `mergeDiscoveredAccounts` does **not** re-add `sms_hits`/totals on conflict. |
+| **R2-7** | Intentional | 48h pairing window and ±₹0.015 stay tight to avoid false EMI covers. `transactionCount` counts **listed** rows (incl. internal legs); KPIs exclude them (ISSUE-4). |
+| **R2-8** | Intentional | Drop any `has failed` UPI alert (refunded **or** retry). Tightening to `refunded` only would ingest failed-retry SMS as spend. Tautology removed; behavior kept. |
+| **R2-9** | Mixed | Trailing-3-month budget seed: **fixed**. User-edit floor ₹100 vs suggestion floor ₹1,000: **intentional**. `formatCompactInr` is an alias of `formatInr` after paise unification. Hidden-mask drilldown mismatch is cosmetic (You list already hides those accounts). |
+| **R2-10** | Fixed | Order-sensitive R2-1 tests exist (`merchant_categorizer_test` + matrix). Schema bumps still land when parse/classify changes; batch when possible. |
+
 ---
 
 ## 6. Known issues / limitations / remaining work
@@ -410,7 +433,7 @@ Review report commit: `6c0741d`.
 ## 7. Testing / CI
 
 - **`flutter test`:** ~500 focused `test` / `testWidgets` plus
-  `account_integration_matrix_test.dart` (~1500 generated cases, suite asserts 1400–1700).
+  `account_integration_matrix_test.dart` (~3000 generated cases, suite asserts 2700–3300).
   `test/TEST_SCENARIOS.md` is a **historical** July 2026 catalog (~223) — do not treat its
   totals as current.
 - **CI:** `.github/workflows/flutter_ci.yml` runs `flutter analyze` + `flutter test` on push and

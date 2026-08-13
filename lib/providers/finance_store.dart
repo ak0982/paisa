@@ -223,10 +223,36 @@ class FinanceStore extends ChangeNotifier {
   /// Seeds a stored limit for every currently-active spend category that does
   /// not already have one. Called after sync so budgets become fixed user
   /// intent (editable) instead of a live function of this month's spend.
+  Set<SpendCategory> _recentSpendCategories() {
+    final out = <SpendCategory>{};
+    final anchor = currentMonth;
+    for (var i = 0; i <= 3; i++) {
+      final month = DateTime(anchor.year, anchor.month - i, 1);
+      final spent = _spendTxns(
+        _transactions
+            .where(
+              (t) =>
+                  t.timestamp.year == month.year &&
+                  t.timestamp.month == month.month,
+            )
+            .toList(),
+      );
+      for (final t in spent) {
+        if (t.category == SpendCategory.income ||
+            t.category == SpendCategory.transfer) {
+          continue;
+        }
+        out.add(t.category);
+      }
+    }
+    return out;
+  }
+
   Future<void> ensureDefaultBudgetsSeeded() async {
     final categories = {
       ...categorySpending.keys,
       ..._userBudgetLimits.keys,
+      ..._recentSpendCategories(),
     };
     var changed = false;
     for (final category in categories) {
@@ -1518,6 +1544,14 @@ class FinanceStore extends ChangeNotifier {
         if (key == ownerKey) continue;
         final donor = buckets[key];
         if (donor == null) continue;
+        // Last-4 collision with a savings discovery must not swallow a real
+        // card or loan (R2-4). Slice+ICICI *savings* relay still folds.
+        final donorKind =
+            donor.kind ?? kinds.kindFor(donor.majorityBank, donor.mask);
+        if (donorKind == AccountKind.creditCard ||
+            donorKind == AccountKind.loan) {
+          continue;
+        }
         for (final t in List<Transaction>.from(donor.txns)) {
           owner.add(
             t,

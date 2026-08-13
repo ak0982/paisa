@@ -26,6 +26,28 @@ void main() {
     expect(result.votes.containsKey('4321') || result.votes.containsKey('0429'), isTrue);
   });
 
+  test('priorDiscoveries seed registry before candidate learn (R2-5)', () async {
+    final result = await discoverAndLearnInIsolate({
+      'allRows': const <Map>[],
+      'candidates': [
+        {
+          'id': '1',
+          'sender': 'VM-ICICI-S',
+          'body':
+              'Account XXXXXXXX0856 has been credited with amount Rs.5000.00. '
+              'Info: LENDENCLUB BORROWER REPAYMENT.',
+          'timestampMs': DateTime(2026, 5, 1).millisecondsSinceEpoch,
+        },
+      ],
+      'seedVotes': const <String, Map<String, int>>{},
+      'priorDiscoveries': [
+        {'bank': 'Slice', 'mask': '••••0856', 'smsHits': 20},
+      ],
+    });
+
+    expect(result.votes['0856']?['Slice'], greaterThan(0));
+  });
+
   test('seedVotes preserves prior bank ownership across learn', () {
     final registry = AccountBankRegistry()
       ..seedVotes({

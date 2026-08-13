@@ -85,7 +85,21 @@ void main() {
           lower.contains('nach-10-') && lower.contains('debited');
       if (isNachDebit) {
         nachDebits++;
-        if (kind != AccountKind.loan) nachLoanMissed++;
+        // R2-2: only NACH that remaps onto a discovered loan must be loan-kind.
+        final display = TransactionEnrichment.resolveLoanDisplay(
+          body: msg.body,
+          parsedBank: parsed.bank,
+          parsedMask: mask,
+          discoveries: discoveries,
+        );
+        final remappedToLoan = discoveries.any(
+          (d) =>
+              d.kind == AccountKind.loan &&
+              d.mask.isNotEmpty &&
+              d.mask == display.mask &&
+              d.bank.toLowerCase() == display.bank.toLowerCase(),
+        );
+        if (remappedToLoan && kind != AccountKind.loan) nachLoanMissed++;
       }
 
       if (kind == AccountKind.loan) loanKind++;
@@ -109,10 +123,12 @@ void main() {
     for (final s in emiSavingsSamples) print('  emi+savings: $s');
 
     expect(nachLoanMissed, 0,
-        reason: 'NACH EMI debits should be classified as loan');
+        reason: 'NACH remapped onto a discovered loan must be loan-kind');
     expect(unparsedLoanSms.length, 0,
         reason: 'PNB and other loan payment SMS should parse');
-    expect(loanKind, greaterThan(60),
-        reason: 'Should detect HDFC+ICICI EMIs and PNB loan payments');
+    // R2-2: bare NACH/SIP is not loan-kind, so this is no longer 60+ NACH rows.
+    // Floor covers PNB loan deposits + remapped EMI/NACH product payments.
+    expect(loanKind, greaterThan(20),
+        reason: 'Should detect PNB loan payments and remapped EMI/NACH');
   });
 }

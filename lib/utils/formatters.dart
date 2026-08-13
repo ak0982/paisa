@@ -13,6 +13,8 @@ String formatAmount(double amount, {required bool isCredit}) {
   return isCredit ? '+$formatted' : '−$formatted';
 }
 
+/// Alias of [formatInr] after the paise unification (R2-9). Callers that
+/// historically expected a compact/rounded string now get full 2-dp INR.
 String formatCompactInr(double amount) => formatInr(amount);
 
 /// Formats a 0–1 spend share for category sticker badges.

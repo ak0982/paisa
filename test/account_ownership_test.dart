@@ -146,6 +146,62 @@ void main() {
           store.bankAccounts().where((a) => a.mask == '••••1234').toList();
       expect(matching.length, 2);
     });
+
+    test('Slice savings + HDFC card same last-4 stay two accounts (R2-4)', () {
+      final store = FinanceStore()
+        ..seedDiscoveredAccounts([
+          const DiscoveredAccount(
+            bank: 'Slice',
+            mask: '••••1234',
+            kind: AccountKind.savings,
+            smsHits: 20,
+          ),
+        ])
+        ..seedTransactions([
+          Transaction(
+            id: 'slice1',
+            smsId: 'slice1',
+            merchant: 'Crew',
+            bank: 'Slice',
+            maskedAccount: '••••1234',
+            category: SpendCategory.food,
+            amount: 200,
+            isCredit: false,
+            timestamp: DateTime(2026, 5, 18),
+            accountKind: AccountKind.savings,
+          ),
+          Transaction(
+            id: 'cc1',
+            smsId: 'cc1',
+            merchant: 'Amazon',
+            bank: 'HDFC',
+            maskedAccount: '••••1234',
+            category: SpendCategory.shopping,
+            amount: 1500,
+            isCredit: false,
+            timestamp: DateTime(2026, 5, 19),
+            accountKind: AccountKind.creditCard,
+          ),
+        ]);
+
+      final matching =
+          store.bankAccounts().where((a) => a.mask == '••••1234').toList();
+      expect(matching.length, 2);
+      expect(matching.map((a) => a.kind).toSet(), {
+        AccountKind.savings,
+        AccountKind.creditCard,
+      });
+      final slice = matching.firstWhere((a) => a.bank == 'Slice');
+      final card = matching.firstWhere((a) => a.bank == 'HDFC');
+      expect(
+        store.transactionsForAccount(evidenceKey: slice.evidenceKey).map((t) => t.id),
+        ['slice1'],
+      );
+      expect(
+        store.transactionsForAccount(evidenceKey: card.evidenceKey).map((t) => t.id),
+        ['cc1'],
+      );
+    });
   });
 
   group('CCBP funding', () {

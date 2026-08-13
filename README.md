@@ -165,15 +165,15 @@ End-to-end flow: **raw SMS → filters → parse → enrich → discover → sto
 `main.dart` currently ships:
 
 ```dart
-const categorizerVersion = 4;
-const transactionSchemaVersion = 30;
+const categorizerVersion = 5;
+const transactionSchemaVersion = 33;
 ```
 
 If a stored stamp is lower **and** onboarding is complete, `FinanceStore` runs `fullRescanFromSms()` **after the first frame** (progress UI). **`store.init()` is also deferred** so the splash is never blocked on DB or SMS work. Fresh installs use onboarding’s own scan. Version stamps are written only after a successful rescan.
 
 Bump `transactionSchemaVersion` (with a changelog comment in `main.dart`) when parsing, enrichment, discovery, or classification changes. **Do not bump** for UI/perf-only work (lazy tabs, memoized account buckets, pairing index, throttled scan progress).
 
-Current schema **30** includes (among earlier ISSUE-1…14 / HSBC / Slice work): You-account drilldown + bank-alias canonicalize; ownership rematch; loan association; multi-loan “no funding-bank guess”; Kotak NACH `from|to`; product↔funding EMI links without double-counting; UPI dest last-4 → unique loan. Full table: [`AGENTS.md`](AGENTS.md).
+Current schema **33** includes (among earlier ISSUE-1…14 / HSBC / Slice work): You-account drilldown + bank-alias canonicalize; ownership rematch; loan association; multi-loan “no funding-bank guess”; Kotak NACH `from|to`; product↔funding EMI links without double-counting; UPI dest last-4 → unique loan; R2 NACH beneficiary-only remap + fold/linker/discovery-merge fixes; SBI UPI comma amounts + PNB optional `of`; live-inbox parse gaps (HDFC On/From card, ICICI cashback/CMS, SBI e-mandate/reversals, Kotak CC, PNB charges, IDFC interest). Full table: [`AGENTS.md`](AGENTS.md).
 
 ---
 
@@ -245,7 +245,7 @@ For display, memoized `bankAccounts()` / `_ledgerAccountBuckets()` group by cano
 - **Sender-first bank resolution.** Bank is resolved from the sender ID first, then the body, with `AccountBankRegistry` learning bank‑per‑mask across the inbox to correct misleading senders (e.g. ICICI relaying credits into another bank's account, LenDenClub settlements).
 - **Promo / scam filtering.** `SmsParser` + `BankPromoFilters` drop marketing ("pre‑approved", "apply now", "SmartEMI", "YONO offer", …) and obfuscated scams ("L0AN", "Appr0ve", fake wallet credits), while a completed‑transaction signal overrides the promo filter so real alerts with offer‑like wording still parse.
 - **Two-pass isolate scan.** Pass 1 collects candidates, learns bank ownership, and runs account discovery; pass 2 parses candidates in a **background isolate** (`sms_parse_isolate.dart`) so the UI stays responsive on large inboxes, with checkpointing for resumability.
-- **Schema versioning.** `transactionSchemaVersion` **30** / `categorizerVersion` **4** in `main.dart` force a full wipe‑and‑rebuild when **parse/classify** logic changes (see above). Perf/UI changes do not bump the schema.
+- **Schema versioning.** `transactionSchemaVersion` **33** / `categorizerVersion` **5** in `main.dart` force a full wipe‑and‑rebuild when **parse/classify** logic changes (see above). Perf/UI changes do not bump the schema.
 - **Shared sorting/formatting.** All lists sort and group through `transaction_sort.dart`. All INR uses `formatInr` (`decimalDigits: 2`). Stats share badges use `formatSharePercent`.
 - **Home lists vs KPIs.** Lists still show **every** cash movement (`countsTowardCashflowSummary`). Headline spend/income use `countsTowardSpend` / `countsTowardIncome` plus transfer pairing, so CCBP / self-transfers do not inflate the hero numbers.
 - **Launch performance.** Lazy keep-alive tabs; memoized You-account buckets; O(n) product-pairing index; non-blocking `init()` after first frame; throttled scan-progress listenable.
@@ -296,7 +296,7 @@ Declared in `android/app/src/main/AndroidManifest.xml` and requested at runtime 
 
 ## Testing
 
-`flutter test` runs ~500 focused unit/widget tests plus a **~1500-case** You-account integration matrix:
+`flutter test` runs ~500 focused unit/widget tests plus a **~3000-case** You-account integration matrix:
 
 ```bash
 flutter test              # run the whole suite
@@ -305,7 +305,7 @@ flutter test test/account_kind_classification_test.dart   # a single file
 
 Key test areas include:
 
-- **You accounts / loans / ownership** — `account_integration_matrix_test.dart` (~1500 cases), `loan_account_association_test.dart`, `account_ownership_test.dart`, `account_transactions_test.dart`, `product_payment_linker_test.dart`, `ledger_bucket_cache_test.dart`.
+- **You accounts / loans / ownership** — `account_integration_matrix_test.dart` (~3000 cases), `loan_account_association_test.dart`, `account_ownership_test.dart`, `account_transactions_test.dart`, `product_payment_linker_test.dart`, `ledger_bucket_cache_test.dart`.
 - **Account-kind classification** — `account_kind_classification_test.dart`, `audit_credit_cards_test.dart`, `audit_loans_test.dart`, `audit_summary_test.dart`.
 - **Savings coverage** — `savings_coverage_diagnostic_test.dart`, `account_discovery_test.dart`, `account_bank_registry_test.dart`.
 - **SMS parsing & pipeline** — `sms_parser_test.dart`, `sms_scan_pipeline_test.dart`, `sms_parse_isolate_test.dart`, `sms_keyword_lists_test.dart`, `transaction_enrichment_test.dart`, `merchant_categorizer_test.dart`, `transaction_validity_test.dart`.
@@ -323,7 +323,7 @@ Test helpers live in `test/helpers/` (`test_harness.dart`, `dummy_data.dart`). D
 ```
 paisa_app/
 ├── lib/
-│   ├── main.dart                       # Entry point, providers, schema 30 + deferred init
+│   ├── main.dart                       # Entry point, providers, schema 31 + deferred init
 │   ├── data/
 │   │   ├── transaction_database.dart   # sqflite persistence (dedupe by SMS id)
 │   │   ├── sms_scan_state.dart         # scan checkpoint / full-scan flag
@@ -367,7 +367,7 @@ paisa_app/
 │   ├── widgets/                        # nav, rows, lists, stickers, sort, bars
 │   ├── theme/                          # colors + typography (Sora / Manrope)
 │   └── utils/formatters.dart           # ₹ (2 decimals) + share % + dates
-├── test/                               # ~500 focused tests + ~1500 account-matrix cases
+├── test/                               # ~500 focused tests + ~3000 account-matrix cases
 ├── android/                            # Android host (READ_SMS)
 ├── assets/                             # fonts + app icon
 └── pubspec.yaml

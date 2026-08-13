@@ -41,12 +41,29 @@ abstract final class TransactionEnrichment {
 
     // Loan payments often debit a savings account via NACH — detect from SMS body
     // before falling back to the debited account's discovered type.
+    // Bare NACH/ACH is not enough (R2-2): SIPs and insurance use the same rail.
     if (looksLikeLoanPayment(lower)) return AccountKind.loan;
     if (looksLikeTransferToDiscoveredLoan(
       body: body,
       discoveries: discoveries,
     )) {
       return AccountKind.loan;
+    }
+    if (_looksLikeNachMandate(lower)) {
+      final display = resolveLoanDisplay(
+        body: body,
+        parsedBank: bank,
+        parsedMask: mask,
+        discoveries: discoveries,
+      );
+      final remappedToLoan = discoveries.any(
+        (d) =>
+            d.kind == AccountKind.loan &&
+            d.mask.isNotEmpty &&
+            d.mask == display.mask &&
+            d.bank.toLowerCase() == display.bank.toLowerCase(),
+      );
+      if (remappedToLoan) return AccountKind.loan;
     }
 
     if (looksLikeCreditCardTransaction(lower)) return AccountKind.creditCard;
@@ -177,6 +194,27 @@ abstract final class TransactionEnrichment {
     if (lower.contains('reversal') && lower.contains('credit card')) {
       return true;
     }
+    if (lower.contains('e-mandate') && lower.contains('credit card')) {
+      return true;
+    }
+    if (lower.contains('debited to') && lower.contains('credit card')) {
+      return true;
+    }
+    if (RegExp(
+      r'spent on kotak credit card',
+      caseSensitive: false,
+    ).hasMatch(lower)) {
+      return true;
+    }
+    // HDFC "Spent Rs.X On HDFC Bank Card 1949 … BLOCK CC" is on-card spend.
+    // "From HDFC Bank Card … BLOCK DC" is a debit-card / savings spend.
+    if (RegExp(
+      r'spent\s+rs\.?.{0,30}on\s+\w+\s+bank\s+card',
+      caseSensitive: false,
+    ).hasMatch(lower) &&
+        !RegExp(r'\bblock\s+dc\b', caseSensitive: false).hasMatch(lower)) {
+      return true;
+    }
 
     return false;
   }
@@ -255,10 +293,48 @@ abstract final class TransactionEnrichment {
   }
 
   static bool categoryLooksLikeEmi(String lower) {
+    // Explicit EMI/product wording only. Bare NACH/ACH is a collection rail
+    // shared with SIPs and insurance — those stay savings (R2-2).
+    return lower.contains('emi of') ||
+        lower.contains('emi due') ||
+        lower.contains('emi reminder');
+  }
+
+  static bool _looksLikeNachMandate(String lower) {
     return lower.contains('nach-') ||
         lower.contains('towards nach') ||
-        lower.contains('emi of') ||
         lower.contains('tp ach');
+  }
+
+  /// True when [bankToken] appears in the NACH/ACH *beneficiary* clause,
+  /// not merely as the funding bank ("debited from HDFC Bank A/c").
+  static bool _nachBeneficiaryMentionsBank(String lower, String bankToken) {
+    final b = bankToken.toLowerCase();
+    if (b.isEmpty) return false;
+    final escaped = RegExp.escape(b);
+    // NACH-10-HDFC / NACH HDFC / NACH-10-TP ACH ICICI
+    if (RegExp(
+      'nach[\\s-]+(?:\\d+[\\s-]+)?(?:tp\\s*ach\\s+)?$escaped',
+      caseSensitive: false,
+    ).hasMatch(lower)) {
+      return true;
+    }
+    if (b == 'icici' && lower.contains('tp ach icici')) return true;
+    if (b == 'hdfc' &&
+        RegExp(
+          r'nach[\s-].{0,40}hdfc bank limited',
+          caseSensitive: false,
+        ).hasMatch(lower)) {
+      return true;
+    }
+    if (b == 'idfc' &&
+        RegExp(
+          r'nach[\s-].{0,40}idfc first bank',
+          caseSensitive: false,
+        ).hasMatch(lower)) {
+      return true;
+    }
+    return false;
   }
 
   /// When EMI is paid via NACH / UPI from a savings account, attach it to the
@@ -359,19 +435,15 @@ abstract final class TransactionEnrichment {
     }
 
     // NACH / ACH mandate beneficiary is a strong product-bank signal (not the
-    // funding bank). Only remap when that bank has exactly one loan mask.
-    if (lower.contains('nach-10-hdfc') ||
-        lower.contains('hdfc bank limited') ||
-        (lower.contains('nach') && lower.contains('hdfc'))) {
+    // funding bank). Only remap when that bank has exactly one loan mask, and
+    // only when the bank token sits in the beneficiary clause (R2-2).
+    if (_nachBeneficiaryMentionsBank(lower, 'hdfc')) {
       return remapToLoan(loanFor('hdfc')) ?? funding;
     }
-    if (lower.contains('tp ach icici') ||
-        lower.contains('nach-10-tp ach icici') ||
-        (lower.contains('nach') && lower.contains('icici'))) {
+    if (_nachBeneficiaryMentionsBank(lower, 'icici')) {
       return remapToLoan(loanFor('icici')) ?? funding;
     }
-    if (lower.contains('idfc first bank') ||
-        (lower.contains('nach') && lower.contains('idfc'))) {
+    if (_nachBeneficiaryMentionsBank(lower, 'idfc')) {
       return remapToLoan(loanFor('idfc')) ?? funding;
     }
 

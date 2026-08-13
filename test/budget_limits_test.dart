@@ -114,6 +114,20 @@ void main() {
     expect(budget.limit, isNot(26000));
   });
 
+  test('seeds a budget for a category spent only in prior months (R2-9)', () async {
+    final db = freshDb();
+    final store = freshStore(db);
+    await store.init();
+
+    store.seedTransactions([
+      food(id: 'h1', amount: 2000, at: lastMonth),
+    ]);
+
+    await store.ensureDefaultBudgetsSeeded();
+    expect(store.userBudgetLimit(SpendCategory.food), isNotNull);
+    expect(store.userBudgetLimit(SpendCategory.food), greaterThanOrEqualTo(1000));
+  });
+
   test('category_budgets table survives reload', () async {
     final path = '${tmp.path}/paisa_persist.db';
     final db1 = TransactionDatabase.forTesting(path);

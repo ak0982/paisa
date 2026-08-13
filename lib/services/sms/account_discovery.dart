@@ -81,7 +81,8 @@ class AccountDiscovery {
       ),
       bankFromMatch: (_, __, ___) => 'Axis',
     ),
-    // "spent on Axis Bank Card XX8341 at …"
+    // "spent on Axis Bank Card XX8341 at …" / "On HDFC Bank Card 1949"
+    // Debit-card "From … Bank Card … BLOCK DC" is handled as savings first.
     _CardPattern(
       RegExp(
         r'(?:SBI|ICICI|Axis|HDFC|Kotak)\s+Bank\s+Card\s+(?:XX|xx|X)?(\d{4})\b',
@@ -214,6 +215,16 @@ class AccountDiscovery {
       bankFromMatch: _bankFromHsbcAcMask,
       kind: AccountKind.savings,
       last4FromLongMask: true,
+    ),
+    // HDFC/SBI debit card BBPS: "Spent Rs.X From HDFC Bank Card x3569 … BLOCK DC" / Bal Rs
+    // Must win over the CC "Bank Card" pattern so debit-card last-4 stay savings.
+    _CardPattern(
+      RegExp(
+        r'From\s+(?:HDFC|SBI|ICICI|Axis|Kotak)\s+Bank\s+Card\s+[xX*]*(\d{4})\b.*(?:\bBLOCK\s+DC\b|\bBal\s+Rs)',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromSavingsMatch,
+      kind: AccountKind.savings,
     ),
     _CardPattern(
       RegExp(

@@ -6,6 +6,54 @@ import 'package:paisa_app/services/sms/product_payment_linker.dart';
 
 void main() {
   group('ProductPaymentLinker', () {
+    Transaction debit({
+      required String id,
+      required String merchant,
+      SpendCategory category = SpendCategory.other,
+      AccountKind kind = AccountKind.savings,
+    }) =>
+        Transaction(
+          id: id,
+          merchant: merchant,
+          bank: 'HDFC',
+          maskedAccount: '••••5300',
+          category: category,
+          amount: 1000,
+          isCredit: false,
+          timestamp: DateTime(2026, 3, 1),
+          accountKind: kind,
+        );
+
+    test('LIC Premium is not a loan-funding payment (R2-3)', () {
+      expect(
+        ProductPaymentLinker.looksLikeLoanFundingPayment(
+          debit(id: 'lic', merchant: 'LIC Premium'),
+        ),
+        isFalse,
+      );
+      expect(
+        ProductPaymentLinker.looksLikeLoanFundingPayment(
+          debit(id: 'chem', merchant: 'Wellness Chemist'),
+        ),
+        isFalse,
+      );
+    });
+
+    test('MBK EMI and word-bound NACH still look like loan funding', () {
+      expect(
+        ProductPaymentLinker.looksLikeLoanFundingPayment(
+          debit(id: 'mbk', merchant: 'MBK EMI'),
+        ),
+        isTrue,
+      );
+      expect(
+        ProductPaymentLinker.looksLikeLoanFundingPayment(
+          debit(id: 'nach', merchant: 'NACH-10-HDFC BANK LIMITED'),
+        ),
+        isTrue,
+      );
+    });
+
     const loans = [
       DiscoveredAccount(
         bank: 'HDFC',
