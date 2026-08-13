@@ -3,6 +3,7 @@
 **Repo:** `ak0982/paisa` @ `main` (schema 30, commit `3b71892`) · **Date:** 13 Aug 2026
 **Scope:** the 32 commits since review commit `6c0741d` — all 16 ISSUE fixes, adversarial-QA fixes, Neo-Vault restyle, HSBC + Slice support, You-account drilldown/ownership/loan association (schema 25–30), paise display, and the launch-perf commit.
 **Method:** read the final state of every core file (`finance_store.dart` 2005 lines, `sms_parser.dart` 1326 lines, `transaction_enrichment.dart`, `product_payment_linker.dart`, `merchant_categorizer.dart`, `sms_parse_isolate.dart`, `sms_reader_service.dart`, `transaction_database.dart`, `main.dart`, `main_shell.dart`, `formatters.dart`, `SmsNativeFilter.kt`, `AndroidManifest.xml`) plus the `3b71892` patch. Line numbers refer to `main` at review time.
+**Verification pass (13 Aug):** every R2 finding below was re-checked against the code *and the test suite* before publication. Where the tests showed a behavior is intentional (e.g. non-brand "trf to" → transfer, `merchant_categorizer_test.dart:55–65`), the finding was narrowed to the genuinely untested/regressed case rather than reported wholesale. No finding here is speculative; each cites the exact lines that produce the behavior.
 
 ---
 
@@ -35,14 +36,16 @@ Also good: `canonicalizeBank` alias normalization, throttled progress notifier, 
 
 ## 2. New issues found in this round
 
-### R2-1 (P0) — Categorizer regression: every SBI-style "trf to" purchase becomes *Transfer*
+### R2-1 (P0) — Categorizer regression: brand merchants paid via SBI-style "trf to" wording become *Transfer*
 
-**Evidence.** ISSUE-13's reorder moved the transfer check **before** the brand-keyword loop: `merchant_categorizer.dart:256–260` (`_looksLikeTransfer` → `return transfer`) now runs before the rules loop at `:269–276`. `_looksLikeTransfer` returns true for any body matching `\btrf to\b` (`:171–173`). SBI's standard UPI debit template is literally *"Dear UPI user A/C X0429 debited by 500.00 on date … **trf to SWIGGY** Refno …"*.
+**Scope note (verified against the test suite, 13 Aug).** "trf to <non-brand payee>" → `transfer` is **intentional and tested** (`merchant_categorizer_test.dart:55–65`, Innofin Solution), and `kpi_exclusions_test.dart:65–68` guards that unpaired transfer debits still count as spend. This finding is specifically about **brand-keyword merchants** — that case has no test and regressed.
 
-**Effect.** Previously "trf to SWIGGY" hit the `swiggy` keyword first → `food`. Now it's `transfer` for **every** SBI UPI purchase (and any bank using "trf to" phrasing):
-- Category stickers/insights/reports lump this spend into Transfer.
+**Evidence.** ISSUE-13's reorder moved the transfer check **before** the brand-keyword loop: `merchant_categorizer.dart:256–260` (`_looksLikeTransfer` → `return transfer`) now runs before the rules loop at `:269–276`. `_looksLikeTransfer` returns true for any body matching `\btrf to\b` (`:171–173`). SBI's standard UPI debit template is literally *"Dear UPI user A/C X0429 debited by 500.00 on date … **trf to SWIGGY** Refno …"* (the exact template used throughout the repo's own tests). Under the pre-change order (rules loop first, transfer check after — verified in the round-1 snapshot), "trf to SWIGGY" hit the `swiggy` keyword → `food`; now the `trf to` rule wins → `transfer`. The only Swiggy categorizer test uses HDFC wording ("Sent Rs.486.00 … **to** Swiggy", `merchant_categorizer_test.dart:79–89`), which never contains "trf to" — so it passes while the SBI-wording case silently changed.
+
+**Effect** (for any brand merchant — Swiggy/Zomato/Amazon/Uber/IRCTC… — paid via a bank whose alert says "trf to"):
+- Category stickers/insights/reports lump this spend into Transfer instead of food/shopping/travel.
 - **Budgets ignore it entirely** — `budgets` excludes the transfer category (`finance_store.dart:1180–1182`), so an SBI-primary user's food/travel budgets read near-zero.
-- **KPI netting risk amplified:** `_selfTransferLegIds` selects transfer-categorised debits as pairing candidates (`finance_store.dart:1043–1047`). A genuine ₹500 "trf to SWIGGY" debit can now pair with any unrelated ₹500 credit that lands in another real bank account within 3 minutes → both legs silently excluded from spend/income. `transaction.dart:67–73`'s own comment warns exactly this class of wording is genuine spend.
+- **KPI netting risk widened:** `_selfTransferLegIds` selects transfer-categorised debits as pairing candidates (`finance_store.dart:1043–1047`). The adversarial guard (both legs must be distinct **real** bank\|mask) correctly blocks wallet/P2P credits, but a genuine third-party credit into your *other real bank account* (same amount, within 3 min) still falsely pairs with a "trf to SWIGGY" purchase → both legs excluded from spend/income. More debits carrying `transfer` category ⇒ more exposure.
 
 **Fix.** Run recognized-merchant checks before the generic `trf to` rule:
 ```dart
@@ -70,7 +73,7 @@ Two compounding problems for anyone with a discovered loan:
 
 ### R2-4 (P1) — Same-last4 discovery fold can swallow a different bank's credit card
 
-**Evidence.** The ownership fold (`finance_store.dart:1494–1533`): when ≥2 buckets share a mask and **exactly one savings discovery** exists for that mask, *every* bucket with that mask is folded into the savings owner and forced `owner.kind = savings` (`:1517–1532`). The filter constrains only the *discovery* side (savings, real bank) — it never checks the **donor** bucket's kind or bank strength. A user with Slice savings ••••1234 (discovered) and an HDFC credit card ••••1234 (transaction-classified, not discovered — discovery regexes miss many cards by design) has the card's rows absorbed into "Slice Savings", kind forced to savings.
+**Evidence.** The ownership fold (`finance_store.dart:1494–1533`): when **≥2 buckets** share a mask (both must have ledger rows; `byMask` is built from all buckets regardless of kind, `:1480–1490`) and **exactly one savings discovery** exists for that mask, *every* other bucket with that mask is folded into the savings owner and forced `owner.kind = savings` (`:1517–1532`). The filter constrains only the *discovery* side (savings kind, real bank) — it never checks the **donor** bucket's kind or bank strength. Concrete failure: Slice savings ••••1234 (discovered, with transactions) and an HDFC credit card ••••1234 (transaction-classified — discovery regexes miss many cards by design, which is why the transaction-vote path exists) → the card bucket's rows are absorbed into "Slice Savings", kind forced to savings.
 
 **Fix.** Skip donors whose resolved kind is card/loan, and require the donor's bank to be weak (`Bank`/empty/non-allowlist — the actual Slice-relay case this fold was built for) rather than folding strong-bank buckets. Add a test: Slice savings + HDFC CC sharing last-4 → two accounts survive.
 
@@ -88,7 +91,7 @@ Two compounding problems for anyone with a discovered loan:
 
 ### R2-7 (P2) — Pairing-window edges in the product↔funding linker
 
-- A loan/card ack SMS that arrives **> 48h** after the funding debit: the funding row is attached as an "orphan" now, and the ack row lands later → the product drilldown shows **both** (double-listed EMI). Consider re-running the link check on new data (it does recompute — but the funding row was only attached because no ack existed; once the ack arrives the recompute drops the funding row: verify with a test that late acks self-heal) and widen/window-match on EMI periodicity.
+- A loan/card ack SMS that arrives **> 48h** after the funding debit **double-lists the EMI permanently**: `withinPairingWindow` compares the two timestamps directly (`product_payment_linker.dart:28–29`), so an ack 72h later never "covers" the funding debit — buckets recompute on every build, but the cover check keeps failing, leaving the orphan-attached funding row *and* the ack row in the product drilldown. (Acks *within* 48h self-heal correctly on recompute.) Consider widening the window or matching on EMI periodicity.
 - `amountsClose` tolerance is ±₹0.015 — banks sometimes ack EMI minus charges (e.g. ₹1 mandate fee separately); consider per-kind tolerance.
 - `buildReport.transactionCount` counts internal legs that its own `spent`/`income` exclude (`finance_store.dart:770` vs `715–719`) — displayed counts won't reconcile with displayed totals.
 
