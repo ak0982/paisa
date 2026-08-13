@@ -52,12 +52,25 @@ class FinanceStore extends ChangeNotifier {
   DateTime? _lastSyncedAt;
   SmsScanProgress? _scanProgress;
   Future<ScanResult>? _activeSync;
+  Future<void>? _initFuture;
+
+  /// Progress-only ticks (throttled). Does not rebuild You/Moves/Stats data.
+  final _scanProgressTick = ChangeNotifier();
+
+  int? _lastProgressNotifyMs;
+  static const _progressThrottleMs = 200;
+
+  Map<String, _LedgerAccountBucket>? _cachedBuckets;
+  Set<String> _cachedBucketHidden = const {};
+  List<BankAccount>? _cachedAccounts;
+  Set<String> _cachedAccountHidden = const {};
 
   List<Transaction> get transactions => List.unmodifiable(_transactions);
   bool get isLoading => _loading;
   String? get error => _error;
   DateTime? get lastSyncedAt => _lastSyncedAt;
   SmsScanProgress? get scanProgress => _scanProgress;
+  Listenable get scanProgressListenable => _scanProgressTick;
   bool get hasSmsPermission => _hasSmsPermission;
   bool _hasSmsPermission = false;
 
@@ -65,15 +78,63 @@ class FinanceStore extends ChangeNotifier {
   bool get permissionPermanentlyDenied => _permissionPermanentlyDenied;
   bool _permissionPermanentlyDenied = false;
 
-  Future<void> init() async {
+  /// Show the existing loading UI on the first frame while [init] runs after
+  /// [runApp] (ISSUE-7: do not block the splash on DB/SMS work).
+  void prepareForDeferredInit() {
+    _loading = true;
+  }
+
+  Future<void> init() {
+    return _initFuture ??= _doInit();
+  }
+
+  Future<void> _doInit() async {
     _hasSmsPermission = await _smsReader.hasSmsPermission();
     _transactions = await _db.getAll();
     _discoveredAccounts = await _db.getDiscoveredAccounts();
     _userBudgetLimits = _parseBudgetLimits(await _db.getCategoryBudgets());
+    _invalidateLedgerCache();
     // Seed fixed limits for active categories that don't have one yet, so the
     // Budgets tab is usable before the next SMS sync (ISSUE-5).
     await ensureDefaultBudgetsSeeded();
+    _loading = false;
     notifyListeners();
+  }
+
+  Future<void> _awaitInit() async {
+    final pending = _initFuture;
+    if (pending != null) await pending;
+  }
+
+  @override
+  void dispose() {
+    _scanProgressTick.dispose();
+    super.dispose();
+  }
+
+  void _invalidateLedgerCache() {
+    _cachedBuckets = null;
+    _cachedAccounts = null;
+    _cachedBucketHidden = const {};
+    _cachedAccountHidden = const {};
+  }
+
+  static bool _sameHiddenMasks(Set<String> a, Set<String> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    return a.containsAll(b);
+  }
+
+  void _emitScanProgress(SmsScanProgress progress, {bool force = false}) {
+    _scanProgress = progress;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final shouldNotify = force ||
+        _lastProgressNotifyMs == null ||
+        progress.done ||
+        now - _lastProgressNotifyMs! >= _progressThrottleMs;
+    if (!shouldNotify) return;
+    _lastProgressNotifyMs = now;
+    _scanProgressTick.notifyListeners();
   }
 
   /// User-set monthly spend limits per category (ISSUE-5). A category present
@@ -191,6 +252,7 @@ class FinanceStore extends ChangeNotifier {
   @visibleForTesting
   void seedTransactions(List<Transaction> items) {
     _transactions = List.from(items);
+    _invalidateLedgerCache();
     notifyListeners();
   }
 
@@ -198,6 +260,7 @@ class FinanceStore extends ChangeNotifier {
   @visibleForTesting
   void seedDiscoveredAccounts(List<DiscoveredAccount> items) {
     _discoveredAccounts = List.from(items);
+    _invalidateLedgerCache();
     notifyListeners();
   }
 
@@ -213,6 +276,7 @@ class FinanceStore extends ChangeNotifier {
     _scanProgress = null;
     _error = null;
     _loading = false;
+    _invalidateLedgerCache();
     notifyListeners();
   }
 
@@ -222,7 +286,11 @@ class FinanceStore extends ChangeNotifier {
   /// to refresh repeatedly), the in-flight scan is returned instead of
   /// starting a second overlapping scan.
   Future<ScanResult> syncFromSms() {
-    return _activeSync ??= _runSync().whenComplete(() => _activeSync = null);
+    return _activeSync ??= () async {
+      await _awaitInit();
+      return _runSync();
+    }()
+        .whenComplete(() => _activeSync = null);
   }
 
   /// Builds last4→bank vote counts from already-stored transactions so an
@@ -327,6 +395,7 @@ class FinanceStore extends ChangeNotifier {
   /// Clears existing transactions first so phantom accounts from older parser
   /// versions cannot linger in Profile.
   Future<ScanResult> fullRescanFromSms() async {
+    await _awaitInit();
     _rescanSeedVotes = _mergeBankVotes(
       _bankVotesFromTransactions(_transactions),
       _bankVotesFromDiscoveries(_discoveredAccounts),
@@ -334,6 +403,7 @@ class FinanceStore extends ChangeNotifier {
     await _db.clearAll();
     _transactions = [];
     _discoveredAccounts = [];
+    _invalidateLedgerCache();
     await _db.resetScanState();
     return syncFromSms();
   }
@@ -341,6 +411,7 @@ class FinanceStore extends ChangeNotifier {
   Future<ScanResult> _runSync() async {
     _loading = true;
     _error = null;
+    _lastProgressNotifyMs = null;
     notifyListeners();
 
     try {
@@ -382,8 +453,10 @@ class FinanceStore extends ChangeNotifier {
       final scan = await _smsReader.scanInbox(
         options: scanOptions,
         onProgress: (progress) {
-          _scanProgress = progress;
-          notifyListeners();
+          _emitScanProgress(
+            progress,
+            force: progress.done || _lastProgressNotifyMs == null,
+          );
         },
         onCheckpoint: (offset) async {
           await _db.saveScanState(
@@ -397,6 +470,7 @@ class FinanceStore extends ChangeNotifier {
       // the table first, so this rebuilds the authoritative set. See ISSUE-1.
       await _db.mergeDiscoveredAccounts(scan.discoveredAccounts);
       _discoveredAccounts = await _db.getDiscoveredAccounts();
+      _invalidateLedgerCache();
       final lastProgress = _scanProgress;
       final existingSmsIds = await _db.getExistingSmsIds();
       final transactionsToSave = <Transaction>[];
@@ -506,12 +580,14 @@ class FinanceStore extends ChangeNotifier {
       );
 
       _transactions = await _db.getAll();
+      _invalidateLedgerCache();
       _lastSyncedAt = DateTime.now();
       // ISSUE-5: persist fixed category limits (from history) so they no longer
       // track the current month's spend. Existing user-set rows are left alone.
       await ensureDefaultBudgetsSeeded();
       _loading = false;
       _scanProgress = null;
+      _scanProgressTick.notifyListeners();
       notifyListeners();
 
       return ScanResult(
@@ -530,6 +606,7 @@ class FinanceStore extends ChangeNotifier {
       _error = friendlyScanError(e);
       _loading = false;
       _scanProgress = null;
+      _scanProgressTick.notifyListeners();
       notifyListeners();
       return ScanResult(
         newCount: 0,
@@ -1300,8 +1377,25 @@ class FinanceStore extends ChangeNotifier {
   Map<String, _LedgerAccountBucket> _ledgerAccountBuckets({
     Set<String> hiddenMasks = const {},
   }) {
+    if (_cachedBuckets != null &&
+        _sameHiddenMasks(_cachedBucketHidden, hiddenMasks)) {
+      return _cachedBuckets!;
+    }
+    final buckets = _computeLedgerAccountBuckets(hiddenMasks: hiddenMasks);
+    _cachedBuckets = buckets;
+    _cachedBucketHidden = Set<String>.from(hiddenMasks);
+    if (!_sameHiddenMasks(_cachedAccountHidden, hiddenMasks)) {
+      _cachedAccounts = null;
+    }
+    return buckets;
+  }
+
+  Map<String, _LedgerAccountBucket> _computeLedgerAccountBuckets({
+    required Set<String> hiddenMasks,
+  }) {
     final kinds = _AccountKindEvidence();
     final merged = mergeDiscoveries(_discoveredAccounts);
+    final pairingIndex = ProductPairingIndex(_transactions);
     for (final d in merged.values) {
       kinds.addDiscovery(d);
     }
@@ -1338,11 +1432,10 @@ class FinanceStore extends ChangeNotifier {
                   canonicalizeBank(loan.bank) &&
               t.maskedAccount == loan.mask;
           if (!onProduct &&
-              ProductPaymentLinker.productSideCoversFunding(
+              pairingIndex.productSideCoversFunding(
                 funding: t,
                 productBank: loan.bank,
                 productMask: loan.mask,
-                all: _transactions,
               )) {
             // fall through to funding-account assignment
           } else {
@@ -1512,12 +1605,15 @@ class FinanceStore extends ChangeNotifier {
     // Orphan funding EMI/CCBP under the product they paid (unique product, or
     // no covering product SMS). Identity stays on the funding account. When a
     // product ack already matches amount+time, funding stays on savings only.
-    _attachLinkedProductPayments(buckets);
+    _attachLinkedProductPayments(buckets, pairingIndex);
 
     return buckets;
   }
 
-  void _attachLinkedProductPayments(Map<String, _LedgerAccountBucket> buckets) {
+  void _attachLinkedProductPayments(
+    Map<String, _LedgerAccountBucket> buckets,
+    ProductPairingIndex pairingIndex,
+  ) {
     final discoveries = mergeDiscoveries(_discoveredAccounts).values;
     for (final entry in List<MapEntry<String, _LedgerAccountBucket>>.from(
       buckets.entries,
@@ -1534,6 +1630,7 @@ class FinanceStore extends ChangeNotifier {
         productKind: kind!,
         all: _transactions,
         discoveries: discoveries,
+        index: pairingIndex,
       );
       final existingIds = bucket.txns.map((t) => t.id).toSet();
       for (final t in linked) {
@@ -1557,6 +1654,17 @@ class FinanceStore extends ChangeNotifier {
   }
 
   List<BankAccount> bankAccounts({Set<String> hiddenMasks = const {}}) {
+    if (_cachedAccounts != null &&
+        _sameHiddenMasks(_cachedAccountHidden, hiddenMasks)) {
+      return _cachedAccounts!;
+    }
+    final accounts = _computeBankAccounts(hiddenMasks: hiddenMasks);
+    _cachedAccounts = accounts;
+    _cachedAccountHidden = Set<String>.from(hiddenMasks);
+    return accounts;
+  }
+
+  List<BankAccount> _computeBankAccounts({required Set<String> hiddenMasks}) {
     final accountsByKey = <String, BankAccount>{};
     final merged = mergeDiscoveries(_discoveredAccounts);
 

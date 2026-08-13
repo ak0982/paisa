@@ -450,10 +450,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
               ),
-              if (store.isLoading || store.scanProgress != null) ...[
-                const SizedBox(height: 16),
-                _ScanProgressCard(progress: store.scanProgress),
-              ],
+              ListenableBuilder(
+                listenable: store.scanProgressListenable,
+                builder: (context, _) {
+                  if (!store.isLoading && store.scanProgress == null) {
+                    return const SizedBox.shrink();
+                  }
+                  return Column(
+                    children: [
+                      const SizedBox(height: 16),
+                      _ScanProgressCard(progress: store.scanProgress),
+                    ],
+                  );
+                },
+              ),
               const SizedBox(height: 16),
               Center(
                 child: Text(

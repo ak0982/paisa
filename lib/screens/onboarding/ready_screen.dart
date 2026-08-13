@@ -30,9 +30,9 @@ class _ReadyScreenState extends State<ReadyScreen> {
 
   Future<void> _scan() async {
     final store = context.read<FinanceStore>();
-    store.addListener(_onStoreUpdate);
+    store.scanProgressListenable.addListener(_onStoreUpdate);
     final result = await store.syncFromSms();
-    store.removeListener(_onStoreUpdate);
+    store.scanProgressListenable.removeListener(_onStoreUpdate);
     if (!mounted) return;
     setState(() {
       _result = result;

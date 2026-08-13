@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../models/category_info.dart';
 import '../../models/transaction.dart';
 import 'account_discovery.dart';
@@ -59,6 +61,24 @@ abstract final class ProductPaymentLinker {
     required String productBank,
     required String productMask,
     required Iterable<Transaction> all,
+    ProductPairingIndex? index,
+  }) {
+    final idx = index ?? ProductPairingIndex(all);
+    return idx.productSideCoversFunding(
+      funding: funding,
+      productBank: productBank,
+      productMask: productMask,
+    );
+  }
+
+  /// Nested-scan reference used only to prove the amount+time index matches
+  /// the original `all.any` semantics.
+  @visibleForTesting
+  static bool productSideCoversFundingScan({
+    required Transaction funding,
+    required String productBank,
+    required String productMask,
+    required Iterable<Transaction> all,
   }) {
     return all.any(
       (a) =>
@@ -90,6 +110,58 @@ abstract final class ProductPaymentLinker {
     required AccountKind productKind,
     required List<Transaction> all,
     required Iterable<DiscoveredAccount> discoveries,
+    ProductPairingIndex? index,
+  }) {
+    return _linkedFundingTransactions(
+      productBank: productBank,
+      productMask: productMask,
+      productKind: productKind,
+      all: all,
+      discoveries: discoveries,
+      covers: (index ?? ProductPairingIndex(all)).productSideCoversFunding,
+    );
+  }
+
+  /// Nested-scan twin of [linkedFundingTransactions] for index parity tests.
+  @visibleForTesting
+  static List<Transaction> linkedFundingTransactionsScan({
+    required String productBank,
+    required String productMask,
+    required AccountKind productKind,
+    required List<Transaction> all,
+    required Iterable<DiscoveredAccount> discoveries,
+  }) {
+    return _linkedFundingTransactions(
+      productBank: productBank,
+      productMask: productMask,
+      productKind: productKind,
+      all: all,
+      discoveries: discoveries,
+      covers: ({
+        required Transaction funding,
+        required String productBank,
+        required String productMask,
+      }) =>
+          productSideCoversFundingScan(
+            funding: funding,
+            productBank: productBank,
+            productMask: productMask,
+            all: all,
+          ),
+    );
+  }
+
+  static List<Transaction> _linkedFundingTransactions({
+    required String productBank,
+    required String productMask,
+    required AccountKind productKind,
+    required List<Transaction> all,
+    required Iterable<DiscoveredAccount> discoveries,
+    required bool Function({
+      required Transaction funding,
+      required String productBank,
+      required String productMask,
+    }) covers,
   }) {
     if (productMask.isEmpty) return const [];
     if (productKind != AccountKind.loan &&
@@ -125,11 +197,10 @@ abstract final class ProductPaymentLinker {
       if (!isCandidate) continue;
 
       // Product-side SMS already represents this EMI/bill → savings only.
-      if (productSideCoversFunding(
+      if (covers(
         funding: t,
         productBank: productBank,
         productMask: productMask,
-        all: all,
       )) {
         continue;
       }
@@ -142,11 +213,10 @@ abstract final class ProductPaymentLinker {
             d.bank.toLowerCase() == productBank.toLowerCase()) {
           return false;
         }
-        return productSideCoversFunding(
+        return covers(
           funding: t,
           productBank: d.bank,
           productMask: d.mask,
-          all: all,
         );
       });
       if (ambiguous) continue;
@@ -160,5 +230,56 @@ abstract final class ProductPaymentLinker {
     }
 
     return out;
+  }
+}
+
+/// Amount (±0.015) + 48h window index for product↔funding pairing.
+///
+/// Lookups are equivalent to scanning every row with
+/// [ProductPaymentLinker.productSideCoversFundingScan].
+class ProductPairingIndex {
+  ProductPairingIndex(Iterable<Transaction> all) {
+    for (final t in all) {
+      if (t.maskedAccount.isEmpty) continue;
+      final cents = _cents(t.amount);
+      final key = _key(t.bank, t.maskedAccount, cents);
+      _byProductCents.putIfAbsent(key, () => []).add(t);
+    }
+  }
+
+  final Map<String, List<Transaction>> _byProductCents = {};
+
+  static int _cents(double amount) => (amount * 100).round();
+
+  static String _key(String bank, String mask, int cents) =>
+      '${bank.toLowerCase()}|$mask|$cents';
+
+  /// Cents buckets that can contain an amount within ±0.015 of [amount].
+  static Iterable<int> nearbyCents(double amount) {
+    final lo = ((amount - 0.015) * 100).floor() - 1;
+    final hi = ((amount + 0.015) * 100).ceil() + 1;
+    return [for (var c = lo; c <= hi; c++) c];
+  }
+
+  bool productSideCoversFunding({
+    required Transaction funding,
+    required String productBank,
+    required String productMask,
+  }) {
+    if (productMask.isEmpty) return false;
+    for (final cents in nearbyCents(funding.amount)) {
+      final hits = _byProductCents[_key(productBank, productMask, cents)];
+      if (hits == null) continue;
+      for (final a in hits) {
+        if (ProductPaymentLinker.amountsClose(a.amount, funding.amount) &&
+            ProductPaymentLinker.withinPairingWindow(
+              a.timestamp,
+              funding.timestamp,
+            )) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 }

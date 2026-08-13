@@ -6,6 +6,7 @@ import '../providers/finance_store.dart';
 import '../models/category_info.dart';
 import '../models/transaction.dart';
 import 'edit_profile_screen.dart';
+import 'category_transactions_screen.dart';
 import 'filtered_transactions_screen.dart';
 import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
@@ -249,6 +250,15 @@ class DashboardScreen extends StatelessWidget {
                           amount: chips[i].value,
                           rotate: true,
                           angle: i.isEven ? -0.035 : 0.035,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => CategoryTransactionsScreen(
+                                category: chips[i].key,
+                                range: store.currentMonthRange,
+                                periodLabel: store.currentMonthLabel,
+                              ),
+                            ),
+                          ),
                         );
                       },
                     ),
@@ -484,6 +494,13 @@ class _EmptyHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: store.scanProgressListenable,
+      builder: (context, _) => _buildHint(context),
+    );
+  }
+
+  Widget _buildHint(BuildContext context) {
     final scanning = store.isLoading;
     final denied = store.permissionPermanentlyDenied;
     final progress = store.scanProgress;

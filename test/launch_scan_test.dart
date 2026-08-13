@@ -10,8 +10,9 @@ import 'package:paisa_app/services/sms/sms_reader_service.dart';
 
 /// ISSUE-7: the schema-bump rescan must no longer block the splash before
 /// runApp. main() records the decision via [FinanceStore.configureLaunchScan]
-/// and the app shell runs it after the first frame with [runLaunchScan]. These
-/// tests verify that coordination:
+/// and, after the first frame, runs [FinanceStore.init] then [runLaunchScan].
+/// Onboarding still owns the first permission scan. These tests verify that
+/// coordination:
 ///   * a pending rescan wipes-and-rebuilds and persists the version stamps
 ///     exactly once (write-after-await), and
 ///   * with no pending rescan (or once satisfied by onboarding) it does a

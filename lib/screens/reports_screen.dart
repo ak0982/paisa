@@ -10,8 +10,8 @@ import '../providers/finance_store.dart';
 import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
+import '../widgets/category_spend_chip.dart';
 import '../widgets/grouped_transaction_list.dart';
-import '../widgets/paisa_progress_bar.dart';
 import '../widgets/transaction_sort_control.dart';
 import 'category_transactions_screen.dart';
 import 'filtered_transactions_screen.dart';
@@ -529,7 +529,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
   Widget _categorySection(RangeReport report, DateTimeRange range) {
     final entries = report.categorySpending.entries.toList();
     if (entries.isEmpty) return const SizedBox.shrink();
-    final maxSpend = entries.first.value.clamp(1, double.infinity);
     final periodLabel = _periodLabelForRange(range);
 
     return Column(
@@ -541,83 +540,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
           style: PaisaTheme.sora(size: 14, weight: FontWeight.w700),
         ),
         const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: PaisaColors.card,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: PaisaColors.dividerAlt),
-          ),
-          child: Column(
-            children: entries.map((entry) {
-              final info = CategoryInfo.forCategory(entry.key);
-              final share =
-                  report.spent > 0 ? entry.value / report.spent : 0.0;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 13),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => CategoryTransactionsScreen(
-                          category: entry.key,
-                          range: range,
-                          periodLabel: periodLabel,
-                        ),
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 2,
-                        horizontal: 2,
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  '${info.label}  ·  ${(share * 100).round()}%',
-                                  style: PaisaTheme.manrope(
-                                    size: 12,
-                                    weight: FontWeight.w600,
-                                    color: PaisaColors.ink,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                formatInr(entry.value),
-                                style: PaisaTheme.sora(
-                                  size: 12,
-                                  weight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(
-                                Icons.chevron_right_rounded,
-                                size: 18,
-                                color: PaisaColors.mutedCaption,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          PaisaProgressBar(
-                            progress: entry.value / maxSpend,
-                            color: info.iconColor,
-                            height: 8,
-                            trackColor: PaisaColors.divider,
-                            animate: false,
-                          ),
-                        ],
-                      ),
+        CategorySpendStickerGrid(
+          tiles: [
+            for (var i = 0; i < entries.length; i++)
+              CategorySpendTile(
+                category: entries[i].key,
+                amount: entries[i].value,
+                share: report.spent > 0
+                    ? (entries[i].value / report.spent).clamp(0.0, 1.0)
+                    : 0,
+                emphasize: i == 0,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => CategoryTransactionsScreen(
+                      category: entries[i].key,
+                      range: range,
+                      periodLabel: periodLabel,
                     ),
                   ),
                 ),
-              );
-            }).toList(),
-          ),
+              ),
+          ],
         ),
       ],
     );

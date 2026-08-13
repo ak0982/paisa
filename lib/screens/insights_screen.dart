@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/finance_store.dart';
-import '../models/category_info.dart';
 import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
-import '../widgets/paisa_progress_bar.dart';
+import '../widgets/category_spend_chip.dart';
 import 'category_transactions_screen.dart';
 import 'reports_screen.dart';
 
@@ -20,9 +19,6 @@ class InsightsScreen extends StatelessWidget {
         final spending = store.insightsCategorySpending;
         final sorted = spending.entries.toList()
           ..sort((a, b) => b.value.compareTo(a.value));
-        final maxSpend = sorted.isEmpty
-            ? 1.0
-            : sorted.first.value.clamp(1, double.infinity);
         final foodDelta = store.insightsFoodDelta();
         final hasTransactions = store.transactions.isNotEmpty;
         final showEmpty = !store.isLoading &&
@@ -213,79 +209,26 @@ class InsightsScreen extends StatelessWidget {
                     style: PaisaTheme.sora(size: 14, weight: FontWeight.w700),
                   ),
                   const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: PaisaColors.card,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: PaisaColors.dividerAlt),
-                    ),
-                    child: Column(
-                      children: sorted.map((entry) {
-                        final info = CategoryInfo.forCategory(entry.key);
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 13),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(10),
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute<void>(
-                                  builder: (_) => CategoryTransactionsScreen(
-                                    category: entry.key,
-                                  ),
-                                ),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 2,
-                                  horizontal: 2,
-                                ),
-                                child: Column(
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            info.label,
-                                            style: PaisaTheme.manrope(
-                                              size: 12,
-                                              weight: FontWeight.w600,
-                                              color: PaisaColors.ink,
-                                            ),
-                                          ),
-                                        ),
-                                        Text(
-                                          formatInr(entry.value),
-                                          style: PaisaTheme.sora(
-                                            size: 12,
-                                            weight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        const Icon(
-                                          Icons.chevron_right_rounded,
-                                          size: 18,
-                                          color: PaisaColors.mutedCaption,
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    PaisaProgressBar(
-                                      progress: entry.value / maxSpend,
-                                      color: info.iconColor,
-                                      height: 8,
-                                      trackColor: PaisaColors.divider,
-                                      animate: false,
-                                    ),
-                                  ],
-                                ),
+                  CategorySpendStickerGrid(
+                    tiles: [
+                      for (var i = 0; i < sorted.length; i++)
+                        CategorySpendTile(
+                          category: sorted[i].key,
+                          amount: sorted[i].value,
+                          share: store.insightsSpent > 0
+                              ? (sorted[i].value / store.insightsSpent)
+                                  .clamp(0.0, 1.0)
+                              : 0,
+                          emphasize: i == 0,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => CategoryTransactionsScreen(
+                                category: sorted[i].key,
                               ),
                             ),
                           ),
-                        );
-                      }).toList(),
-                    ),
+                        ),
+                    ],
                   ),
                 ],
                 if (foodDelta != null && foodDelta != 0) ...[

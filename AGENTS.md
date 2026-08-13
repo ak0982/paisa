@@ -42,7 +42,7 @@ classifies each account, and surfaces spend/income summaries, budgets, insights 
 ### Commands
 ```bash
 flutter pub get                 # install dependencies
-flutter test                    # run the full test suite (~378 tests)
+flutter test                    # full suite (~500 focused tests + ~1500 account-matrix cases)
 flutter test test/foo_test.dart # run a single suite
 flutter analyze                 # static analysis / lints (flutter_lints)
 flutter run                     # run on a connected Android device / emulator
@@ -52,12 +52,14 @@ dart run flutter_launcher_icons # regenerate launcher icons from assets/icon/app
 Some diagnostic scripts under `tool/` are standalone Dart programs run with `dart run tool/<name>.dart`; most read the SMS dump from `~/Downloads/my_sms.txt` (see §6/§7).
 
 ### Device / development constraints (IMPORTANT — respect these)
-The user develops against a **physical Android device**. When operating on it:
+The user develops against **physical Android devices**. When operating on them:
 - **NEVER uninstall the app, clear app data/caches, run `pm trim-caches`, or delete/move files
   on the device.** Do not manipulate device storage in any way.
 - `adb install -r` of the app's own APK **is fine** (reinstall/replace is allowed).
 - If a device **storage / space** issue occurs (e.g. `INSTALL_FAILED_INSUFFICIENT_STORAGE`),
   **STOP and tell the user** so they can free space themselves. Do not free space automatically.
+- Last known devices (optional context, do not hardcode into product logic): Redmi
+  `4453302c`, Samsung SM_G781B `RZCT40Z5TSN`.
 
 ### Conventions
 - State management: `provider` + `ChangeNotifier`. `FinanceStore` holds finance data + derived
@@ -74,15 +76,15 @@ The user develops against a **physical Android device**. When operating on it:
 ### Directory pointers
 | Area | What lives there |
 | --- | --- |
-| `lib/main.dart` | App bootstrap, provider wiring, **schema-version gate** (`transactionSchemaVersion` / `categorizerVersion`) that schedules a full re-scan **after** first frame (ISSUE-7). |
-| `lib/screens/` | UI screens: `dashboard_screen.dart` (Home), `transactions_screen.dart`, `insights_screen.dart`, `reports_screen.dart`, `profile_screen.dart`, `budgets_screen.dart`, drill-downs (`category_transactions_screen.dart`, `filtered_transactions_screen.dart`), onboarding (`screens/onboarding/`), settings (`screens/settings/`), `main_shell.dart` (bottom-nav shell). |
-| `lib/widgets/` | Reusable UI: `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `paisa_bottom_nav.dart`, chips/buttons/progress bars. |
-| `lib/providers/finance_store.dart` | The core store: holds transactions + discoveries, derives analytics, account classification (`bankAccounts()` + `_AccountKindEvidence` keyed by `bank\|mask`), user budget limits, launch-scan orchestration. |
+| `lib/main.dart` | App bootstrap, provider wiring, **schema-version gate** (`transactionSchemaVersion` **30** / `categorizerVersion` **4**). `store.init()` + launch scan run **after first frame** (ISSUE-7, fully done). |
+| `lib/screens/` | Bottom-nav tabs: HOME (`dashboard_screen.dart`), MOVES (`transactions_screen.dart`), BUDGET (`budgets_screen.dart`), STATS (`insights_screen.dart` + `reports_screen.dart`), YOU (`profile_screen.dart`). Drill-downs: `category_transactions_screen.dart`, `filtered_transactions_screen.dart` (incl. You-account lists). Onboarding + settings (privacy / help only — no notification toggles). `main_shell.dart` uses **lazy keep-alive** tabs. |
+| `lib/widgets/` | `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `paisa_bottom_nav.dart`, `category_spend_chip.dart` (Home chips + Stats/Reports sticker grid / rim arc / TOP·mid·LOW badges), buttons/progress bars, `bank_logo.dart`. |
+| `lib/providers/finance_store.dart` | Core store: txns + discoveries, analytics, `bankAccounts()` / `_ledgerAccountBuckets()` (**memoized**), `_AccountKindEvidence` keyed by `bank\|mask`, You rematch + loan association, user budget limits, launch-scan, **throttled** `scanProgressListenable`. |
 | `lib/providers/app_settings.dart` | Preferences (profile, merchant-masking, hidden accounts). **No notification toggles** (removed ISSUE-6). |
-| `lib/services/sms/` | The SMS ingestion pipeline (see §4). |
+| `lib/services/sms/` | SMS pipeline (see §4) plus `product_payment_linker.dart` (You drilldown product↔funding links, O(n) `ProductPairingIndex`). |
 | `lib/models/` | `transaction.dart`, `bank_account.dart`, `budget.dart`, `category_info.dart`, `range_report.dart`, `transaction_sort.dart`. |
 | `lib/data/` | `transaction_database.dart` (sqflite; `mergeDiscoveredAccounts`, `category_budgets` table), `sms_scan_state.dart` (checkpointing), `mock_data.dart`. |
-| `lib/utils/formatters.dart` | Currency + date/time formatting helpers. |
+| `lib/utils/formatters.dart` | INR (`decimalDigits: 2`, no whole-rupee roundoff), `formatSharePercent` (tiny Stats shares), date/time. |
 | `lib/theme/` | Colors + theme. |
 | `android/.../SmsNativeFilter.kt` | Native coarse thinner only (sender / length / OTP) — **not** the promo/scam gate. |
 | `android/.../MainActivity.kt` | Platform channel; SMS batch reads run on a **background executor** (ISSUE-10). |
@@ -90,7 +92,7 @@ The user develops against a **physical Android device**. When operating on it:
 | `test/fixtures/synthetic_sms_corpus.txt` | Synthetic SMS fixtures (no personal data) so gate coverage runs without the private dump. |
 | `docs/india_bank_sms_research.md` | RBI bank inventory, SMS taxonomy, public template notes, and parser expansion roadmap (research only). |
 | `tool/` | Standalone diagnostic scripts (audits, simulations) run against the SMS dump. **SMS analysis loop:** `import_sms_dump.dart` → `reparse_sms_analysis.dart` → `report_sms_gaps.dart` writes `~/Downloads/paisa_sms_analysis.db` + redacted `paisa_sms_gap_report.md` (both gitignored). |
-| `test/` | ~378 tests (see §7). |
+| `test/` | ~500 focused tests + ~1500-case account matrix (see §7). |
 | `code_review_by_fable_claude.md` | Fable/Claude code review that drove ISSUES 1–16 (historical evidence + proposed fixes). |
 
 ### End-to-end SMS data flow
@@ -133,13 +135,19 @@ inboxes, with checkpointing (`sms_scan_state.dart`) for resume.
 
 `lib/main.dart` defines:
 
-- `const transactionSchemaVersion = **28**`
+- `const transactionSchemaVersion = **30**`
 - `const categorizerVersion = **4**`
 
 On launch, if either stored value is lower than the code constant **and** onboarding is complete,
 `FinanceStore` schedules `fullRescanFromSms()` **after the first frame** (with progress UI) —
-not before `runApp` (ISSUE-7). Fresh installs flow through onboarding's own scan. Version stamps
-are written only after the rescan completes so a killed rescan retries.
+not before `runApp`. **`store.init()` is also deferred** (`prepareForDeferredInit()` +
+`addPostFrameCallback`); it must not block the splash (ISSUE-7, fully done). Fresh installs
+flow through onboarding's own scan. Version stamps are written only after the rescan completes
+so a killed rescan retries.
+
+**Perf-only changes (lazy tabs, memoized `bankAccounts` / `_ledgerAccountBuckets`, O(n)
+pairing index, throttled scan-progress listenable) must NOT bump the schema.** They do not
+change stored parse/classify results.
 
 **Whenever you change parsing, enrichment, discovery, or classification logic, BUMP
 `transactionSchemaVersion`** (add a changelog comment like the existing ones). Otherwise existing
@@ -164,6 +172,11 @@ installs keep stale data and your change appears to "do nothing."
 | 22 → 23 | **HSBC India:** sender/body mapping (`HSBCIN` / `HSBC*`), savings + debit-card + CC parse/discovery, `_realBanks` + logo. |
 | 23 → 24 | **Evidence from offline SMS analysis DB** (fresh dump → `~/Downloads/paisa_sms_analysis.db`): live HSBC `creditcard … used at … for INR` signal+parse; ICICI USD spends + CC refunds; Axis cashback; bill/EMI due reminders demoted from txn noise. |
 | 24 → 25 | **Slice Small Finance Bank** (SLCEIT / SLCBNK): UPI send/receive, IMPS, AutoPay, CC spend; failed-refunded UPI ignored; discovery + logo. |
+| 25 → 26 | You **account drilldown**: canonicalize bank aliases (BOB→Bank of Baroda); keep CCBP on the **funding** account (no remap to card); attach unambiguous same-bank maskless orphans. |
+| 26 → 27 | Account-owning bank vs SMS sender: registry learns Slice, does not learn from ICICI settlements; seeds votes from discoveries + pre-rescan ownership; You buckets **rematch** `Bank`/wrong-bank same last-4 into the unique real owner. |
+| 27 → 28 | **Loan product association**: discover loan masks before linked savings; NACH/EMI remaps onto loan mask only when known (never issuer bank + funding mask); opening a loan lists associated EMI debits. |
+| 28 → 29 | **Multi-loan EMI**: never remap ambiguous MBK/generic EMI via funding bank; NACH mandate bank requires a **unique** loan at that bank; **Kotak NACH** accepts `debited from\|to`. |
+| 29 → 30 | **Product↔funding payment links** for You drilldown (amount+time pairing; **UPI dest last-4** → unique loan). If a product-side SMS already covers the same amount in-window, the funding debit stays on savings only — **no double-count**. |
 
 `categorizerVersion` remains **4** (rebuilds when categorizer rules change enough independently of
 schema). ISSUE-13's categorizer precision rode the schema bump 19 → 20 rather than a separate
@@ -192,7 +205,14 @@ categorizer bump.
   schemes, available-balance phrases, and light normalization helpers.
 - `transaction_enrichment.dart` — resolves the account **kind**, the correct display bank/mask
   for credit-card rows (incl. **CCBP bill payments**) and loan rows (NACH/EMI), and improves
-  merchant text. No personal NACH→product-name hardcoding (ISSUE-13).
+  merchant text. No personal NACH→product-name hardcoding (ISSUE-13). Multi-loan: never guess
+  the product from the **funding bank**; UPI/NEFT dest last-4 remaps only when that mask is a
+  **unique** discovered loan; Kotak NACH parse accepts `debited from|to`.
+- `product_payment_linker.dart` — You-section **product↔funding** links without rewriting
+  identity via the funding bank. Amount (±0.015) + 48h window; if a product ack already covers
+  the funding debit, **do not** also list the funding row on the loan/card (one economic EMI →
+  one drilldown row). Ambiguous same amount/time across two products → link neither. Lookups
+  go through O(n) `ProductPairingIndex`.
 - `merchant_categorizer.dart` — maps merchant text → spend category. Short keywords use **word
   boundaries**; BBPS/CCBP debits classify as **transfer** before bills keywords (ISSUE-13).
 - `sms_parse_isolate.dart` — background-isolate entry: discovery + registry learning +
@@ -256,14 +276,57 @@ impossible). Limits are seeded once from historical spend suggestion, then owned
   rails, and a large UPI-handle allowlist in `sms_keyword_lists.dart`).
 - **Lending / other:** LenDenClub (P2P).
 
-### 4.6 Sorting & date formatting
+### 4.6 Sorting, INR, and share percents
 - `lib/models/transaction_sort.dart` — `TransactionSort { dateDesc, dateAsc, amountDesc,
   amountAsc }`; default is **`dateDesc` (newest first)**. `sortTransactions()` and
   `buildTransactionSections()` are shared by every list; date sorts group by day with headers,
   amount sorts produce a flat list. `dayGroupLabel()` renders headers like `TODAY · 12 JUL 2025`
   (**year always included**).
-- `lib/utils/formatters.dart` — `formatInr`, `formatAmount` (signed), `formatTxnDate`
-  (`d MMM yyyy`, **year included**), `formatTxnTime` (`HH:mm`).
+- `lib/utils/formatters.dart` — `NumberFormat.currency(locale: 'en_IN', symbol: '₹',
+  **decimalDigits: 2**)` so `formatInr` / `formatAmount` always show paise (₹0.85 stays 0.85,
+  not a whole-rupee roundoff). `formatTxnDate` (`d MMM yyyy`), `formatTxnTime` (`HH:mm`).
+  `formatSharePercent` formats 0–1 shares for Stats/Reports badges: `32%` / `0.4%` / `0.03%` /
+  `<0.01%`.
+
+### 4.7 You-section accounts (drilldown, rematch, loans)
+YOU (`profile_screen.dart`) lists `bankAccounts()` with All / Savings / Credit card / Loan
+filters. Tapping an account opens `FilteredTransactionsScreen` via
+`FinanceStore.transactionsForAccount` (same bucket as the You totals).
+
+`_ledgerAccountBuckets()` (memoized; see §4.9):
+- Exact `bank|mask` assignment; banks **canonicalized** (e.g. BOB → Bank of Baroda).
+- **Ownership rematch:** `Bank` / wrong-bank / maskless rows with a last-4 that has a **unique**
+  real owner are absorbed into that owner (Slice•0856 absorbing ICICI-relay credits).
+- **CCBP** stays on the **funding savings** account (not remapped onto the card).
+- **Loans:** EMI/NACH on a funding mask is attributed to the loan only when there is exactly
+  one discovered loan, or ingest already remapped via body last-4 / unique NACH beneficiary /
+  UPI dest last-4. **Never guess via funding bank** when multiple loans exist (schema 29).
+- `ProductPaymentLinker` then attaches orphan funding payments to the unique product, skipping
+  any amount already covered by a product-side SMS (schema 30, no double-count).
+
+### 4.8 Home chips + Stats/Reports stickers
+- **Home** category chips (`CategorySpendChip`, no share/badge) are **tappable** →
+  `CategoryTransactionsScreen` for the **current month**.
+- **STATS** (`insights_screen.dart`) and **Reports** (`reports_screen.dart`) use
+  `CategorySpendStickerGrid`: same Home-style stickers in a 2-col wrap, **rim arc** = share of
+  perimeter, **TOP · N%** / mid `N%` / **LOW · N%** badges via `formatSharePercent` (tiny
+  shares must not vanish as `0%`). Highest-share tile is emphasized. Tiles drill into the
+  category list (Insights window or report range).
+
+### 4.9 Performance (no schema bump)
+These keep large inboxes responsive. **Do not bump `transactionSchemaVersion` for them.**
+- **Lazy keep-alive tabs** (`_LazyKeepAliveTabs` in `main_shell.dart`): each of HOME / MOVES /
+  BUDGET / STATS / YOU is built on first visit and kept offstage (`Offstage` + `TickerMode`).
+  Index-only `setState` must not rebuild other tabs.
+- **Memoized** `bankAccounts()` and `_ledgerAccountBuckets()`; invalidate on txn/discovery/
+  hidden-mask changes (`_invalidateLedgerCache`).
+- **O(n) `ProductPairingIndex`** (bank|mask|cents) instead of nested `all.any` scans for
+  product↔funding pairing. Tested for parity with the scan path.
+- **Non-blocking `init()`** after first frame (`prepareForDeferredInit` + post-frame
+  `store.init()` then `runLaunchScan()`). ISSUE-7 is complete — do not re-await init/rescan
+  before `runApp`.
+- **Throttled scan progress** (`scanProgressListenable`, 200ms, force on done): progress UI
+  must not rebuild You/Moves/Stats data.
 
 ---
 
@@ -300,7 +363,7 @@ Source report: `code_review_by_fable_claude.md`. Fixes landed as discrete commit
 | **ISSUE-4** | `512a488` | KPIs inflated by transfers / CCBP / duplicate bank+wallet SMS. Added `countsTowardSpend`/`Income`, transfer pairing, cross-source dedupe. Lists still show all rows. Schema **17→18**. |
 | **ISSUE-5** | `027661e` | Budgets were `spent×1.3` (never exceed-able). Now fixed editable limits in `category_budgets`. |
 | **ISSUE-6** | `a61e79a` | Placebo notification toggles + unused `RECEIVE_SMS` **removed** (chose remove over implement). Only `READ_SMS` remains. |
-| **ISSUE-7** | `11912ba` | Schema-bump rescan blocked `runApp` / broke onboarding permission UX. Now non-blocking after first frame, gated on `onboardingComplete`. |
+| **ISSUE-7** | `11912ba` | Schema-bump rescan blocked `runApp` / broke onboarding permission UX. **Fully done:** `init()` + rescan run after first frame (`prepareForDeferredInit`); gated on `onboardingComplete`; progress is a throttled listenable. Do not treat splash-block as an open issue. |
 | **ISSUE-8** | `99056dc` | Raw `PlatformException` strings in UI → friendly scan-error copy; log details via `debugPrint`. |
 | **ISSUE-9** | `7691ce4` | ~50 RegExps rebuilt per message → `static final _patterns` compiled once. |
 | **ISSUE-10** | `4402dd2` | Native SMS reads on Android main thread; discovery on UI isolate → background executor + discovery in parse isolate. |
@@ -317,6 +380,11 @@ Review report commit: `6c0741d`.
 
 ## 6. Known issues / limitations / remaining work
 
+**Fixed — do not re-open as bugs:**
+- Whole-rupee INR roundoff — `formatInr` uses `decimalDigits: 2` (see §4.6).
+- Blocking splash on DB hydrate / schema rescan — ISSUE-7 is fully done (see §3 / §4.9).
+
+**Still true:**
 - **ISSUE-15 deferred — no biometric app lock, DB still plaintext `sqflite`.** Privacy *copy* is
   honest; at-rest encryption (`sqflite_sqlcipher`) and `local_auth` lock were **intentionally not
   shipped**. Do not pretend they exist. Revisit when productizing.
@@ -326,8 +394,9 @@ Review report commit: `6c0741d`.
   removed (ISSUE-6); real-time capture would need a full implement path, not a placebo toggle.
 - **Heuristic / regex-based classification.** Parsing, enrichment, and account-kind voting can
   still misclassify edge cases (unusual SMS wording, new templates, ambiguous senders).
+  Multi-loan users: ambiguous MBK/generic EMI stays on the **funding** account by design.
 - **Uneven bank coverage.** Majors have rich patterns; **Canara** and **Bank of Baroda** are
-  mostly sender-detection only. Research inventory + expansion roadmap:
+  mostly sender-detection only (BOB cards via BOBCARD). Research inventory + expansion roadmap:
   `docs/india_bank_sms_research.md`.
 - **Account discovery depends on masks.** Unrecognized masking styles may hide accounts.
 - **Testing uses a private SMS dump** at `~/Downloads/my_sms.txt` (and `my_sms_live.txt`) that
@@ -340,22 +409,30 @@ Review report commit: `6c0741d`.
 
 ## 7. Testing / CI
 
-- **~378 tests** (`flutter test`): counted as ~347 `test(...)` + ~31 `testWidgets(...)` across
-  `test/`.
+- **`flutter test`:** ~500 focused `test` / `testWidgets` plus
+  `account_integration_matrix_test.dart` (~1500 generated cases, suite asserts 1400–1700).
+  `test/TEST_SCENARIOS.md` is a **historical** July 2026 catalog (~223) — do not treat its
+  totals as current.
 - **CI:** `.github/workflows/flutter_ci.yml` runs `flutter analyze` + `flutter test` on push and
   PR to `main`. Dump-dependent suites skip on CI; synthetic fixtures keep critical gates green.
 - **Key suites:**
+  - `account_integration_matrix_test.dart` — large You-account matrix (kinds, rematch, CCBP,
+    loans, parity of totals vs drilldown).
+  - `loan_account_association_test.dart`, `account_ownership_test.dart`,
+    `account_transactions_test.dart` — loan association, rematch, drilldown lists.
+  - `product_payment_linker_test.dart` — product↔funding links, no double-count, index parity.
+  - `ledger_bucket_cache_test.dart` — memoized `bankAccounts` / `_ledgerAccountBuckets`.
+  - `formatters_test.dart` — `decimalDigits: 2` INR + `formatSharePercent`.
+  - `launch_scan_test.dart` — ISSUE-7 non-blocking init / rescan.
   - `account_kind_classification_test.dart` — balanced `bank|mask` voting.
   - `savings_coverage_diagnostic_test.dart` — savings coverage against the SMS dump (skips if absent).
   - `budget_limits_test.dart` — fixed editable budgets (ISSUE-5).
   - `home_consistency_test.dart` — Home KPIs vs listed rows / exclusions.
   - `sms_scan_pipeline_test.dart` / synthetic corpus — production gate coverage.
-  - `transaction_sort_test.dart`, `sms_parser_test.dart`, `account_discovery_test.dart`,
-    `account_bank_registry_test.dart`, `transaction_enrichment_test.dart`,
-    `merchant_categorizer_test.dart`, `insights_window_test.dart`,
-    `reports_category_drilldown_test.dart`, plus `audit_*` / `*_scenarios` and `widget_test.dart`.
-    See `test/TEST_SCENARIOS.md`.
-- **Never commit SMS dumps or real account masks.** Suites that need the dump skip gracefully.
+  - Plus parser / discovery / registry / enrichment / categorizer / insights / reports /
+    `audit_*` / `*_scenarios` / `widget_test.dart`.
+- **Never commit SMS dumps, `paisa_sms_analysis.db`, real account masks, `.env`, secrets, or
+  APKs.** Suites that need the dump skip gracefully.
 
 ---
 
@@ -363,17 +440,21 @@ Review report commit: `6c0741d`.
 
 1. **Always bump `transactionSchemaVersion`** (in `lib/main.dart`, with a changelog comment)
    when you change parsing, enrichment, discovery, or classification — otherwise existing
-   installs keep **stale data** and your change looks like a no-op.
+   installs keep **stale data** and your change looks like a no-op. **Do not bump** for
+   UI/perf-only work (lazy tabs, caches, pairing index, progress throttle).
 2. **Keep classification generic. NO hardcoded user masks / account numbers.** Key on
    `(bank, masked last-4)` / `bank|mask` and reuse existing signals. Do not hardcode personal
-   NACH merchant strings to product names (ISSUE-13).
+   NACH merchant strings to product names (ISSUE-13). Multi-loan: never guess product from
+   funding bank.
 3. **Never commit SMS data or secrets.** `.gitignore` already excludes `my_sms.txt`,
-   `my_sms_live.txt`, `*_sms_live.txt`, `sms_analysis_report.txt`, and Android signing files
-   (`*.jks`, `*.keystore`, `key.properties`, `local.properties`). Use synthetic fixtures only.
+   `my_sms_live.txt`, `*_sms_live.txt`, `sms_analysis_report.txt`, `paisa_sms_analysis.db`,
+   `paisa_sms_gap_report.md`, and Android signing files (`*.jks`, `*.keystore`,
+   `key.properties`, `local.properties`). No `.env`, APKs, or dumps. Use synthetic fixtures only.
 4. **Respect the device-storage constraint** (see §2): never uninstall / clear data / touch
    device storage; `adb install -r` is fine; escalate storage issues to the user.
 5. **Prefer the shared helpers** (`transaction_sort.dart`, `formatters.dart`) so every screen
-   stays consistent; don't re-implement sorting or date formatting locally.
+   stays consistent; don't re-implement sorting, INR, or date formatting locally. Keep
+   `decimalDigits: 2`.
 6. **When adding bank/wallet support**, extend the keyword/handle lists and discovery regexes,
    add a test case, and validate against the dump with `flutter test` + relevant `tool/` scripts.
 7. **Do not reintroduce Fable-review regressions:**
@@ -384,7 +465,10 @@ Review report commit: `6c0741d`.
    - Budgets must stay **user fixed limits** — never `spent × 1.3` circular auto-limits.
    - Do not add placebo notification toggles or unused `RECEIVE_SMS` without a real
      notification + receiver implementation.
-   - Do not block `runApp` on a full SMS rescan; keep the ISSUE-7 launch-scan pattern.
+   - Do not block `runApp` on DB `init()` or a full SMS rescan; keep the ISSUE-7 launch-scan
+     pattern (`prepareForDeferredInit` + post-frame work).
    - Keep KPIs on `countsTowardSpend` / `countsTowardIncome` (+ transfer pairing); lists may
      still show internal movement.
    - Seed `AccountBankRegistry` from stored data; don't start incremental scans empty.
+   - You drilldown must use `transactionsForAccount` / the same ledger buckets as
+     `bankAccounts()`; product↔funding links must not double-count covered EMIs.

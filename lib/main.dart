@@ -126,20 +126,23 @@ Future<void> main() async {
   final appSettings = AppSettings(prefs);
 
   final store = FinanceStore();
-  await store.init();
+  // ISSUE-7: do NOT await store.init() before runApp — that froze the splash
+  // on DB + (previously) the full SMS rescan. Show the shell immediately with
+  // the existing loading UI; hydrate after the first frame.
+  store.prepareForDeferredInit();
 
   final needsRescan =
       (prefs.getInt('categorizer_version') ?? 0) < categorizerVersion ||
       (prefs.getInt('transaction_schema_version') ?? 0) <
           transactionSchemaVersion;
 
-  // ISSUE-7: do NOT block the splash on the rescan. Hand the decision to the
-  // store so the app shell runs it after the first frame (with progress UI).
-  // Gate on onboarding: fresh installs (onboarding not complete) flow through
-  // the onboarding scan instead, so the OS permission dialog appears over the
-  // onboarding screen rather than a dead splash. Stamps are written only after
-  // the rescan completes (in runLaunchScan / onboarding), so a killed rescan
-  // retries on the next launch.
+  // ISSUE-7: do NOT block the splash on the rescan. Run init + launch scan
+  // after the first frame (with progress UI). Gate on onboarding: fresh
+  // installs (onboarding not complete) flow through the onboarding scan
+  // instead, so the OS permission dialog appears over the onboarding screen
+  // rather than a dead splash. Stamps are written only after the rescan
+  // completes (in runLaunchScan / onboarding), so a killed rescan retries
+  // on the next launch.
   Future<void> persistScanVersions() async {
     await prefs.setInt('categorizer_version', categorizerVersion);
     await prefs.setInt('transaction_schema_version', transactionSchemaVersion);
@@ -159,6 +162,15 @@ Future<void> main() async {
       child: PaisaApp(showMain: onboardingComplete),
     ),
   );
+
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
+    await store.init();
+    // Onboarding still owns the first permission scan. Returning users get
+    // the launch scan (full rescan or incremental) after the first frame.
+    if (onboardingComplete) {
+      await store.runLaunchScan();
+    }
+  });
 }
 
 class PaisaApp extends StatelessWidget {

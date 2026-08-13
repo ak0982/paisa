@@ -2,7 +2,7 @@
 
 **Paisa** is a Flutter personal‑finance app that turns your Android SMS inbox into a complete picture of your money. It reads bank and UPI alert messages **on‑device**, automatically parses them into transactions, discovers your bank accounts, credit cards and loans, classifies each one, and surfaces spending insights, budgets and reports — with **zero manual entry**.
 
-It is purpose‑built for **Indian banks and payment providers** (HDFC, SBI, ICICI, Axis, Kotak, IDFC, PNB, Federal/Fi/Jupiter, Yes Bank, IndusInd, BOB, and the major wallets/UPI apps).
+It is purpose‑built for **Indian banks and payment providers** (HDFC, SBI, ICICI, Axis, Kotak, IDFC, PNB, Federal/Fi/Jupiter, Yes Bank, IndusInd, BOB, HSBC, Slice, and the major wallets/UPI apps).
 
 > **Private / personal project.** This is a personal-use application. No SMS content, account masks, or other personal data is committed to this repository. All SMS parsing happens locally on the device.
 
@@ -32,15 +32,16 @@ It is purpose‑built for **Indian banks and payment providers** (HDFC, SBI, ICI
 - **Full SMS history scan** — the first launch reads the **entire** SMS inbox (no time window), so years of history are captured. Subsequent launches do fast incremental scans of only new messages.
 - **Automatic transaction parsing** — a staged filter + regex pipeline extracts amount, debit/credit direction, merchant/payee, bank and masked account from each alert. No manual entry.
 - **Account discovery & classification** — savings accounts, credit cards and loans are detected from your SMS and grouped by bank + masked last‑4, each classified by a balanced per‑account voting rule.
-- **Dashboard (Home)** — greeting header, current‑month spend/income summary, category chips, and Today / This‑month transaction lists.
-- **Transactions** — searchable, category‑filtered, date‑grouped transaction list with sorting.
-- **Budgets** — auto‑generated per‑category budgets (30% headroom over spend, floored at ₹1,000) with progress bars.
-- **Insights** — all‑time spending charts, category breakdown, top merchants, daily average, highest‑spend day, and food‑spend trend comparisons.
-- **Reports** — date‑range reports (This month, Last month, Last 3 months, This year, Last year, All time, or a custom range) with **category and merchant/income‑source drill‑downs**.
-- **Sorting** — every transaction list supports Newest/Oldest (date) and High→Low / Low→High (amount) sorting via a shared control.
-- **Filtering** — drill into a single category, merchant or income source; the Profile account list filters by All / Savings / Credit card / Loan.
-- **Profile** — detected account list with type filters, editable local profile (name/email), a manual **Rescan SMS** action, and settings (notifications, privacy, help & support).
-- **On-device SQLite storage** — parsed transactions are deduplicated by SMS id and persisted locally with `sqflite`.
+- **Dashboard (Home)** — greeting, current‑month spend/income (KPIs exclude internal movement), **tappable** category chips → this month’s category list, Today / This‑month rows.
+- **Moves** — searchable, category‑filtered, date‑grouped transaction list with sorting.
+- **Budgets** — **user‑editable** per‑category limits (seeded once from history, then owned by the user; progress can exceed 100%). Not a circular `spent × 1.3` formula.
+- **Stats** — spending charts, Home‑style category **stickers** (rim arc + TOP/mid/LOW % badges), top merchants, daily average, highest‑spend day, food‑spend trend.
+- **Reports** — date‑range reports (presets + custom) with the same sticker grid and category / merchant / income drill‑downs.
+- **Sorting** — every transaction list supports Newest/Oldest (date) and High→Low / Low→High (amount) via a shared control.
+- **Filtering** — drill into a category, merchant, income source, or a **You** account (loan drilldown includes associated EMI without double‑counting a product SMS + funding debit).
+- **You** — detected accounts with All / Savings / Credit card / Loan filters, ownership rematch, editable local profile, **Rescan SMS**, privacy + help settings (**no** notification toggles).
+- **Exact INR** — all amounts use `en_IN` currency with **two decimal digits** (no whole‑rupee roundoff).
+- **On-device SQLite storage** — parsed transactions are deduplicated by SMS id and persisted locally with `sqflite` (plaintext; biometric lock / SQLCipher are not shipped).
 
 ---
 
@@ -80,8 +81,8 @@ flowchart TD
     H --> I["TransactionDatabase (sqflite)<br/>dedupe by SMS id"]
     F --> I
 
-    I --> J["FinanceStore (ChangeNotifier)<br/>balanced per-mask kind voting,<br/>accounts, analytics, reports"]
-    J --> K["UI screens<br/>Dashboard · Transactions · Budgets<br/>Insights · Reports · Profile"]
+    I --> J["FinanceStore (ChangeNotifier)<br/>bank|mask voting, You rematch,<br/>product↔funding links, reports"]
+    J --> K["UI screens<br/>HOME · MOVES · BUDGET<br/>STATS · Reports · YOU"]
 ```
 
 ### Layer-by-layer
@@ -90,15 +91,15 @@ flowchart TD
 
 | Screen | Purpose |
 | --- | --- |
-| `main_shell.dart` | Bottom-nav shell hosting the 5 main tabs (Dashboard, Transactions, Budgets, Insights, Profile) via an `IndexedStack`; kicks off an incremental `syncFromSms()` on start. |
-| `dashboard_screen.dart` | Home: greeting, current-month spend/income summary, category chips, Today / This-month transaction previews. |
-| `transactions_screen.dart` | Full transaction list with search, category filters, date grouping and sort. |
-| `budgets_screen.dart` | Auto-generated per-category budgets with progress bars. |
-| `insights_screen.dart` | All-time spending charts, category breakdown, top merchants, trends. |
-| `reports_screen.dart` | Date-range reports with presets + custom range, category & merchant/income drill-downs. |
-| `category_transactions_screen.dart` | Lists debit transactions for a single category (thin wrapper over `FilteredTransactionsScreen`). |
-| `filtered_transactions_screen.dart` | Lists transactions matching a category, merchant or income source (optionally date-bounded). |
-| `profile_screen.dart` | Detected accounts with All/Savings/Credit-card/Loan filters, profile card, Rescan SMS, settings entry points. |
+| `main_shell.dart` | Bottom-nav shell: **HOME / MOVES / BUDGET / STATS / YOU**. Tabs are **lazy keep-alive** (built on first visit, kept offstage). Launch scan runs after first frame, not here. |
+| `dashboard_screen.dart` | Home: greeting, current-month spend/income, **tappable** category chips, Today / This-month previews. |
+| `transactions_screen.dart` | Moves: full list with search, category filters, date grouping and sort. |
+| `budgets_screen.dart` | User-editable per-category budget limits with progress bars (can exceed 100%). |
+| `insights_screen.dart` | Stats: charts + Home-style category sticker grid (rim arc, TOP/mid/LOW %). |
+| `reports_screen.dart` | Date-range reports (presets + custom) with the same sticker grid and drill-downs. |
+| `category_transactions_screen.dart` | Debit list for one category (wrapper over `FilteredTransactionsScreen`). |
+| `filtered_transactions_screen.dart` | Category, merchant, income source, or **You-account** drilldown (optionally date-bounded). |
+| `profile_screen.dart` | You: accounts with All/Savings/Credit-card/Loan filters, rematch, Rescan SMS, privacy/help. |
 | `edit_profile_screen.dart` | Edit locally-stored name/email. |
 | `onboarding/welcome_screen.dart` | First-run welcome. |
 | `onboarding/profile_setup_screen.dart` | Collects on-device profile details (name + optional email). |
@@ -109,11 +110,11 @@ flowchart TD
 
 #### `lib/widgets/` — reusable widgets
 
-`paisa_bottom_nav.dart` (bottom navigation bar), `transaction_row.dart` (single transaction row), `grouped_transaction_list.dart` (date/amount grouped list built from `buildTransactionSections`), `transaction_sort_control.dart` (shared sort menu), `category_spend_chip.dart` (category spend chips), `paisa_progress_bar.dart` (budget/insights bars), `gradient_button.dart`, and `settings_detail_scaffold.dart` (shared settings page scaffold).
+`paisa_bottom_nav.dart` (HOME / MOVES / BUDGET / STATS / YOU), `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `category_spend_chip.dart` (Home chips + Stats/Reports `CategorySpendStickerGrid` with rim arc and TOP/mid/LOW badges), `paisa_progress_bar.dart`, `gradient_button.dart`, `bank_logo.dart`, and `settings_detail_scaffold.dart`.
 
 #### `lib/providers/` — state management
 
-- `finance_store.dart` — the central `FinanceStore extends ChangeNotifier`. Owns transactions and discovered accounts, orchestrates scans (`syncFromSms`, `fullRescanFromSms`, re-entrancy-guarded `_runSync`), and exposes all derived analytics (monthly/insights spend, budgets, top merchants, `buildReport`, `bankAccounts()`). Contains the **balanced per-mask account-kind voting** (`_AccountKindEvidence`).
+- `finance_store.dart` — the central `FinanceStore extends ChangeNotifier`. Owns transactions and discovered accounts, orchestrates scans (`syncFromSms`, `fullRescanFromSms`, re-entrancy-guarded `_runSync`), and exposes analytics (monthly/insights spend, budgets, top merchants, `buildReport`, memoized `bankAccounts()` / `_ledgerAccountBuckets()`). Balanced `bank|mask` kind voting, You rematch + loan association, product↔funding links (no double-count), throttled `scanProgressListenable`.
 - `app_settings.dart` — user/app preferences persisted via `shared_preferences`.
 
 #### `lib/services/sms/` — the SMS pipeline
@@ -129,7 +130,8 @@ End-to-end flow: **raw SMS → filters → parse → enrich → discover → sto
 | `sms_keyword_lists.dart` | Wallet/UPI provider detection, allow-listed VPA handling, card-scheme detection (Visa/Mastercard/RuPay/Amex), and balance-suffix stripping. |
 | `account_discovery.dart` | `AccountDiscovery` — regexes that identify **savings / credit-card / loan** accounts (bank + masked last-4) directly from SMS, including balance/interest/informational messages. |
 | `account_bank_registry.dart` | `AccountBankRegistry` — learns which bank owns each account last-4 from unambiguous SMS, then corrects misleading senders (e.g. ICICI relaying a credit into an SBI/HDFC beneficiary account, LenDenClub settlement notifications). |
-| `transaction_enrichment.dart` | `TransactionEnrichment` — resolves the masked account, the account **kind**, the correct display bank/mask for credit-card (incl. CCBP bill payments) and loan (NACH/EMI) rows, and improves merchant/label text. |
+| `transaction_enrichment.dart` | `TransactionEnrichment` — mask/kind/display for CC (CCBP) and loans (NACH/EMI). Multi-loan: no funding-bank guess; UPI dest last-4 remaps only to a unique loan; Kotak NACH `debited from\|to`. |
+| `product_payment_linker.dart` | You drilldown product↔funding links (amount+time; skip if product SMS already covers the EMI). O(n) `ProductPairingIndex`. |
 | `merchant_categorizer.dart` | `MerchantCategorizer` — maps merchant/body keywords to a `SpendCategory` (food, travel, shopping, bills, entertainment, EMI, health, transfer, income, ATM, other), with transfer/CC-bill/wallet-credit special cases. |
 | `sms_parse_isolate.dart` | Runs candidate parsing off the UI thread in a background isolate. |
 | `parsed_sms_transaction.dart` | Value type for a parsed SMS (input message + parsed result). |
@@ -152,7 +154,7 @@ End-to-end flow: **raw SMS → filters → parse → enrich → discover → sto
 
 #### `lib/utils/` — helpers
 
-- `formatters.dart` — `en_IN` ₹ currency formatting (`formatInr`, `formatAmount` with +/−) and consistent transaction date/time formats (`d MMM yyyy`, `HH:mm`).
+- `formatters.dart` — `en_IN` ₹ with **`decimalDigits: 2`** (`formatInr`, `formatAmount`), `formatSharePercent` for Stats badges, dates (`d MMM yyyy`, `HH:mm`).
 
 #### `lib/theme/`
 
@@ -160,22 +162,18 @@ End-to-end flow: **raw SMS → filters → parse → enrich → discover → sto
 
 ### Schema versioning & re-scans
 
-`main.dart` defines two version constants and forces a **one-time full re-scan** when either is bumped:
+`main.dart` currently ships:
 
 ```dart
 const categorizerVersion = 4;
-const transactionSchemaVersion = 14;
-
-final needsRescan =
-    (prefs.getInt('categorizer_version') ?? 0) < categorizerVersion ||
-    (prefs.getInt('transaction_schema_version') ?? 0) < transactionSchemaVersion;
-if (needsRescan) {
-  await store.fullRescanFromSms();   // clears DB + re-reads the whole inbox
-  // ... persist the new versions
-}
+const transactionSchemaVersion = 30;
 ```
 
-Because parsing, classification and enrichment logic evolve over time, bumping `transactionSchemaVersion` guarantees existing installs **wipe and rebuild** their local data from the raw inbox so they pick up the improved logic. The history behind the current value `14` (recorded inline in `main.dart`) includes: reading the entire inbox instead of a 24-month window, deriving account kind from the strongest signal per bank+mask, switching to **balanced voting**, and adding savings-account coverage for balance/interest-only SMS (Federal via Fi/Jupiter, PNB long masks, IDFC).
+If a stored stamp is lower **and** onboarding is complete, `FinanceStore` runs `fullRescanFromSms()` **after the first frame** (progress UI). **`store.init()` is also deferred** so the splash is never blocked on DB or SMS work. Fresh installs use onboarding’s own scan. Version stamps are written only after a successful rescan.
+
+Bump `transactionSchemaVersion` (with a changelog comment in `main.dart`) when parsing, enrichment, discovery, or classification changes. **Do not bump** for UI/perf-only work (lazy tabs, memoized account buckets, pairing index, throttled scan progress).
+
+Current schema **30** includes (among earlier ISSUE-1…14 / HSBC / Slice work): You-account drilldown + bank-alias canonicalize; ownership rematch; loan association; multi-loan “no funding-bank guess”; Kotak NACH `from|to`; product↔funding EMI links without double-counting; UPI dest last-4 → unique loan. Full table: [`AGENTS.md`](AGENTS.md).
 
 ---
 
@@ -199,10 +197,12 @@ The supported set is derived directly from the sender/body resolvers and regexes
 | IndusInd | Sender + body resolvers |
 | Canara | Sender detection |
 | Bank of Baroda | Sender detection (bank); see BOBCARD below for its card |
+| HSBC | Savings + debit-card + CC (`HSBCIN` / `HSBC*`) |
+| Slice SFB | UPI / IMPS / AutoPay / CC (`SLCEIT` / `SLCBNK`); failed-refunded UPI ignored |
 
 ### Credit-card issuers
 
-Recognised in credit-card regexes / enrichment: **SBI, ICICI, Axis, HDFC, Kotak, IDFC (FIRST), Yes Bank, IndusInd, BOB (BOBCARD)**. Card schemes detected in text: **Visa, Mastercard, RuPay, Amex**.
+Recognised in credit-card regexes / enrichment: **SBI, ICICI, Axis, HDFC, Kotak, IDFC (FIRST), Yes Bank, IndusInd, BOB (BOBCARD), HSBC, Slice**. Card schemes detected in text: **Visa, Mastercard, RuPay, Amex, Maestro, Diners**.
 
 ### Neobanks
 
@@ -234,7 +234,7 @@ Discovery regexes alone only fire on a handful of narrow SMS shapes, so account 
 
 **CCBP funding‑side attribution.** A credit‑card *bill payment* (CCBP / BBPS / "trf to credit card") is a debit **from the funding savings account**, not spend **on** the card. `_isFundingSideBillPayment` recognises these (an outgoing debit labelled "credit card bill payment") and counts them as **savings** evidence for the funding mask, while the card‑ness of the payment is attributed to the card itself via `TransactionEnrichment.resolveCreditCardDisplay`. This ensures a real savings account that regularly pays a card bill stays classified as savings.
 
-For display, `bankAccounts()` groups every transaction by mask, routes it to the mask's winning kind, and produces one `BankAccount` per (kind, bank, mask), with sensible thresholds (e.g. savings needs recognised bank + real mask; cards/loans allow smaller issuers as long as the mask is a real masked last‑4).
+For display, memoized `bankAccounts()` / `_ledgerAccountBuckets()` group by canonical `bank|mask`, rematch `Bank`/wrong-bank same last-4 into the unique real owner, keep CCBP on the funding savings account, and associate loan EMI without guessing among multiple loans. Opening a You account lists the same bucket (`transactionsForAccount`). Product↔funding links skip a funding debit when a product-side SMS already covers that amount in-window.
 
 ---
 
@@ -245,9 +245,10 @@ For display, `bankAccounts()` groups every transaction by mask, routes it to the
 - **Sender-first bank resolution.** Bank is resolved from the sender ID first, then the body, with `AccountBankRegistry` learning bank‑per‑mask across the inbox to correct misleading senders (e.g. ICICI relaying credits into another bank's account, LenDenClub settlements).
 - **Promo / scam filtering.** `SmsParser` + `BankPromoFilters` drop marketing ("pre‑approved", "apply now", "SmartEMI", "YONO offer", …) and obfuscated scams ("L0AN", "Appr0ve", fake wallet credits), while a completed‑transaction signal overrides the promo filter so real alerts with offer‑like wording still parse.
 - **Two-pass isolate scan.** Pass 1 collects candidates, learns bank ownership, and runs account discovery; pass 2 parses candidates in a **background isolate** (`sms_parse_isolate.dart`) so the UI stays responsive on large inboxes, with checkpointing for resumability.
-- **Schema versioning.** `transactionSchemaVersion` / `categorizerVersion` in `main.dart` force a full wipe‑and‑rebuild when logic changes (see above).
-- **Shared sorting/formatting.** All lists sort and group through `transaction_sort.dart`, and all currency/date rendering goes through `utils/formatters.dart`, so every surface stays consistent.
-- **Consistent Home math.** A single predicate (`countsTowardCashflowSummary`) drives both the Home headline totals and the lists beneath them, so the hero number can never disagree with the rows.
+- **Schema versioning.** `transactionSchemaVersion` **30** / `categorizerVersion` **4** in `main.dart` force a full wipe‑and‑rebuild when **parse/classify** logic changes (see above). Perf/UI changes do not bump the schema.
+- **Shared sorting/formatting.** All lists sort and group through `transaction_sort.dart`. All INR uses `formatInr` (`decimalDigits: 2`). Stats share badges use `formatSharePercent`.
+- **Home lists vs KPIs.** Lists still show **every** cash movement (`countsTowardCashflowSummary`). Headline spend/income use `countsTowardSpend` / `countsTowardIncome` plus transfer pairing, so CCBP / self-transfers do not inflate the hero numbers.
+- **Launch performance.** Lazy keep-alive tabs; memoized You-account buckets; O(n) product-pairing index; non-blocking `init()` after first frame; throttled scan-progress listenable.
 
 ---
 
@@ -267,6 +268,8 @@ flutter run            # on a connected Android device / emulator
 ```
 
 On first launch, grant the SMS permission when prompted so the app can scan your inbox.
+
+**Device constraint:** never uninstall the app, clear app data/caches, or delete files on a physical device. `adb install -r` of this app’s APK is fine. If install fails for storage (`INSTALL_FAILED_INSUFFICIENT_STORAGE`), stop and free space manually.
 
 ### Build a release APK
 
@@ -293,7 +296,7 @@ Declared in `android/app/src/main/AndroidManifest.xml` and requested at runtime 
 
 ## Testing
 
-The project has a substantial unit/widget test suite (~353 tests) under `test/`:
+`flutter test` runs ~500 focused unit/widget tests plus a **~1500-case** You-account integration matrix:
 
 ```bash
 flutter test              # run the whole suite
@@ -302,14 +305,16 @@ flutter test test/account_kind_classification_test.dart   # a single file
 
 Key test areas include:
 
+- **You accounts / loans / ownership** — `account_integration_matrix_test.dart` (~1500 cases), `loan_account_association_test.dart`, `account_ownership_test.dart`, `account_transactions_test.dart`, `product_payment_linker_test.dart`, `ledger_bucket_cache_test.dart`.
 - **Account-kind classification** — `account_kind_classification_test.dart`, `audit_credit_cards_test.dart`, `audit_loans_test.dart`, `audit_summary_test.dart`.
 - **Savings coverage** — `savings_coverage_diagnostic_test.dart`, `account_discovery_test.dart`, `account_bank_registry_test.dart`.
 - **SMS parsing & pipeline** — `sms_parser_test.dart`, `sms_scan_pipeline_test.dart`, `sms_parse_isolate_test.dart`, `sms_keyword_lists_test.dart`, `transaction_enrichment_test.dart`, `merchant_categorizer_test.dart`, `transaction_validity_test.dart`.
+- **Formatters / launch** — `formatters_test.dart` (INR paise + share %), `launch_scan_test.dart` (non-blocking init).
 - **Analytics & UI consistency** — `home_consistency_test.dart`, `insights_window_test.dart`, `reports_category_drilldown_test.dart`, `simulate_insights_test.dart`, `deep_scenarios_test.dart`, `diverse_scenarios_test.dart`.
 - **Sorting** — `transaction_sort_test.dart`.
 - **Settings & widgets** — `app_settings_test.dart`, `finance_store_settings_test.dart`, `settings_widget_test.dart`, `widget_test.dart`.
 
-Test helpers live in `test/helpers/` (`test_harness.dart`, `dummy_data.dart`).
+Test helpers live in `test/helpers/` (`test_harness.dart`, `dummy_data.dart`). Dump-dependent suites skip when `~/Downloads/my_sms.txt` is absent. **Never commit SMS dumps or `paisa_sms_analysis.db`.**
 
 ---
 
@@ -318,7 +323,7 @@ Test helpers live in `test/helpers/` (`test_harness.dart`, `dummy_data.dart`).
 ```
 paisa_app/
 ├── lib/
-│   ├── main.dart                       # Entry point, providers, schema-version rescan
+│   ├── main.dart                       # Entry point, providers, schema 30 + deferred init
 │   ├── data/
 │   │   ├── transaction_database.dart   # sqflite persistence (dedupe by SMS id)
 │   │   ├── sms_scan_state.dart         # scan checkpoint / full-scan flag
@@ -331,7 +336,7 @@ paisa_app/
 │   │   ├── category_info.dart          # SpendCategory
 │   │   └── range_report.dart
 │   ├── providers/
-│   │   ├── finance_store.dart          # ChangeNotifier store + balanced kind voting
+│   │   ├── finance_store.dart          # store, voting, You buckets, launch scan
 │   │   └── app_settings.dart
 │   ├── services/sms/
 │   │   ├── sms_reader_service.dart     # platform channel + two-pass scan
@@ -342,11 +347,12 @@ paisa_app/
 │   │   ├── account_discovery.dart      # AccountKind + savings/CC/loan patterns
 │   │   ├── account_bank_registry.dart  # bank-per-mask learning
 │   │   ├── transaction_enrichment.dart # mask/kind/display/label resolution
+│   │   ├── product_payment_linker.dart # You product↔funding links + pairing index
 │   │   ├── merchant_categorizer.dart   # SpendCategory mapping
 │   │   ├── sms_parse_isolate.dart      # off-thread parsing
 │   │   └── parsed_sms_transaction.dart
 │   ├── screens/
-│   │   ├── main_shell.dart             # bottom-nav shell (5 tabs)
+│   │   ├── main_shell.dart             # lazy keep-alive HOME/MOVES/BUDGET/STATS/YOU
 │   │   ├── dashboard_screen.dart
 │   │   ├── transactions_screen.dart
 │   │   ├── budgets_screen.dart
@@ -357,11 +363,11 @@ paisa_app/
 │   │   ├── profile_screen.dart
 │   │   ├── edit_profile_screen.dart
 │   │   ├── onboarding/                 # welcome, profile setup, SMS permission, ready
-│   │   └── settings/                   # notifications, privacy, help & support
-│   ├── widgets/                        # bottom nav, rows, lists, sort control, bars
+│   │   └── settings/                   # privacy, help & support (no notifications)
+│   ├── widgets/                        # nav, rows, lists, stickers, sort, bars
 │   ├── theme/                          # colors + typography (Sora / Manrope)
-│   └── utils/formatters.dart           # ₹ + date/time formatting
-├── test/                               # ~353 unit/widget tests
+│   └── utils/formatters.dart           # ₹ (2 decimals) + share % + dates
+├── test/                               # ~500 focused tests + ~1500 account-matrix cases
 ├── android/                            # Android host (READ_SMS)
 ├── assets/                             # fonts + app icon
 └── pubspec.yaml
@@ -371,6 +377,6 @@ paisa_app/
 
 ## Privacy
 
-- **On-device processing.** Every SMS is read, filtered, parsed, classified and stored **entirely on your Android device**. Parsed data lives in a local `sqflite` database; nothing is uploaded and there is no backend.
-- **No secrets or personal data in this repo.** This repository contains only source code. No real SMS content, account numbers/masks, names, or credentials are committed.
+- **On-device processing.** Every SMS is read, filtered, parsed, classified and stored **entirely on your Android device**. Parsed data lives in a local **plaintext** `sqflite` database; nothing is uploaded and there is no backend. Biometric lock / SQLCipher are **not** shipped.
+- **No secrets or personal data in this repo.** Source code only. No real SMS content, account numbers/masks, `paisa_sms_analysis.db`, `.env`, or APKs.
 - **You control the data.** The app requests SMS access at runtime, supports a manual rescan, and exposes privacy controls (including clearing all locally stored data) in Settings.

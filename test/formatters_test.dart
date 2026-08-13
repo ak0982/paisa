@@ -40,4 +40,33 @@ void main() {
       expect(formatCompactInr(500), formatInr(500));
     });
   });
+
+  group('formatSharePercent', () {
+    test('omits non-positive shares', () {
+      expect(formatSharePercent(0), '');
+      expect(formatSharePercent(-0.1), '');
+    });
+
+    test('integer percent when >= 1%', () {
+      expect(formatSharePercent(0.32), '32%');
+      expect(formatSharePercent(1), '100%');
+      expect(formatSharePercent(0.01), '1%');
+    });
+
+    test('one decimal between 0.1% and 1%', () {
+      expect(formatSharePercent(0.004), '0.4%');
+      expect(formatSharePercent(0.001), '0.1%');
+      expect(formatSharePercent(0.0099), '1.0%');
+    });
+
+    test('two decimals between 0.01% and 0.1%', () {
+      expect(formatSharePercent(0.0003), '0.03%');
+      expect(formatSharePercent(0.0001), '0.01%');
+    });
+
+    test('shows <0.01% for tinier shares', () {
+      expect(formatSharePercent(0.00005), '<0.01%');
+      expect(formatSharePercent(0.000001), '<0.01%');
+    });
+  });
 }

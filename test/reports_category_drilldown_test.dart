@@ -216,9 +216,7 @@ void main() {
 
       expect(find.text('Where money went'), findsOneWidget);
 
-      // Food row label includes share percent, e.g. "Food  ·  12%"
-      final foodRow = find.textContaining('Food  ·');
-      await tester.tap(foodRow);
+      await tester.tap(find.text('FOOD'));
       await tester.pumpAndSettle();
 
       expect(find.byType(CategoryTransactionsScreen), findsOneWidget);

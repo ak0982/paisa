@@ -313,4 +313,309 @@ void main() {
       );
     });
   });
+
+  group('indexed pairing matches nested scan', () {
+    void expectParity({
+      required String productBank,
+      required String productMask,
+      required AccountKind productKind,
+      required List<Transaction> all,
+      required Iterable<DiscoveredAccount> discoveries,
+    }) {
+      final indexed = ProductPaymentLinker.linkedFundingTransactions(
+        productBank: productBank,
+        productMask: productMask,
+        productKind: productKind,
+        all: all,
+        discoveries: discoveries,
+      );
+      final scan = ProductPaymentLinker.linkedFundingTransactionsScan(
+        productBank: productBank,
+        productMask: productMask,
+        productKind: productKind,
+        all: all,
+        discoveries: discoveries,
+      );
+      expect(indexed.map((t) => t.id).toList(), scan.map((t) => t.id).toList());
+
+      for (final t in all) {
+        expect(
+          ProductPaymentLinker.productSideCoversFunding(
+            funding: t,
+            productBank: productBank,
+            productMask: productMask,
+            all: all,
+          ),
+          ProductPaymentLinker.productSideCoversFundingScan(
+            funding: t,
+            productBank: productBank,
+            productMask: productMask,
+            all: all,
+          ),
+        );
+      }
+    }
+
+    test('existing loan and card fixtures stay equivalent', () {
+      const loans = [
+        DiscoveredAccount(
+          bank: 'HDFC',
+          mask: '••••0855',
+          kind: AccountKind.loan,
+          smsHits: 5,
+        ),
+        DiscoveredAccount(
+          bank: 'PNB',
+          mask: '••••0310',
+          kind: AccountKind.loan,
+          smsHits: 4,
+        ),
+      ];
+      final covered = [
+        Transaction(
+          id: 'mbk',
+          merchant: 'MBK EMI',
+          bank: 'HDFC',
+          maskedAccount: '••••5300',
+          category: SpendCategory.emi,
+          amount: 5199.39,
+          isCredit: false,
+          timestamp: DateTime(2026, 2, 27),
+          accountKind: AccountKind.loan,
+        ),
+        Transaction(
+          id: 'pnb',
+          merchant: 'Loan payment',
+          bank: 'PNB',
+          maskedAccount: '••••0310',
+          category: SpendCategory.emi,
+          amount: 5199.39,
+          isCredit: false,
+          timestamp: DateTime(2026, 2, 27, 1),
+          accountKind: AccountKind.loan,
+        ),
+      ];
+      expectParity(
+        productBank: 'PNB',
+        productMask: '••••0310',
+        productKind: AccountKind.loan,
+        all: covered,
+        discoveries: loans,
+      );
+      expectParity(
+        productBank: 'HDFC',
+        productMask: '••••0855',
+        productKind: AccountKind.loan,
+        all: covered,
+        discoveries: loans,
+      );
+
+      const onlyPnb = [
+        DiscoveredAccount(
+          bank: 'PNB',
+          mask: '••••0310',
+          kind: AccountKind.loan,
+          smsHits: 4,
+        ),
+      ];
+      expectParity(
+        productBank: 'PNB',
+        productMask: '••••0310',
+        productKind: AccountKind.loan,
+        all: [covered.first],
+        discoveries: onlyPnb,
+      );
+
+      const onlyCard = [
+        DiscoveredAccount(
+          bank: 'HDFC',
+          mask: '••••9999',
+          kind: AccountKind.creditCard,
+          smsHits: 3,
+        ),
+      ];
+      final ccbp = [
+        Transaction(
+          id: 'ccbp',
+          merchant: 'MBK CCBP',
+          bank: 'SBI',
+          maskedAccount: '••••0429',
+          category: SpendCategory.bills,
+          amount: 12000,
+          isCredit: false,
+          timestamp: DateTime(2026, 7, 1),
+          accountKind: AccountKind.creditCard,
+        ),
+        Transaction(
+          id: 'ack',
+          merchant: 'Payment received',
+          bank: 'HDFC',
+          maskedAccount: '••••9999',
+          category: SpendCategory.bills,
+          amount: 12000,
+          isCredit: true,
+          timestamp: DateTime(2026, 7, 1, 2),
+          accountKind: AccountKind.creditCard,
+        ),
+      ];
+      expectParity(
+        productBank: 'HDFC',
+        productMask: '••••9999',
+        productKind: AccountKind.creditCard,
+        all: ccbp,
+        discoveries: onlyCard,
+      );
+      expectParity(
+        productBank: 'HDFC',
+        productMask: '••••9999',
+        productKind: AccountKind.creditCard,
+        all: [ccbp.first],
+        discoveries: onlyCard,
+      );
+    });
+
+    test('amount ±0.015 and 48h window boundaries match nested scan', () {
+      const loan = [
+        DiscoveredAccount(
+          bank: 'PNB',
+          mask: '••••0310',
+          kind: AccountKind.loan,
+          smsHits: 4,
+        ),
+      ];
+      final anchorTime = DateTime(2026, 2, 27);
+      Transaction product(double amount, DateTime at) => Transaction(
+            id: 'p-$amount-${at.millisecondsSinceEpoch}',
+            merchant: 'Loan payment',
+            bank: 'PNB',
+            maskedAccount: '••••0310',
+            category: SpendCategory.emi,
+            amount: amount,
+            isCredit: false,
+            timestamp: at,
+            accountKind: AccountKind.loan,
+          );
+      Transaction funding(double amount, DateTime at) => Transaction(
+            id: 'f-$amount-${at.millisecondsSinceEpoch}',
+            merchant: 'MBK EMI',
+            bank: 'HDFC',
+            maskedAccount: '••••5300',
+            category: SpendCategory.emi,
+            amount: amount,
+            isCredit: false,
+            timestamp: at,
+            accountKind: AccountKind.loan,
+          );
+
+      final cases = <List<Transaction>>[
+        [funding(100, anchorTime), product(100.014, anchorTime)],
+        [funding(100, anchorTime), product(100.015, anchorTime)],
+        [funding(100, anchorTime), product(100.016, anchorTime)],
+        [
+          funding(5199.39, anchorTime),
+          product(5199.39, anchorTime.add(const Duration(hours: 48))),
+        ],
+        [
+          funding(5199.39, anchorTime),
+          product(
+            5199.39,
+            anchorTime.add(const Duration(hours: 48, milliseconds: 1)),
+          ),
+        ],
+        [
+          funding(88.88, anchorTime),
+          product(88.88, anchorTime.subtract(const Duration(hours: 24))),
+          product(12.50, anchorTime),
+        ],
+      ];
+      for (final all in cases) {
+        expectParity(
+          productBank: 'PNB',
+          productMask: '••••0310',
+          productKind: AccountKind.loan,
+          all: all,
+          discoveries: loan,
+        );
+      }
+    });
+
+    test('large mixed corpus stays equivalent (no funding-bank guess)', () {
+      const loans = [
+        DiscoveredAccount(
+          bank: 'HDFC',
+          mask: '••••0855',
+          kind: AccountKind.loan,
+          smsHits: 5,
+        ),
+        DiscoveredAccount(
+          bank: 'PNB',
+          mask: '••••0310',
+          kind: AccountKind.loan,
+          smsHits: 4,
+        ),
+      ];
+      final all = <Transaction>[
+        for (var i = 0; i < 80; i++)
+          Transaction(
+            id: 'spend-$i',
+            merchant: 'Swiggy',
+            bank: 'HDFC',
+            maskedAccount: '••••5300',
+            category: SpendCategory.food,
+            amount: 100 + i * 0.01,
+            isCredit: false,
+            timestamp: DateTime(2026, 1, 1).add(Duration(hours: i)),
+            accountKind: AccountKind.savings,
+          ),
+        Transaction(
+          id: 'mbk-covered',
+          merchant: 'MBK EMI',
+          bank: 'HDFC',
+          maskedAccount: '••••5300',
+          category: SpendCategory.emi,
+          amount: 3333.33,
+          isCredit: false,
+          timestamp: DateTime(2026, 3, 1),
+          accountKind: AccountKind.loan,
+        ),
+        Transaction(
+          id: 'pnb-ack',
+          merchant: 'Loan payment',
+          bank: 'PNB',
+          maskedAccount: '••••0310',
+          category: SpendCategory.emi,
+          amount: 3333.33,
+          isCredit: false,
+          timestamp: DateTime(2026, 3, 1, 3),
+          accountKind: AccountKind.loan,
+        ),
+        Transaction(
+          id: 'orphan',
+          merchant: 'MBK EMI',
+          bank: 'HDFC',
+          maskedAccount: '••••5300',
+          category: SpendCategory.emi,
+          amount: 111.11,
+          isCredit: false,
+          timestamp: DateTime(2026, 4, 1),
+          accountKind: AccountKind.loan,
+        ),
+      ];
+
+      expectParity(
+        productBank: 'PNB',
+        productMask: '••••0310',
+        productKind: AccountKind.loan,
+        all: all,
+        discoveries: loans,
+      );
+      expectParity(
+        productBank: 'HDFC',
+        productMask: '••••0855',
+        productKind: AccountKind.loan,
+        all: all,
+        discoveries: loans,
+      );
+    });
+  });
 }
