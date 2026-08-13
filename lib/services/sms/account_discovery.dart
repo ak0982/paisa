@@ -228,6 +228,30 @@ class AccountDiscovery {
     ),
     _CardPattern(
       RegExp(
+        r'(?:spent on|spent via).{0,60}(?:HDFC|SBI|ICICI|Axis|Kotak)\s+Bank\s+Card\s+[xX*]*(\d{4})\b.*\bBLOCK\s+DC\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromSavingsMatch,
+      kind: AccountKind.savings,
+    ),
+    _CardPattern(
+      RegExp(
+        r'(?:HDFC|SBI|ICICI|Axis|Kotak)\s+BANK\s+Debit Card\s+[xX*]*(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromSavingsMatch,
+      kind: AccountKind.savings,
+    ),
+    _CardPattern(
+      RegExp(
+        r'Savings Account\s+[Xx*•]+(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromSenderOrBody,
+      kind: AccountKind.savings,
+    ),
+    _CardPattern(
+      RegExp(
         r'(?:deposited|debited|credited)\s+(?:in|to|from)\s+(?:HDFC|SBI|ICICI|Axis|Kotak|IDFC(?:\s+FIRST)?|Yes(?:\s+Bank)?|IndusInd|HSBC)\s+Bank\s+(?:A/?c|Acct)\s*(?:XX|xx|\*{1,4})?(\d{4})\b',
         caseSensitive: false,
       ),

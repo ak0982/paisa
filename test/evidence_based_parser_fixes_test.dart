@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:paisa_app/services/sms/account_discovery.dart';
 import 'package:paisa_app/services/sms/parsed_sms_transaction.dart';
 import 'package:paisa_app/services/sms/sms_parser.dart';
 import 'package:paisa_app/services/sms/sms_scan_pipeline.dart';
@@ -317,6 +318,135 @@ void main() {
       expect(result.transaction!.amount, 60775.86);
       expect(result.transaction!.isCredit, isTrue);
       expect(result.transaction!.maskedAccount, '••••1505');
+    });
+
+    test('ICICI 3-digit XX505 CMS credit is not invented as an account', () {
+      const body =
+          'ICICI Bank Account XX505 credited:Rs. 60,775.86 on 07-May-26. Info CMS* CC RBI 10 H*ICICI BANK . Available Balance is Rs. 74,202.07.';
+      final result = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'icici-cms-3',
+          sender: 'VA-ICICIT-S',
+          body: body,
+          timestamp: DateTime(2026, 5, 7),
+        ),
+      );
+      expect(result.isParsed, isFalse);
+      expect(
+        AccountDiscovery.discover(sender: 'VA-ICICIT-S', body: body)?.mask,
+        isNot(equals('••••0505')),
+      );
+    });
+
+    test('ICICI CC refund transferred to savings XX1505 parses', () {
+      const body =
+          'Refund of Rs 1,715.36 from ICICI Bank Credit Card XX0003 to Savings Account XX1505 has been successfully transferred.';
+      final result = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'icici-sav-ref',
+          sender: 'AD-ICICIT-S',
+          body: body,
+          timestamp: DateTime(2026, 8, 1),
+        ),
+      );
+      expect(result.outcome, SmsPipelineOutcome.parsed, reason: body);
+      expect(result.transaction!.amount, 1715.36);
+      expect(result.transaction!.isCredit, isTrue);
+      expect(result.transaction!.maskedAccount, '••••1505');
+      expect(result.transaction!.bank, 'ICICI');
+      expect(
+        TransactionEnrichment.resolveAccountKind(
+          bank: 'ICICI',
+          mask: '••••1505',
+          body: body,
+          discoveries: const [],
+        ),
+        AccountKind.savings,
+      );
+      final d = AccountDiscovery.discover(sender: 'AD-ICICIT-S', body: body);
+      expect(d, isNotNull);
+      expect(d!.kind, AccountKind.savings);
+      expect(d.mask, '••••1505');
+    });
+
+    test('HDFC ALERT spent via Debit Card CCBBPSNO is savings not CC', () {
+      const body =
+          'ALERT:Rs.31250.00 spent via HDFC BANK Debit Card xx3569 at CCBBPSNO on Aug 1 2026 6:02AM without PIN/OTP.Not you?Call 18002586161 / 18002586161.';
+      final result = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'hdfc-dc-alert',
+          sender: 'AD-HDFCBK-S',
+          body: body,
+          timestamp: DateTime(2026, 8, 1),
+        ),
+      );
+      expect(result.outcome, SmsPipelineOutcome.parsed, reason: body);
+      expect(result.transaction!.amount, 31250);
+      expect(result.transaction!.isCredit, isFalse);
+      expect(result.transaction!.maskedAccount, '••••3569');
+      expect(
+        TransactionEnrichment.looksLikeDebitCardSpend(body.toLowerCase()),
+        isTrue,
+      );
+      expect(
+        TransactionEnrichment.looksLikeCreditCardTransaction(body.toLowerCase()),
+        isFalse,
+      );
+      expect(
+        TransactionEnrichment.resolveAccountKind(
+          bank: 'HDFC',
+          mask: '••••3569',
+          body: body,
+          discoveries: const [],
+        ),
+        AccountKind.savings,
+      );
+      final d = AccountDiscovery.discover(sender: 'AD-HDFCBK-S', body: body);
+      expect(d, isNotNull);
+      expect(d!.kind, AccountKind.savings);
+      expect(d.mask, '••••3569');
+    });
+
+    test('HDFC Spent From Bank Card CCBBPSNO BLOCK DC kind is savings', () {
+      const body =
+          'Spent Rs.31250 From HDFC Bank Card x3569 At CCBBPSNO On 2026-08-01:06:02:24 Bal Rs.55551.08 Not You? Call 18002586161/SMS BLOCK DC  3569 to 7308080808';
+      expect(
+        TransactionEnrichment.resolveAccountKind(
+          bank: 'HDFC',
+          mask: '••••3569',
+          body: body,
+          discoveries: const [],
+        ),
+        AccountKind.savings,
+      );
+      expect(
+        TransactionEnrichment.looksLikeCreditCardTransaction(body.toLowerCase()),
+        isFalse,
+      );
+    });
+
+    test('HDFC Rs spent on Bank Card CCBBPSNO BLOCK DC kind is savings', () {
+      const body =
+          'Rs.1365 spent on HDFC Bank Card x3569 at CCBBPSNO on 2026-08-01:06:02:24 Avl bal: 55551.0.Not You? Call 18002586161 / SMS BLOCK DC 3569 to 7308080808';
+      final result = SmsScanPipeline.process(
+        SmsMessageInput(
+          id: 'hdfc-spent-on-dc',
+          sender: 'AD-HDFCBK-S',
+          body: body,
+          timestamp: DateTime(2026, 8, 1),
+        ),
+      );
+      expect(result.outcome, SmsPipelineOutcome.parsed, reason: body);
+      expect(result.transaction!.maskedAccount, '••••3569');
+      expect(
+        TransactionEnrichment.resolveAccountKind(
+          bank: 'HDFC',
+          mask: '••••3569',
+          body: body,
+          discoveries: const [],
+        ),
+        AccountKind.savings,
+      );
     });
 
     test('EMI due reminder and SmartPay failed debit do not parse', () {

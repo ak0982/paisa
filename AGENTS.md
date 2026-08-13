@@ -76,7 +76,7 @@ The user develops against **physical Android devices**. When operating on them:
 ### Directory pointers
 | Area | What lives there |
 | --- | --- |
-| `lib/main.dart` | App bootstrap, provider wiring, **schema-version gate** (`transactionSchemaVersion` **33** / `categorizerVersion` **5**). `store.init()` + launch scan run **after first frame** (ISSUE-7, fully done). |
+| `lib/main.dart` | App bootstrap, provider wiring, **schema-version gate** (`transactionSchemaVersion` **34** / `categorizerVersion` **5**). `store.init()` + launch scan run **after first frame** (ISSUE-7, fully done). |
 | `lib/screens/` | Bottom-nav tabs: HOME (`dashboard_screen.dart`), MOVES (`transactions_screen.dart`), BUDGET (`budgets_screen.dart`), STATS (`insights_screen.dart` + `reports_screen.dart`), YOU (`profile_screen.dart`). Drill-downs: `category_transactions_screen.dart`, `filtered_transactions_screen.dart` (incl. You-account lists). Onboarding + settings (privacy / help only — no notification toggles). `main_shell.dart` uses **lazy keep-alive** tabs. |
 | `lib/widgets/` | `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `paisa_bottom_nav.dart`, `category_spend_chip.dart` (Home chips + Stats/Reports sticker grid / rim arc / TOP·mid·LOW badges), buttons/progress bars, `bank_logo.dart`. |
 | `lib/providers/finance_store.dart` | Core store: txns + discoveries, analytics, `bankAccounts()` / `_ledgerAccountBuckets()` (**memoized**), `_AccountKindEvidence` keyed by `bank\|mask`, You rematch + loan association, user budget limits, launch-scan, **throttled** `scanProgressListenable`. |
@@ -136,7 +136,7 @@ inboxes, with checkpointing (`sms_scan_state.dart`) for resume.
 
 `lib/main.dart` defines:
 
-- `const transactionSchemaVersion = **33**`
+- `const transactionSchemaVersion = **34**`
 - `const categorizerVersion = **5**`
 
 On launch, if either stored value is lower than the code constant **and** onboarding is complete,
@@ -181,6 +181,7 @@ installs keep stale data and your change appears to "do nothing."
 | 30 → 31 | **R2 review:** NACH kind/remap only from the beneficiary clause (not the funding bank); loan-linker word boundaries; same-last4 ownership fold skips card/loan donors; incremental discovery merge does not re-add counters. |
 | 31 → 32 | SBI UPI/CCBP amounts accept thousands commas; PNB loan-deposit SMS accepts optional `of`. |
 | 32 → 33 | Live-inbox parse gaps: HDFC Spent Rs On/From Bank Card (CC vs debit-card BBPS), ICICI cashback + "your" CC refunds, SBI CC reversal/cashback + e-mandate + UPI/IMPS/CBS credits, Kotak CC spend, PNB bank charges, IDFC savings interest + CC thank-you payment, ICICI CMS `Account XX credited:Rs.`. Debit-card `BLOCK DC` discoveries stay savings. |
+| 33 → 34 | Leftover live inbox: ICICI CC refund **successfully transferred** onto savings last-4 (4-digit only; 3-digit `XX505` CMS left unparsed); HDFC `spent via Debit Card` / `BLOCK DC` / `CCBBPSNO` store as **savings**, not creditCard. |
 
 `categorizerVersion` is **5** (R2-1: brand keywords beat generic SBI-style `trf to`, while
 BBPS/CCBP stay Transfer ahead of bills). ISSUE-13's categorizer precision rode the schema bump

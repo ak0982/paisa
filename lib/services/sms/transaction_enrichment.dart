@@ -66,6 +66,17 @@ abstract final class TransactionEnrichment {
       if (remappedToLoan) return AccountKind.loan;
     }
 
+    // Debit-card / BLOCK DC / CCBBPSNO spends are savings, not credit card
+    // (`ccbp` substring in CCBBPSNO used to flip kind via _creditCardBody).
+    if (looksLikeDebitCardSpend(lower)) return AccountKind.savings;
+    // ICICI CC refund landed in savings: body mentions the card as the source.
+    if (RegExp(
+      r'refund of .+to savings account .+successfully transferred',
+      caseSensitive: false,
+    ).hasMatch(lower)) {
+      return AccountKind.savings;
+    }
+
     if (looksLikeCreditCardTransaction(lower)) return AccountKind.creditCard;
 
     if (_creditCardBody.hasMatch(lower)) return AccountKind.creditCard;
@@ -114,8 +125,27 @@ abstract final class TransactionEnrichment {
     );
   }
 
+  /// HDFC/SBI debit-card BBPS (BLOCK DC, "Debit Card", CCBBPSNO) must stay
+  /// savings — not creditCard. Distinct from funding-side MBK CCBP bill pay.
+  static bool looksLikeDebitCardSpend(String lower) {
+    if (RegExp(r'\bblock\s+dc\b', caseSensitive: false).hasMatch(lower)) {
+      return true;
+    }
+    if (RegExp(r'\bdebit\s+card\b', caseSensitive: false).hasMatch(lower)) {
+      return true;
+    }
+    if ((lower.contains('ccbbps') ||
+            lower.contains('bbpsbill') ||
+            lower.contains('dcsi-bbps')) &&
+        !lower.contains('credit card')) {
+      return true;
+    }
+    return false;
+  }
+
   static bool looksLikeCreditCardTransaction(String lower) {
     if (looksLikeLoanPayment(lower)) return false;
+    if (looksLikeDebitCardSpend(lower)) return false;
 
     if (lower.contains('ccbp') || lower.contains('mbk ccbp')) return true;
 

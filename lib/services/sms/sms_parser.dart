@@ -132,7 +132,10 @@ class SmsParser {
     r'monthly interest of|'
     r'debited with rs\.?\s*[\d,]+.*bank charges|'
     r'thank you for payment of\s+(?:inr|rs)|'
-    r'credited:rs)',
+    r'credited:rs|'
+    // Live leftovers: HDFC "ALERT: Rs spent via Debit Card" / ICICI CC→savings refund.
+    r'spent via|'
+    r'refund of\s+(?:inr|rs\.?).+successfully transferred)',
     caseSensitive: false,
   );
 
@@ -163,9 +166,10 @@ class SmsParser {
 
   /// Strong bank alert verbs — used for trusted senders only.
   static final _bankAlertPattern = RegExp(
-    r'(debited|credited|spent\s+on|spent\s+(?:inr|rs\.?)|paid\s+to|sent\s+rs|'
+    r'(debited|credited|spent\s+on|spent\s+via|spent\s+(?:inr|rs\.?)|paid\s+to|sent\s+rs|'
     r'withdrawn|deposited|depositing|payment of\s+(?:inr|rs)|has a credit by|'
-    r'is debited to|received\s+rs\.?\s*[\d,]+.*in your)',
+    r'is debited to|received\s+rs\.?\s*[\d,]+.*in your|'
+    r'successfully transferred)',
     caseSensitive: false,
   );
 
@@ -1041,6 +1045,16 @@ class SmsParser {
         accountGroup: 2,
         merchantGroup: 3,
       ),
+      // Live leftover: "ALERT:Rs.X spent via HDFC BANK Debit Card xx3569 at CCBBPSNO on Aug 1 …"
+      _SmsPattern(
+        RegExp(
+          r"(?:ALERT:)?\s*Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent via\s+(?:HDFC|SBI|ICICI|Axis|Kotak)\s+BANK\s+Debit Card\s+[xX*]*(\d{4})\s+at\s+([A-Za-z0-9 .&'_-]+?)\s+on\s+",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
       // ICICI cashback — often no card last-4: "Congrats! Rs 134.09 cashback credited to ICICI Bank Credit Card"
       _SmsPattern(
         RegExp(
@@ -1277,7 +1291,8 @@ class SmsParser {
         accountGroup: 2,
         isCredit: true,
       ),
-      // ICICI savings: "ICICI Bank Account XX505 credited:Rs. 60,775.86 on 07-May-26. Info CMS*…"
+      // ICICI savings: "ICICI Bank Account XX1505 credited:Rs. …" (4+ digits only;
+      // 3-digit XX505 is left unparsed on purpose — do not invent a padded mask).
       _SmsPattern(
         RegExp(
           r'ICICI Bank Account\s+X+(\d{4,})\s+credited:Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
@@ -1285,6 +1300,17 @@ class SmsParser {
         ),
         accountGroup: 1,
         amountGroup: 2,
+        isCredit: true,
+      ),
+      // Live leftover: CC refund landed in savings — "Refund of Rs X from ICICI
+      // Bank Credit Card XX0003 to Savings Account XX1505 has been successfully transferred."
+      _SmsPattern(
+        RegExp(
+          r'Refund of Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+from ICICI Bank Credit Card\s+[Xx*]+\d+\s+to Savings Account\s+[Xx*]+(\d{4})\s+has been successfully transferred',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
         isCredit: true,
       ),
       // ICICI settlement relay: account XXXXXXXX0429 has been credited with amount

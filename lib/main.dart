@@ -118,7 +118,11 @@ const int categorizerVersion = 5;
 // PNB bank charges, IDFC savings interest + CC thank-you payment,
 // ICICI "Account XX credited:Rs." CMS credits.
 // Debit-card "BLOCK DC" discoveries stay savings, not credit card.
-const int transactionSchemaVersion = 33;
+// Bumped 33 -> 34: leftover live inbox — ICICI CC refund "successfully
+// transferred" onto savings XX#### (4-digit only; 3-digit XX505 CMS left
+// unparsed); HDFC "spent via Debit Card" / BLOCK DC / CCBBPSNO kind is
+// savings, not creditCard (`ccbp` substring no longer flips debit-card BBPS).
+const int transactionSchemaVersion = 34;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
