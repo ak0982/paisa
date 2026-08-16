@@ -12,6 +12,7 @@ import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/category_spend_chip.dart';
+import '../widgets/day_strip_teaser.dart';
 import '../widgets/neo_surface.dart';
 import '../widgets/paisa_progress_bar.dart';
 import '../widgets/transaction_row.dart';
@@ -234,6 +235,8 @@ class DashboardScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+                const SizedBox(height: 12),
+                const DayStripTeaser(),
                 if (chips.isNotEmpty) ...[
                   const SizedBox(height: 18),
                   SizedBox(

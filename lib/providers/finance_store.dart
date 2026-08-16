@@ -1232,6 +1232,145 @@ class FinanceStore extends ChangeNotifier {
   static double _sumAmount(Iterable<Transaction> txns) =>
       txns.fold(0.0, (sum, t) => sum + t.amount);
 
+  // --- Day Strip (single local calendar day) ---
+
+  /// Inclusive local-midnight start and exclusive next-midnight end for [day].
+  static (DateTime start, DateTime end) dayBounds(DateTime day) {
+    final start = DateTime(day.year, day.month, day.day);
+    return (start, start.add(const Duration(days: 1)));
+  }
+
+  /// Every cash movement on [day]'s local calendar date, oldest → newest.
+  /// Includes internal moves (CC bill / self-transfer / CC payment-received).
+  List<Transaction> transactionsForDay(DateTime day) {
+    final (start, end) = dayBounds(day);
+    return _transactions.where((t) {
+      return !t.timestamp.isBefore(start) && t.timestamp.isBefore(end);
+    }).toList()
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+  }
+
+  /// OUT for [day]: real spend KPIs (same exclusions as Home / ISSUE-4).
+  double daySpend(DateTime day) =>
+      _sumAmount(_spendTxns(transactionsForDay(day)));
+
+  /// IN for [day]: real income KPIs (same exclusions as Home / ISSUE-4).
+  double dayIncome(DateTime day) =>
+      _sumAmount(_incomeTxns(transactionsForDay(day)));
+
+  /// Signed net for [day]: IN − OUT.
+  double dayNet(DateTime day) => dayIncome(day) - daySpend(day);
+
+  /// Ids of self-transfer legs within [day]'s transactions.
+  Set<String> daySelfTransferLegIds(DateTime day) =>
+      _selfTransferLegIds(transactionsForDay(day));
+
+  /// True when [t] appears on the day list but is excluded from OUT/IN KPIs.
+  bool isDayInternalMove(Transaction t, {DateTime? day}) {
+    if (t.isCreditCardBillPayment || t.isCreditCardPaymentReceived) {
+      return true;
+    }
+    final anchor = day ?? t.timestamp;
+    return daySelfTransferLegIds(anchor).contains(t.id);
+  }
+
+  /// OUT totals for the last [count] local days ending at [anchor] (inclusive).
+  /// Index 0 is oldest; last index is [anchor]'s day. Used for Home intensity ticks.
+  List<double> recentDaySpendSeries({DateTime? anchor, int count = 5}) {
+    final end = anchor ?? DateTime.now();
+    final day = DateTime(end.year, end.month, end.day);
+    return List.generate(count, (i) {
+      final d = day.subtract(Duration(days: count - 1 - i));
+      return daySpend(d);
+    });
+  }
+
+  // --- Day Strip (inclusive local date range) ---
+
+  /// Inclusive local-midnight start → exclusive day-after-[endInclusive] end.
+  static (DateTime start, DateTime endExclusive) rangeBounds(
+    DateTime start,
+    DateTime endInclusive,
+  ) {
+    var a = DateTime(start.year, start.month, start.day);
+    var b = DateTime(endInclusive.year, endInclusive.month, endInclusive.day);
+    if (b.isBefore(a)) {
+      final tmp = a;
+      a = b;
+      b = tmp;
+    }
+    return (a, b.add(const Duration(days: 1)));
+  }
+
+  /// Every cash movement from [start] through [endInclusive] (local calendar).
+  /// Includes internal moves. Oldest → newest.
+  List<Transaction> transactionsForDateRange(
+    DateTime start,
+    DateTime endInclusive,
+  ) {
+    final (lo, hi) = rangeBounds(start, endInclusive);
+    return _transactions.where((t) {
+      return !t.timestamp.isBefore(lo) && t.timestamp.isBefore(hi);
+    }).toList()
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+  }
+
+  /// OUT KPI for an inclusive local date range (same exclusions as [daySpend]).
+  double rangeSpend(DateTime start, DateTime endInclusive) =>
+      _sumAmount(_spendTxns(transactionsForDateRange(start, endInclusive)));
+
+  /// IN KPI for an inclusive local date range (same exclusions as [dayIncome]).
+  double rangeIncome(DateTime start, DateTime endInclusive) =>
+      _sumAmount(_incomeTxns(transactionsForDateRange(start, endInclusive)));
+
+  /// Signed net for an inclusive local date range: IN − OUT.
+  double rangeNet(DateTime start, DateTime endInclusive) =>
+      rangeIncome(start, endInclusive) - rangeSpend(start, endInclusive);
+
+  /// Self-transfer leg ids within an inclusive local date range.
+  Set<String> rangeSelfTransferLegIds(DateTime start, DateTime endInclusive) =>
+      _selfTransferLegIds(transactionsForDateRange(start, endInclusive));
+
+  /// True when [t] is listed but excluded from OUT/IN KPIs for [start]–[end].
+  bool isRangeInternalMove(
+    Transaction t, {
+    required DateTime start,
+    required DateTime endInclusive,
+  }) {
+    if (t.isCreditCardBillPayment || t.isCreditCardPaymentReceived) {
+      return true;
+    }
+    return rangeSelfTransferLegIds(start, endInclusive).contains(t.id);
+  }
+
+  /// Day-of-month → OUT spend for [month]'s calendar month (local dates).
+  /// Days with zero OUT are omitted. Used by Pulse Calendar intensity fills.
+  Map<int, double> monthDaySpendMap(DateTime month) {
+    final year = month.year;
+    final m = month.month;
+    final lastDay = DateTime(year, m + 1, 0).day;
+    final map = <int, double>{};
+    for (var d = 1; d <= lastDay; d++) {
+      final spend = daySpend(DateTime(year, m, d));
+      if (spend > 0) map[d] = spend;
+    }
+    return map;
+  }
+
+  /// Normalized 0–1 intensity for [day]'s OUT vs peak OUT in that month.
+  /// Returns 0 when the day (or month peak) has no spend.
+  double daySpendIntensity(DateTime day, {Map<int, double>? monthMap}) {
+    final map = monthMap ?? monthDaySpendMap(day);
+    final spend = map[day.day] ?? daySpend(day);
+    if (spend <= 0) return 0;
+    var peak = 0.0;
+    for (final v in map.values) {
+      if (v > peak) peak = v;
+    }
+    if (peak <= 0) peak = spend;
+    return (spend / peak).clamp(0.0, 1.0);
+  }
+
   // --- Derived stats ---
 
   double get monthlySpent => _sumAmount(_spendTxns(_dashboardMonthTransactions));

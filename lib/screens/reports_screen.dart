@@ -12,6 +12,7 @@ import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/category_spend_chip.dart';
 import '../widgets/grouped_transaction_list.dart';
+import '../widgets/pulse_calendar_sheet.dart';
 import '../widgets/transaction_sort_control.dart';
 import 'category_transactions_screen.dart';
 import 'filtered_transactions_screen.dart';
@@ -95,24 +96,25 @@ class _ReportsScreenState extends State<ReportsScreen> {
       DateTime(d.year, d.month, d.day, 23, 59, 59, 999);
 
   Future<void> _pickCustomRange() async {
-    final store = context.read<FinanceStore>();
     final now = DateTime.now();
-    final first = store.earliestTransactionDate ?? DateTime(now.year - 3);
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(first.year, first.month, first.day),
-      lastDate: now,
-      initialDateRange: _customRange,
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: PaisaColors.primary),
-        ),
-        child: child!,
-      ),
+    final seed = _customRange ??
+        DateTimeRange(
+          start: DateTime(now.year, now.month, 1),
+          end: DateTime(now.year, now.month, now.day),
+        );
+    final picked = await showPulseCalendarSheet(
+      context,
+      initialStart: seed.start,
+      initialEnd: seed.end,
+      initialMode: PulseCalendarMode.range,
     );
-    if (picked == null) return;
+    if (!mounted || picked == null) return;
     setState(() {
-      _customRange = picked;
+      // Store local calendar days; [_resolveRange] expands end to inclusive EOD.
+      _customRange = DateTimeRange(
+        start: picked.startDay,
+        end: picked.endDay,
+      );
       _preset = _RangePreset.custom;
     });
   }
@@ -281,55 +283,61 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     return SizedBox(
       height: 42,
-      child: ListView(
+      child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 18),
-        children: labels.entries.map((e) {
-          final active = _preset == e.key;
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: GestureDetector(
-              onTap: () {
-                if (e.key == _RangePreset.custom) {
-                  _pickCustomRange();
-                } else {
-                  setState(() => _preset = e.key);
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: active ? PaisaColors.primary : PaisaColors.card,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: active ? PaisaColors.primary : PaisaColors.dividerAlt,
+        child: Row(
+          children: labels.entries.map((e) {
+            final active = _preset == e.key;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: GestureDetector(
+                onTap: () {
+                  if (e.key == _RangePreset.custom) {
+                    _pickCustomRange();
+                  } else {
+                    setState(() => _preset = e.key);
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: active ? PaisaColors.primary : PaisaColors.card,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: active ? PaisaColors.primary : PaisaColors.dividerAlt,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      if (e.key == _RangePreset.custom) ...[
+                        Icon(
+                          Icons.calendar_today_rounded,
+                          size: 13,
+                          color: active
+                              ? PaisaColors.inkOnAccent
+                              : PaisaColors.mutedLight,
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Text(
+                        e.value,
+                        style: PaisaTheme.manrope(
+                          size: 12.5,
+                          weight: FontWeight.w700,
+                          color: active
+                              ? PaisaColors.inkOnAccent
+                              : PaisaColors.mutedLight,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: Row(
-                  children: [
-                    if (e.key == _RangePreset.custom) ...[
-                      Icon(
-                        Icons.calendar_today_rounded,
-                        size: 13,
-                        color: active ? PaisaColors.inkOnAccent : PaisaColors.mutedLight,
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                    Text(
-                      e.value,
-                      style: PaisaTheme.manrope(
-                        size: 12.5,
-                        weight: FontWeight.w700,
-                        color: active ? PaisaColors.inkOnAccent : PaisaColors.mutedLight,
-                      ),
-                    ),
-                  ],
-                ),
               ),
-            ),
-          );
-        }).toList(),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
