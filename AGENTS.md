@@ -77,11 +77,11 @@ The user develops against **physical Android devices**. When operating on them:
 | Area | What lives there |
 | --- | --- |
 | `lib/main.dart` | App bootstrap, provider wiring, **schema-version gate** (`transactionSchemaVersion` **35** / `categorizerVersion` **5**). `store.init()` + launch scan run **after first frame** (ISSUE-7, fully done). |
-| `lib/screens/` | Bottom-nav tabs: HOME (`dashboard_screen.dart`), MOVES (`transactions_screen.dart`), BUDGET (`budgets_screen.dart`), STATS (`insights_screen.dart` + `reports_screen.dart`), YOU (`profile_screen.dart`). Drill-downs: `category_transactions_screen.dart`, `filtered_transactions_screen.dart` (incl. You-account lists). Onboarding + settings (privacy / help only — no notification toggles). `main_shell.dart` uses **lazy keep-alive** tabs. |
-| `lib/widgets/` | `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `paisa_bottom_nav.dart`, `category_spend_chip.dart` (Home chips + Stats/Reports sticker grid / rim arc / TOP·mid·LOW badges), `paisa_coin.dart` (shared struck-disc chrome), `sms_coin_slab.dart` (**Coin Flip / Mint Slab** transaction detail — see §4.10), buttons/progress bars, `bank_logo.dart`. |
+| `lib/screens/` | Bottom-nav tabs: HOME (`dashboard_screen.dart` + **Day Strip teaser**), MOVES (`transactions_screen.dart`), BUDGET (`budgets_screen.dart`), STATS (`insights_screen.dart` **ledger coin** + `reports_screen.dart`), YOU (`profile_screen.dart`). Day browse: `day_strip_screen.dart` (**Paisa Coin** circular day/range ledger). Drill-downs: `category_transactions_screen.dart`, `filtered_transactions_screen.dart` (incl. You-account lists). Onboarding + settings (privacy / help only — no notification toggles). `main_shell.dart` uses **lazy keep-alive** tabs. |
+| `lib/widgets/` | `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `paisa_bottom_nav.dart`, `category_spend_chip.dart` (Home chips + Stats/Reports sticker grid / rim arc / TOP·mid·LOW badges), `paisa_coin.dart` (shared struck-disc chrome for Day Strip + Stats), `day_strip_teaser.dart` (Home DAY entry), `pulse_calendar_sheet.dart` (**Pulse Calendar** day/range picker), `sms_coin_slab.dart` (**Coin Flip / Mint Slab** transaction detail — see §4.10), buttons/progress bars, `bank_logo.dart`. |
 | `lib/providers/finance_store.dart` | Core store: txns + discoveries, analytics, `bankAccounts()` / `_ledgerAccountBuckets()` (**memoized**), `_AccountKindEvidence` keyed by `bank\|mask`, You rematch + loan association, user budget limits, launch-scan, **throttled** `scanProgressListenable`. |
 | `lib/providers/app_settings.dart` | Preferences (profile, merchant-masking, hidden accounts). **No notification toggles** (removed ISSUE-6). |
-| `lib/services/sms/` | SMS pipeline (see §4) plus `product_payment_linker.dart` (You drilldown product↔funding links, O(n) `ProductPairingIndex`). |
+| `lib/services/sms/` | SMS pipeline (see §4) plus `product_payment_linker.dart` (You drilldown product↔funding links, O(n) `ProductPairingIndex`) and `original_sms_lookup.dart` (Coin Flip on-demand body statuses). |
 | `lib/models/` | `transaction.dart`, `bank_account.dart`, `budget.dart`, `category_info.dart`, `range_report.dart`, `transaction_sort.dart`. |
 | `lib/data/` | `transaction_database.dart` (sqflite; `mergeDiscoveredAccounts`, `category_budgets` table), `sms_scan_state.dart` (checkpointing), `mock_data.dart`. |
 | `lib/utils/formatters.dart` | INR (`decimalDigits: 2`, no whole-rupee roundoff), `formatSharePercent` (tiny Stats shares), date/time. |
@@ -194,7 +194,7 @@ BBPS/CCBP stay Transfer ahead of bills). ISSUE-13's categorizer precision rode t
 
 ### 4.1 SMS parsing pipeline (`lib/services/sms/`)
 - `sms_reader_service.dart` — talks to the native side over the `com.paisa.paisa_app/sms`
-  platform   channel; batch-fetches messages and inbox counts; seeds `AccountBankRegistry` from
+  platform channel; batch-fetches messages and inbox counts; seeds `AccountBankRegistry` from
   stored transaction votes before a scan (ISSUE-12). Also serves single-message
   reads (`getSmsById` / `loadOriginalSms`) for the transaction detail (§4.10).
 - `original_sms_lookup.dart` — on-demand original-SMS result type + empty-state
@@ -323,6 +323,30 @@ filters. Tapping an account opens `FilteredTransactionsScreen` via
   perimeter, **TOP · N%** / mid `N%` / **LOW · N%** badges via `formatSharePercent` (tiny
   shares must not vanish as `0%`). Highest-share tile is emphasized. Tiles drill into the
   category list (Insights window or report range).
+
+### 4.8a Day Strip (Paisa Coin) + Pulse Calendar + Stats ledger coin
+UI-only day/range browsing and struck-coin chrome. **No schema bump.**
+
+- **Home DAY teaser** (`day_strip_teaser.dart`) sits under the month hero: selected/today
+  OUT · IN plus optional intensity ticks. Tap opens `DayStripScreen`; calendar icon opens
+  **Pulse Calendar**.
+- **Day Strip** (`day_strip_screen.dart`) — single day or inclusive range minted as a
+  circular **Paisa Coin** ledger (`paisa_coin.dart`): milled rim, OUT/IN gauge ring, recessed
+  OUT amount, embossed day numeral + PAISA wordmark. Rows below are stamped with miniature
+  coin tokens (share of day); internal moves get a dashed token + MOVE badge and stay out of
+  OUT/IN KPIs (same cashflow rules as Home). Filter overflow + sort; row tap → Coin Flip
+  (§4.10).
+- **Pulse Calendar** (`pulse_calendar_sheet.dart`) — Neo-Vault month grid with spend-intensity
+  fills (`FinanceStore` day OUT helpers). Modes: **day** (Day Strip / teaser) and **range**.
+  **Reports → Custom** uses this sheet (not the Material date-range picker) and opens the
+  picked range on Day Strip / report flow accordingly.
+- **Stats ledger coin** (`insights_screen.dart`) — whole insights window struck as one coin
+  via the same `paisa_coin.dart` chrome (`PaisaCoinFace` / tokens / wordmark `STATS`). Peak-day
+  legend opens Day Strip for that day.
+
+Shared chrome lives in `paisa_coin.dart` so Day Strip and Stats stay visually consistent.
+Tests: `day_strip_test.dart`, `day_strip_widget_test.dart`, `insights_coin_widget_test.dart`,
+`reports_custom_range_test.dart` (Custom → Pulse Calendar).
 
 ### 4.9 Performance (no schema bump)
 These keep large inboxes responsive. **Do not bump `transactionSchemaVersion` for them.**
@@ -507,9 +531,15 @@ Source: `code_review_round2_by_fable_claude.md` (on `main`). Do **not** re-intro
   - `home_consistency_test.dart` — Home KPIs vs listed rows / exclusions.
   - `sms_scan_pipeline_test.dart` / synthetic corpus — production gate coverage.
   - `same_source_alert_twins_test.dart` — schema 35 Spent vs ALERT debit-card twin collapse.
+  - `day_strip_test.dart` / `day_strip_widget_test.dart` — Day Strip OUT/IN vs Home KPIs;
+    Paisa Coin UI + Pulse Calendar entry (§4.8a).
+  - `insights_coin_widget_test.dart` — Stats ledger coin totals / chrome.
+  - `reports_custom_range_test.dart` — Reports Custom opens Pulse Calendar.
   - `sms_coin_slab_test.dart` — Coin Flip / Mint Slab detail: face summary, flip
     reveals the body, loading / deleted-SMS / no-permission / no-`smsId` states,
     copy, and masking that never redacts the SMS (§4.10).
+  - `sms_coin_slab_corners_test.dart` — money/paise matrix, verbatim body, Unicode,
+    every `OriginalSmsStatus`, flip mechanics, list journeys, `getSmsById` contract.
   - Plus parser / discovery / registry / enrichment / categorizer / insights / reports /
     `audit_*` / `*_scenarios` / `widget_test.dart`.
 - **Never commit SMS dumps, `paisa_sms_analysis.db`, real account masks, `.env`, secrets, or

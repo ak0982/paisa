@@ -32,16 +32,19 @@ It is purpose‑built for **Indian banks and payment providers** (HDFC, SBI, ICI
 - **Full SMS history scan** — the first launch reads the **entire** SMS inbox (no time window), so years of history are captured. Subsequent launches do fast incremental scans of only new messages.
 - **Automatic transaction parsing** — a staged filter + regex pipeline extracts amount, debit/credit direction, merchant/payee, bank and masked account from each alert. No manual entry.
 - **Account discovery & classification** — savings accounts, credit cards and loans are detected from your SMS and grouped by bank + masked last‑4, each classified by a balanced per‑account voting rule.
-- **Dashboard (Home)** — greeting, current‑month spend/income (KPIs exclude internal movement), **tappable** category chips → this month’s category list, Today / This‑month rows.
+- **Dashboard (Home)** — greeting, current‑month spend/income (KPIs exclude internal movement), **tappable** category chips → this month’s category list, **Day Strip teaser** (DAY OUT · IN → Paisa Coin day ledger), Today / This‑month rows.
+- **Day Strip (Paisa Coin)** — single day or range as a circular struck-coin ledger (OUT/IN gauge, stamped rows). Opens from Home teaser, Pulse Calendar, or Stats peak-day.
+- **Pulse Calendar** — month grid with spend-intensity cells; day or range mode. Used by Day Strip and **Reports → Custom** (replaces the Material range picker).
 - **Moves** — searchable, category‑filtered, date‑grouped transaction list with sorting.
 - **Budgets** — **user‑editable** per‑category limits (seeded once from history, then owned by the user; progress can exceed 100%). Not a circular `spent × 1.3` formula.
-- **Stats** — spending charts, Home‑style category **stickers** (rim arc + TOP/mid/LOW % badges), top merchants, daily average, highest‑spend day, food‑spend trend.
-- **Reports** — date‑range reports (presets + custom) with the same sticker grid and category / merchant / income drill‑downs.
+- **Stats** — **ledger coin** hero (shared `paisa_coin` chrome), spending charts, Home‑style category **stickers** (rim arc + TOP/mid/LOW % badges), top merchants, daily average, highest‑spend day, food‑spend trend.
+- **Reports** — date‑range reports (presets + **Custom via Pulse Calendar**) with the same sticker grid and category / merchant / income drill‑downs.
+- **Coin Flip / Mint Slab** — tapping a transaction opens a flip coin: face = amount/merchant/account; reverse = **original SMS** fetched on demand by `smsId` (bodies are **not** stored).
 - **Sorting** — every transaction list supports Newest/Oldest (date) and High→Low / Low→High (amount) via a shared control.
 - **Filtering** — drill into a category, merchant, income source, or a **You** account (loan drilldown includes associated EMI without double‑counting a product SMS + funding debit).
 - **You** — detected accounts with All / Savings / Credit card / Loan filters, ownership rematch, editable local profile, **Rescan SMS**, privacy + help settings (**no** notification toggles).
 - **Exact INR** — all amounts use `en_IN` currency with **two decimal digits** (no whole‑rupee roundoff).
-- **On-device SQLite storage** — parsed transactions are deduplicated by SMS id and persisted locally with `sqflite` (plaintext; biometric lock / SQLCipher are not shipped).
+- **On-device SQLite storage** — parsed transactions are deduplicated by SMS id and persisted locally with `sqflite` (plaintext; biometric lock / SQLCipher are not shipped). SMS **bodies** are never written to the DB.
 
 ---
 
@@ -82,7 +85,7 @@ flowchart TD
     F --> I
 
     I --> J["FinanceStore (ChangeNotifier)<br/>bank|mask voting, You rematch,<br/>product↔funding links, reports"]
-    J --> K["UI screens<br/>HOME · MOVES · BUDGET<br/>STATS · Reports · YOU"]
+    J --> K["UI screens<br/>HOME (+ Day Strip teaser) · Day Strip / Paisa Coin<br/>MOVES · BUDGET · STATS (ledger coin)<br/>Reports (Custom → Pulse Calendar) · YOU<br/>Coin Flip / Mint Slab on txn tap"]
 ```
 
 ### Layer-by-layer
@@ -92,11 +95,12 @@ flowchart TD
 | Screen | Purpose |
 | --- | --- |
 | `main_shell.dart` | Bottom-nav shell: **HOME / MOVES / BUDGET / STATS / YOU**. Tabs are **lazy keep-alive** (built on first visit, kept offstage). Launch scan runs after first frame, not here. |
-| `dashboard_screen.dart` | Home: greeting, current-month spend/income, **tappable** category chips, Today / This-month previews. |
-| `transactions_screen.dart` | Moves: full list with search, category filters, date grouping and sort. |
+| `dashboard_screen.dart` | Home: greeting, current-month spend/income, **tappable** category chips, **Day Strip teaser**, Today / This-month previews. |
+| `day_strip_screen.dart` | **Paisa Coin** day/range ledger (circular OUT/IN coin + stamped rows). Pulse Calendar entry; row tap → Coin Flip. |
+| `transactions_screen.dart` | Moves: full list with search, category filters, date grouping and sort. Row tap → Coin Flip. |
 | `budgets_screen.dart` | User-editable per-category budget limits with progress bars (can exceed 100%). |
-| `insights_screen.dart` | Stats: charts + Home-style category sticker grid (rim arc, TOP/mid/LOW %). |
-| `reports_screen.dart` | Date-range reports (presets + custom) with the same sticker grid and drill-downs. |
+| `insights_screen.dart` | Stats: **ledger coin** hero + charts + Home-style category sticker grid (rim arc, TOP/mid/LOW %). |
+| `reports_screen.dart` | Date-range reports (presets + **Custom → Pulse Calendar**) with the same sticker grid and drill-downs. |
 | `category_transactions_screen.dart` | Debit list for one category (wrapper over `FilteredTransactionsScreen`). |
 | `filtered_transactions_screen.dart` | Category, merchant, income source, or **You-account** drilldown (optionally date-bounded). |
 | `profile_screen.dart` | You: accounts with All/Savings/Credit-card/Loan filters, rematch, Rescan SMS, privacy/help. |
@@ -110,7 +114,7 @@ flowchart TD
 
 #### `lib/widgets/` — reusable widgets
 
-`paisa_bottom_nav.dart` (HOME / MOVES / BUDGET / STATS / YOU), `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `category_spend_chip.dart` (Home chips + Stats/Reports `CategorySpendStickerGrid` with rim arc and TOP/mid/LOW badges), `paisa_progress_bar.dart`, `gradient_button.dart`, `bank_logo.dart`, and `settings_detail_scaffold.dart`.
+`paisa_bottom_nav.dart` (HOME / MOVES / BUDGET / STATS / YOU), `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `category_spend_chip.dart` (Home chips + Stats/Reports `CategorySpendStickerGrid` with rim arc and TOP/mid/LOW badges), `paisa_coin.dart` (shared struck-disc chrome for Day Strip + Stats ledger coin), `day_strip_teaser.dart` (Home DAY entry), `pulse_calendar_sheet.dart` (Pulse Calendar day/range picker), `sms_coin_slab.dart` (Coin Flip / Mint Slab transaction detail), `paisa_progress_bar.dart`, `gradient_button.dart`, `bank_logo.dart`, and `settings_detail_scaffold.dart`.
 
 #### `lib/providers/` — state management
 
@@ -123,7 +127,8 @@ End-to-end flow: **raw SMS → filters → parse → enrich → discover → sto
 
 | File | Role |
 | --- | --- |
-| `sms_reader_service.dart` | Talks to Android over the `com.paisa.paisa_app/sms` `MethodChannel`; batches inbox reads (default 500), tracks progress/checkpoints, and runs a two-pass scan (pass 1 learns bank-per-mask + discovers accounts, pass 2 parses in an isolate). |
+| `sms_reader_service.dart` | Talks to Android over the `com.paisa.paisa_app/sms` `MethodChannel`; batches inbox reads (default 500), tracks progress/checkpoints, and runs a two-pass scan (pass 1 learns bank-per-mask + discovers accounts, pass 2 parses in an isolate). Also `getSmsById` / `loadOriginalSms` for Coin Flip (on-demand body; not persisted). |
+| `original_sms_lookup.dart` | Typed original-SMS lookup result + empty-state copy (`emptyBody` / `lookupFailed` / …) for the mint-slab reverse. |
 | `sms_scan_pipeline.dart` | `SmsScanPipeline` — the fast **multi-stage filter** (cheap checks first, full regex last): (1) financial sender, (2) financial body hint / financial gate, (3) OTP filter, (4) promo/scam filter, (5) transaction-signal check, (6) parse. Returns a typed `SmsPipelineOutcome`. |
 | `sms_parser.dart` | `SmsParser` — promo/scam/OTP detection, sender/body bank resolution, and a large ordered list of bank/UPI/credit-card regex patterns that extract amount, account mask, merchant and credit/debit. |
 | `bank_promo_filters.dart` | `BankPromoFilters` — per-bank marketing/offer phrases (SmartEMI, YONO offer, iMobile offer, etc.) used to drop promos that carry an amount but no completed transaction. |
@@ -249,6 +254,7 @@ For display, memoized `bankAccounts()` / `_ledgerAccountBuckets()` group by cano
 - **Shared sorting/formatting.** All lists sort and group through `transaction_sort.dart`. All INR uses `formatInr` (`decimalDigits: 2`). Stats share badges use `formatSharePercent`.
 - **Home lists vs KPIs.** Lists still show **every** cash movement (`countsTowardCashflowSummary`). Headline spend/income use `countsTowardSpend` / `countsTowardIncome` plus transfer pairing, so CCBP / self-transfers do not inflate the hero numbers.
 - **Launch performance.** Lazy keep-alive tabs; memoized You-account buckets; O(n) product-pairing index; non-blocking `init()` after first frame; throttled scan-progress listenable.
+- **Coin Flip SMS reverse.** Bodies are loaded on demand via `getSmsById` (session memory cache only). Failure modes map to explicit `OriginalSmsStatus` values — never hang on a blank reverse.
 
 ---
 
@@ -308,11 +314,18 @@ Key test areas include:
 - **You accounts / loans / ownership** — `account_integration_matrix_test.dart` (~3000 cases), `loan_account_association_test.dart`, `account_ownership_test.dart`, `account_transactions_test.dart`, `product_payment_linker_test.dart`, `ledger_bucket_cache_test.dart`.
 - **Account-kind classification** — `account_kind_classification_test.dart`, `audit_credit_cards_test.dart`, `audit_loans_test.dart`, `audit_summary_test.dart`.
 - **Savings coverage** — `savings_coverage_diagnostic_test.dart`, `account_discovery_test.dart`, `account_bank_registry_test.dart`.
-- **SMS parsing & pipeline** — `sms_parser_test.dart`, `sms_scan_pipeline_test.dart`, `sms_parse_isolate_test.dart`, `sms_keyword_lists_test.dart`, `transaction_enrichment_test.dart`, `merchant_categorizer_test.dart`, `transaction_validity_test.dart`.
+- **SMS parsing & pipeline** — `sms_parser_test.dart`, `sms_scan_pipeline_test.dart`, `sms_parse_isolate_test.dart`, `sms_keyword_lists_test.dart`, `transaction_enrichment_test.dart`, `merchant_categorizer_test.dart`, `transaction_validity_test.dart`, `same_source_alert_twins_test.dart` (schema 35).
+- **Day Strip / Pulse / coins** — `day_strip_test.dart`, `day_strip_widget_test.dart`, `insights_coin_widget_test.dart`, `reports_custom_range_test.dart`.
+- **Coin Flip / Mint Slab** — `sms_coin_slab_test.dart`, `sms_coin_slab_corners_test.dart` (injectable loader; no device required).
 - **Formatters / launch** — `formatters_test.dart` (INR paise + share %), `launch_scan_test.dart` (non-blocking init).
 - **Analytics & UI consistency** — `home_consistency_test.dart`, `insights_window_test.dart`, `reports_category_drilldown_test.dart`, `simulate_insights_test.dart`, `deep_scenarios_test.dart`, `diverse_scenarios_test.dart`.
 - **Sorting** — `transaction_sort_test.dart`.
 - **Settings & widgets** — `app_settings_test.dart`, `finance_store_settings_test.dart`, `settings_widget_test.dart`, `widget_test.dart`.
+
+```bash
+flutter test test/day_strip_test.dart test/day_strip_widget_test.dart
+flutter test test/sms_coin_slab_test.dart test/sms_coin_slab_corners_test.dart
+```
 
 Test helpers live in `test/helpers/` (`test_harness.dart`, `dummy_data.dart`). Dump-dependent suites skip when `~/Downloads/my_sms.txt` is absent. **Never commit SMS dumps or `paisa_sms_analysis.db`.**
 
@@ -323,7 +336,7 @@ Test helpers live in `test/helpers/` (`test_harness.dart`, `dummy_data.dart`). D
 ```
 paisa_app/
 ├── lib/
-│   ├── main.dart                       # Entry point, providers, schema 31 + deferred init
+│   ├── main.dart                       # Entry point, providers, schema 35 + deferred init
 │   ├── data/
 │   │   ├── transaction_database.dart   # sqflite persistence (dedupe by SMS id)
 │   │   ├── sms_scan_state.dart         # scan checkpoint / full-scan flag
@@ -336,10 +349,11 @@ paisa_app/
 │   │   ├── category_info.dart          # SpendCategory
 │   │   └── range_report.dart
 │   ├── providers/
-│   │   ├── finance_store.dart          # store, voting, You buckets, launch scan
+│   │   ├── finance_store.dart          # store, voting, You buckets, Day Strip helpers, launch scan
 │   │   └── app_settings.dart
 │   ├── services/sms/
-│   │   ├── sms_reader_service.dart     # platform channel + two-pass scan
+│   │   ├── sms_reader_service.dart     # platform channel + two-pass scan + getSmsById
+│   │   ├── original_sms_lookup.dart    # Coin Flip on-demand SMS statuses / copy
 │   │   ├── sms_scan_pipeline.dart      # staged filters
 │   │   ├── sms_parser.dart             # regex parsing + promo/scam filters
 │   │   ├── bank_promo_filters.dart
@@ -353,23 +367,25 @@ paisa_app/
 │   │   └── parsed_sms_transaction.dart
 │   ├── screens/
 │   │   ├── main_shell.dart             # lazy keep-alive HOME/MOVES/BUDGET/STATS/YOU
-│   │   ├── dashboard_screen.dart
+│   │   ├── dashboard_screen.dart       # Home + Day Strip teaser
+│   │   ├── day_strip_screen.dart       # Paisa Coin day/range ledger
 │   │   ├── transactions_screen.dart
 │   │   ├── budgets_screen.dart
-│   │   ├── insights_screen.dart
-│   │   ├── reports_screen.dart
+│   │   ├── insights_screen.dart        # Stats ledger coin
+│   │   ├── reports_screen.dart         # Custom → Pulse Calendar
 │   │   ├── category_transactions_screen.dart
 │   │   ├── filtered_transactions_screen.dart
 │   │   ├── profile_screen.dart
 │   │   ├── edit_profile_screen.dart
 │   │   ├── onboarding/                 # welcome, profile setup, SMS permission, ready
 │   │   └── settings/                   # privacy, help & support (no notifications)
-│   ├── widgets/                        # nav, rows, lists, stickers, sort, bars
+│   ├── widgets/                        # nav, rows, paisa_coin, day_strip_teaser,
+│   │                                   # pulse_calendar_sheet, sms_coin_slab, stickers, sort
 │   ├── theme/                          # colors + typography (Sora / Manrope)
 │   └── utils/formatters.dart           # ₹ (2 decimals) + share % + dates
 ├── test/                               # ~500 focused tests + ~3000 account-matrix cases
-├── android/                            # Android host (READ_SMS)
-├── assets/                             # fonts + app icon
+├── android/                            # Android host (READ_SMS + getSmsById)
+├── assets/                             # fonts + app icon + bank logos
 └── pubspec.yaml
 ```
 
@@ -377,6 +393,6 @@ paisa_app/
 
 ## Privacy
 
-- **On-device processing.** Every SMS is read, filtered, parsed, classified and stored **entirely on your Android device**. Parsed data lives in a local **plaintext** `sqflite` database; nothing is uploaded and there is no backend. Biometric lock / SQLCipher are **not** shipped.
+- **On-device processing.** Every SMS is read, filtered, parsed, classified and stored **entirely on your Android device**. Parsed data lives in a local **plaintext** `sqflite` database; nothing is uploaded and there is no backend. Biometric lock / SQLCipher are **not** shipped. **SMS bodies are not persisted** — Coin Flip loads them on demand from the inbox by message id.
 - **No secrets or personal data in this repo.** Source code only. No real SMS content, account numbers/masks, `paisa_sms_analysis.db`, `.env`, or APKs.
 - **You control the data.** The app requests SMS access at runtime, supports a manual rescan, and exposes privacy controls (including clearing all locally stored data) in Settings.
