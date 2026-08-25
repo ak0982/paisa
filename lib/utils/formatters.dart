@@ -33,6 +33,18 @@ String formatSharePercent(double share) {
   return '<0.01%';
 }
 
+/// Applies the "mask merchant names" preference to a display label, e.g.
+/// `Swiggy` → `Sw••••gy`. Display-only: it never redacts the original bank
+/// SMS, which is the source of truth behind a transaction.
+String maskedMerchantLabel(String merchant, bool mask) {
+  if (!mask || merchant.length <= 2) return merchant;
+  if (merchant.length <= 4) {
+    return '${merchant[0]}••${merchant[merchant.length - 1]}';
+  }
+  return '${merchant.substring(0, 2)}••••'
+      '${merchant.substring(merchant.length - 2)}';
+}
+
 /// Shared transaction date/time formats so every surface (rows, group
 /// headers, drill-downs, recents, reports) shows dates consistently.
 final _txnDateFmt = DateFormat('d MMM yyyy');

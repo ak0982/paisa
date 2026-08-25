@@ -78,7 +78,7 @@ The user develops against **physical Android devices**. When operating on them:
 | --- | --- |
 | `lib/main.dart` | App bootstrap, provider wiring, **schema-version gate** (`transactionSchemaVersion` **35** / `categorizerVersion` **5**). `store.init()` + launch scan run **after first frame** (ISSUE-7, fully done). |
 | `lib/screens/` | Bottom-nav tabs: HOME (`dashboard_screen.dart`), MOVES (`transactions_screen.dart`), BUDGET (`budgets_screen.dart`), STATS (`insights_screen.dart` + `reports_screen.dart`), YOU (`profile_screen.dart`). Drill-downs: `category_transactions_screen.dart`, `filtered_transactions_screen.dart` (incl. You-account lists). Onboarding + settings (privacy / help only — no notification toggles). `main_shell.dart` uses **lazy keep-alive** tabs. |
-| `lib/widgets/` | `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `paisa_bottom_nav.dart`, `category_spend_chip.dart` (Home chips + Stats/Reports sticker grid / rim arc / TOP·mid·LOW badges), buttons/progress bars, `bank_logo.dart`. |
+| `lib/widgets/` | `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `paisa_bottom_nav.dart`, `category_spend_chip.dart` (Home chips + Stats/Reports sticker grid / rim arc / TOP·mid·LOW badges), `paisa_coin.dart` (shared struck-disc chrome), `sms_coin_slab.dart` (**Coin Flip / Mint Slab** transaction detail — see §4.10), buttons/progress bars, `bank_logo.dart`. |
 | `lib/providers/finance_store.dart` | Core store: txns + discoveries, analytics, `bankAccounts()` / `_ledgerAccountBuckets()` (**memoized**), `_AccountKindEvidence` keyed by `bank\|mask`, You rematch + loan association, user budget limits, launch-scan, **throttled** `scanProgressListenable`. |
 | `lib/providers/app_settings.dart` | Preferences (profile, merchant-masking, hidden accounts). **No notification toggles** (removed ISSUE-6). |
 | `lib/services/sms/` | SMS pipeline (see §4) plus `product_payment_linker.dart` (You drilldown product↔funding links, O(n) `ProductPairingIndex`). |
@@ -194,8 +194,11 @@ BBPS/CCBP stay Transfer ahead of bills). ISSUE-13's categorizer precision rode t
 
 ### 4.1 SMS parsing pipeline (`lib/services/sms/`)
 - `sms_reader_service.dart` — talks to the native side over the `com.paisa.paisa_app/sms`
-  platform channel; batch-fetches messages and inbox counts; seeds `AccountBankRegistry` from
-  stored transaction votes before a scan (ISSUE-12).
+  platform   channel; batch-fetches messages and inbox counts; seeds `AccountBankRegistry` from
+  stored transaction votes before a scan (ISSUE-12). Also serves single-message
+  reads (`getSmsById` / `loadOriginalSms`) for the transaction detail (§4.10).
+- `original_sms_lookup.dart` — on-demand original-SMS result type + empty-state
+  copy for the coin reverse (§4.10). No bodies are persisted.
 - `sms_scan_pipeline.dart` — `SmsScanPipeline.process()` runs the staged gate above and returns
   a `SmsPipelineOutcome` (`notFinancialSender`, `notFinancialBody`, `otpOnly`, `promo`,
   `noTransactionSignal`, `parseFailed`, `parsed`). Cheap checks first, full regex last.
@@ -336,6 +339,55 @@ These keep large inboxes responsive. **Do not bump `transactionSchemaVersion` fo
 - **Throttled scan progress** (`scanProgressListenable`, 200ms, force on done): progress UI
   must not rebuild You/Moves/Stats data.
 
+### 4.10 Transaction detail: Coin Flip / Mint Slab (`sms_coin_slab.dart`)
+
+Tapping a transaction anywhere (Paisa Coin day list, MOVES, Reports, You /
+category drilldowns, Home recents) opens `showTransactionCoinSlab` — a struck
+coin that **flips** inside a mint slab instead of a Material field sheet.
+
+- **Face:** `PaisaCoinFace` with the gauge struck fully OUT (white) or IN (lime),
+  `formatInr` amount, merchant (respects `AppSettings.maskMerchantNames`),
+  `bank · mask`, and the flow label on the rim. Internal movement (`isMove`)
+  leaves the gauge idle and stamps a MOVE chip.
+- **Reverse:** the mint slab — milled rim, hard shadow, `ORIGINAL SMS` legend,
+  sender stamp, and the **full unredacted SMS body** in a recessed scrollable
+  field with Copy. Merchant masking is display-only and never redacts the body;
+  the SMS is the source of truth.
+
+**SMS bodies are still not persisted.** The body is fetched on demand from the
+inbox by `Transaction.smsId` via `SmsReaderService.loadOriginalSms` →
+`getSmsById` on the `com.paisa.paisa_app/sms` channel →
+`MainActivity.getSmsById` (queries `Telephony.Sms._ID`, background executor).
+A session-only 32-entry memory cache avoids re-reading the provider; nothing
+goes to the database. Every failure mode is an explicit `OriginalSmsStatus`
+(`noSmsId` / `notFound` / `noPermission` / `unsupportedPlatform` / `emptyBody` /
+`lookupFailed`) with struck empty-state copy in `original_sms_lookup.dart` —
+never a raw platform error, never a blank field and never a reading bar that
+does not stop:
+
+- A `loaded` row whose body is blank must render through
+  `OriginalSmsLookup.displayStatus`, which reports it as `emptyBody`. Reading
+  copy off `status` directly gives the customer an empty title *and* an empty
+  body.
+- Anything thrown on the way to the inbox (channel error, unexpected payload
+  type) resolves to `lookupFailed` — both `loadOriginalSms` and the widget's
+  `_load` swallow throws, because an unresolved future leaves the reverse stuck
+  on `READING THE INBOX` forever.
+- The `RECEIVED …` stamp is suppressed for a zero/absent date column so a bank
+  alert is never labelled `RECEIVED 1 JAN 1970`.
+
+Dragging horizontally across the disc flips it, **except** over the SMS body
+itself, where the selection gesture wins — customers highlight reference
+numbers there, so the message must not flip away mid-drag.
+
+`TransactionCoinSlab` takes an injectable `OriginalSmsLoader` so widget tests
+cover every state without a device: `test/sms_coin_slab_test.dart` (core) and
+`test/sms_coin_slab_corners_test.dart` (money/paise matrix, verbatim body,
+Unicode, every miss status, flip mechanics, list journeys, service contract).
+
+This is **UI + a new native read** only — no parse/classify change, so it does
+**not** bump `transactionSchemaVersion`.
+
 ---
 
 ## 5. What has been tried — history of changes (read before re-implementing)
@@ -455,6 +507,9 @@ Source: `code_review_round2_by_fable_claude.md` (on `main`). Do **not** re-intro
   - `home_consistency_test.dart` — Home KPIs vs listed rows / exclusions.
   - `sms_scan_pipeline_test.dart` / synthetic corpus — production gate coverage.
   - `same_source_alert_twins_test.dart` — schema 35 Spent vs ALERT debit-card twin collapse.
+  - `sms_coin_slab_test.dart` — Coin Flip / Mint Slab detail: face summary, flip
+    reveals the body, loading / deleted-SMS / no-permission / no-`smsId` states,
+    copy, and masking that never redacts the SMS (§4.10).
   - Plus parser / discovery / registry / enrichment / categorizer / insights / reports /
     `audit_*` / `*_scenarios` / `widget_test.dart`.
 - **Never commit SMS dumps, `paisa_sms_analysis.db`, real account masks, `.env`, secrets, or

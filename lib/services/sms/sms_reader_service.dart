@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../data/sms_scan_state.dart';
 import 'account_bank_registry.dart';
 import 'account_discovery.dart';
+import 'original_sms_lookup.dart';
 import 'parsed_sms_transaction.dart';
 import 'sms_parse_isolate.dart';
 
@@ -122,6 +123,87 @@ class SmsReaderService {
       return count ?? 0;
     } on PlatformException catch (_) {
       return 0;
+    }
+  }
+
+  /// Reads one inbox message by `Telephony.Sms._ID`. Returns null when the
+  /// message is no longer on the device.
+  Future<SmsMessageInput?> getSmsById(String id) async {
+    if (!Platform.isAndroid || id.isEmpty) return null;
+    try {
+      final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(
+        'getSmsById',
+        {'id': id},
+      );
+      if (raw == null) return null;
+      final map = Map<String, dynamic>.from(raw);
+      return SmsMessageInput(
+        id: map['id']?.toString() ?? id,
+        sender: map['sender']?.toString() ?? '',
+        body: map['body']?.toString() ?? '',
+        timestamp: DateTime.fromMillisecondsSinceEpoch(_epochMs(map['timestamp'])),
+      );
+    } on PlatformException catch (_) {
+      return null;
+    } on MissingPluginException catch (_) {
+      return null;
+    }
+  }
+
+  /// Accepts whatever the platform put in the date column (num, or a string
+  /// on OEMs that stringify it) without throwing on an unexpected type.
+  static int _epochMs(Object? raw) => switch (raw) {
+        final num n => n.toInt(),
+        final String s => int.tryParse(s) ?? 0,
+        _ => 0,
+      };
+
+  /// Small LRU of recently opened messages so re-opening the same transaction
+  /// does not hit the content provider again. Bodies live here only for the
+  /// session — nothing is written to the database.
+  static final _originalSmsCache = <String, OriginalSms>{};
+  static const _originalSmsCacheLimit = 32;
+
+  /// Resolves the original alert behind a transaction for the coin reverse.
+  /// Every failure mode is an explicit [OriginalSmsStatus], never an exception.
+  Future<OriginalSmsLookup> loadOriginalSms(String? smsId) async {
+    if (smsId == null || smsId.isEmpty) {
+      return const OriginalSmsLookup.miss(OriginalSmsStatus.noSmsId);
+    }
+    final cached = _originalSmsCache[smsId];
+    if (cached != null) return OriginalSmsLookup.loaded(cached);
+
+    if (!Platform.isAndroid) {
+      return const OriginalSmsLookup.miss(
+        OriginalSmsStatus.unsupportedPlatform,
+      );
+    }
+
+    try {
+      if (!await hasSmsPermission()) {
+        return const OriginalSmsLookup.miss(OriginalSmsStatus.noPermission);
+      }
+
+      final message = await getSmsById(smsId);
+      if (message == null) {
+        return const OriginalSmsLookup.miss(OriginalSmsStatus.notFound);
+      }
+
+      final sms = OriginalSms(
+        id: message.id,
+        sender: message.sender,
+        body: message.body,
+        timestamp: message.timestamp,
+      );
+      if (_originalSmsCache.length >= _originalSmsCacheLimit) {
+        _originalSmsCache.remove(_originalSmsCache.keys.first);
+      }
+      _originalSmsCache[smsId] = sms;
+      return OriginalSmsLookup.loaded(sms);
+    } catch (_) {
+      // The coin reverse has struck copy for a failed read; an exception
+      // escaping here would leave it stuck on the reading bar.
+      return const OriginalSmsLookup.miss(OriginalSmsStatus.lookupFailed);
     }
   }
 

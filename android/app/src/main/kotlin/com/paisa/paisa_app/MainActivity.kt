@@ -74,6 +74,27 @@ class MainActivity : FlutterActivity() {
                             }
                         }
                     }
+                    "getSmsById" -> {
+                        if (!hasSmsPermission()) {
+                            result.error("PERMISSION_DENIED", "SMS permission not granted", null)
+                            return@setMethodCallHandler
+                        }
+                        val id = call.argument<String>("id")
+                        if (id.isNullOrBlank()) {
+                            result.success(null)
+                            return@setMethodCallHandler
+                        }
+                        smsExecutor.execute {
+                            try {
+                                val row = getSmsById(id)
+                                mainHandler.post { result.success(row) }
+                            } catch (e: Exception) {
+                                mainHandler.post {
+                                    result.error("SMS_READ_FAILED", e.message, null)
+                                }
+                            }
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -99,6 +120,37 @@ class MainActivity : FlutterActivity() {
         ) ?: return 0
 
         cursor.use { return it.count }
+    }
+
+    /**
+     * Reads a single inbox message by its `Telephony.Sms._ID`, so a stored
+     * transaction can show the alert it was parsed from without Paisa ever
+     * persisting message bodies. Returns null when the row is gone (the user
+     * deleted the SMS) — the caller renders that as an empty reverse, not an
+     * error.
+     */
+    private fun getSmsById(id: String): Map<String, Any?>? {
+        val cursor = contentResolver.query(
+            inboxUri,
+            projection,
+            "${Telephony.Sms._ID} = ?",
+            arrayOf(id),
+            null
+        ) ?: return null
+
+        cursor.use {
+            if (!it.moveToFirst()) return null
+            val idIdx = it.getColumnIndex(Telephony.Sms._ID)
+            val addressIdx = it.getColumnIndex(Telephony.Sms.ADDRESS)
+            val bodyIdx = it.getColumnIndex(Telephony.Sms.BODY)
+            val dateIdx = it.getColumnIndex(Telephony.Sms.DATE)
+            return mapOf(
+                "id" to it.getString(idIdx),
+                "sender" to (it.getString(addressIdx) ?: ""),
+                "body" to (it.getString(bodyIdx) ?: ""),
+                "timestamp" to it.getLong(dateIdx)
+            )
+        }
     }
 
     /**

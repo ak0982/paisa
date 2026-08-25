@@ -4,6 +4,7 @@ import '../models/transaction.dart';
 import '../models/transaction_sort.dart';
 import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
+import 'sms_coin_slab.dart';
 import 'transaction_row.dart';
 
 /// Day-grouped transaction list matching the Transactions screen pattern.
@@ -20,6 +21,7 @@ class GroupedTransactionList extends StatelessWidget {
     this.emptySubtitle,
     this.shrinkWrap = false,
     this.physics,
+    this.onTransactionTap,
   });
 
   final List<Transaction> transactions;
@@ -29,6 +31,9 @@ class GroupedTransactionList extends StatelessWidget {
   final String? emptySubtitle;
   final bool shrinkWrap;
   final ScrollPhysics? physics;
+
+  /// Overrides the default Coin Flip / Mint Slab detail on row tap.
+  final ValueChanged<Transaction>? onTransactionTap;
 
   @override
   Widget build(BuildContext context) {
@@ -46,18 +51,28 @@ class GroupedTransactionList extends StatelessWidget {
       shrinkWrap: shrinkWrap,
       physics: physics,
       itemCount: sections.length,
-      itemBuilder: (context, index) =>
-          TransactionSectionCard(section: sections[index]),
+      itemBuilder: (context, index) => TransactionSectionCard(
+        section: sections[index],
+        onTransactionTap: onTransactionTap,
+      ),
     );
   }
 }
 
 /// Renders a single [TransactionListSection]: an optional day header followed
 /// by a card of transaction rows. Shared so grouped/flat layouts stay in sync.
+///
+/// Rows open the Coin Flip / Mint Slab detail on tap unless [onTransactionTap]
+/// overrides it, so every list drills into the same transaction surface.
 class TransactionSectionCard extends StatelessWidget {
-  const TransactionSectionCard({super.key, required this.section});
+  const TransactionSectionCard({
+    super.key,
+    required this.section,
+    this.onTransactionTap,
+  });
 
   final TransactionListSection section;
+  final ValueChanged<Transaction>? onTransactionTap;
 
   @override
   Widget build(BuildContext context) {
@@ -90,13 +105,17 @@ class TransactionSectionCard extends StatelessWidget {
           child: Column(
             children: [
               for (var i = 0; i < section.items.length; i++) ...[
-                TransactionRow(
+                TransactionCoinTap(
                   transaction: section.items[i],
-                  showCategoryChip: true,
-                  showSmsLabel: false,
-                  showTime: !showDate,
-                  showDate: showDate,
-                  compact: true,
+                  onTap: onTransactionTap,
+                  child: TransactionRow(
+                    transaction: section.items[i],
+                    showCategoryChip: true,
+                    showSmsLabel: false,
+                    showTime: !showDate,
+                    showDate: showDate,
+                    compact: true,
+                  ),
                 ),
                 if (i < section.items.length - 1)
                   const Divider(height: 1, color: PaisaColors.divider),

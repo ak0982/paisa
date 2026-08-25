@@ -15,6 +15,7 @@ import '../widgets/category_spend_chip.dart';
 import '../widgets/day_strip_teaser.dart';
 import '../widgets/neo_surface.dart';
 import '../widgets/paisa_progress_bar.dart';
+import '../widgets/sms_coin_slab.dart';
 import '../widgets/transaction_row.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -427,9 +428,12 @@ class _TxnCard extends StatelessWidget {
       child: Column(
         children: [
           for (var i = 0; i < transactions.length; i++) ...[
-            TransactionRow(
+            TransactionCoinTap(
               transaction: transactions[i],
-              showDate: showDates,
+              child: TransactionRow(
+                transaction: transactions[i],
+                showDate: showDates,
+              ),
             ),
             if (i < transactions.length - 1)
               const Divider(

@@ -14,6 +14,7 @@ import '../utils/formatters.dart';
 import '../widgets/neo_surface.dart';
 import '../widgets/paisa_coin.dart';
 import '../widgets/pulse_calendar_sheet.dart';
+import '../widgets/sms_coin_slab.dart';
 import '../widgets/transaction_sort_control.dart';
 
 /// OUT arc share of the Paisa Coin gauge ring (`out / (out + income)`).
@@ -132,119 +133,7 @@ class _DayStripScreenState extends State<DayStripScreen> {
   }
 
   void _showTxnSheet(BuildContext context, Transaction t, bool isMove) {
-    final maskMerchants =
-        context.read<AppSettings?>()?.maskMerchantNames ?? false;
-    final merchant = dayStripMerchantLabel(t.merchant, maskMerchants);
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: PaisaColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        side: BorderSide(color: PaisaColors.border, width: 2),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: PaisaColors.border,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        merchant,
-                        style: PaisaTheme.sora(
-                          size: 18,
-                          weight: FontWeight.w800,
-                          color: PaisaColors.ink,
-                        ),
-                      ),
-                    ),
-                    if (isMove)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: PaisaColors.cardElevated,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: PaisaColors.muted,
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Text(
-                          'MOVE',
-                          style: PaisaTheme.sora(
-                            size: 10,
-                            weight: FontWeight.w800,
-                            color: PaisaColors.mutedCaption,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  formatAmount(t.amount, isCredit: t.isCredit),
-                  style: PaisaTheme.sora(
-                    size: 28,
-                    weight: FontWeight.w800,
-                    color: isMove
-                        ? PaisaColors.mutedCaption
-                        : (t.isCredit ? PaisaColors.credit : PaisaColors.debit),
-                    letterSpacing: -0.4,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '${formatTxnDate(t.timestamp)} · ${formatTxnTime(t.timestamp)}',
-                  style: PaisaTheme.manrope(
-                    size: 13,
-                    weight: FontWeight.w600,
-                    color: PaisaColors.mutedCaption,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${t.flowLabel} · ${t.metaLine}',
-                  style: PaisaTheme.manrope(
-                    size: 13,
-                    color: PaisaColors.muted,
-                  ),
-                ),
-                if (t.source == 'SMS') ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    '⚡ From SMS',
-                    style: PaisaTheme.manrope(
-                      size: 12,
-                      weight: FontWeight.w600,
-                      color: PaisaColors.muted,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    );
+    showTransactionCoinSlab(context, t, isMove: isMove);
   }
 
   @override
@@ -370,13 +259,8 @@ class _DayStripScreenState extends State<DayStripScreen> {
   }
 }
 
-String dayStripMerchantLabel(String merchant, bool mask) {
-  if (!mask || merchant.length <= 2) return merchant;
-  if (merchant.length <= 4) {
-    return '${merchant[0]}••${merchant[merchant.length - 1]}';
-  }
-  return '${merchant.substring(0, 2)}••••${merchant.substring(merchant.length - 2)}';
-}
+String dayStripMerchantLabel(String merchant, bool mask) =>
+    maskedMerchantLabel(merchant, mask);
 
 /// Uppercase coin legend date, e.g. `FRI 15 AUG`.
 String formatDayStripHeader(DateTime day) {
