@@ -2,7 +2,9 @@
 
 **Repo:** `ak0982/paisa` @ `main` (schema 35, HEAD `3ac2837`) · **Date:** 25 Aug 2026
 **Focus:** security / vulnerability audit of the whole application, plus review of the commits since round 2 (`fca7343` → `3ac2837`: schema 33/34/35 parser work, the native `getSmsById` reverse-lookup, and the Day Strip / Pulse Calendar / Coin Flip / Stats-coin UI).
-**Method:** read the release `AndroidManifest.xml`, `android/app/build.gradle`, `MainActivity.kt`, the debug/profile manifests, `pubspec.yaml`, `.gitignore`, the regex parser (`sms_parser.dart`), and the logging paths. Every claim below is verified against the code; where a suspected issue turned out **not** to be exploitable, it is listed in §3 with the evidence, rather than dropped silently. Line numbers refer to `main` at review time.
+**Method:** read the release `AndroidManifest.xml`, `android/app/build.gradle`, `android/gradle.properties`, `MainActivity.kt`, the debug/profile manifests, `pubspec.yaml`, `app_settings.dart`, `transaction_database.dart`, `.gitignore`, the regex parser (`sms_parser.dart`), and the logging paths. Every claim below is verified against the code; where a suspected issue turned out **not** to be exploitable, it is listed in §3 with the evidence, rather than dropped silently. Line numbers refer to `main` at review time.
+
+**Round-3 verification addendum (re-checked before publishing).** I re-verified the load-bearing claims: (1) a repo-wide search confirmed **no** `allowBackup` / `fullBackupContent` / `dataExtractionRules` / backup-rules XML exists anywhere in the project (only `build.gradle`'s `targetSdkVersion flutter.targetSdkVersion` and this report match); (2) `targetSdkVersion` is **not pinned** — it resolves to the Flutter SDK default (34 for the Flutter 3.19+ implied by `sdk: '>=3.3.1'`), which changes the `adb backup` sub-vector (see SEC-1, corrected below); (3) storage locations were corrected by reading `app_settings.dart` and `transaction_database.dart` — **budgets live in the SQLite `category_budgets` table, not `shared_preferences`** (an earlier draft mis-stated this).
 
 Threat model for this app: a purely on-device Android finance app that reads the SMS inbox, parses bank/UPI alerts, and stores parsed transactions + discovered accounts + budgets in a local SQLite DB. There is no backend and (in release) no network. So the meaningful adversaries are: (a) **another app or tooling on the same device** (screenshots, logs, backups), (b) **anyone with physical/ADB access to the device**, (c) **the device's cloud backup**, and (d) **a crafted SMS** as a remote input into the parser. This review is scoped to those.
 
@@ -12,14 +14,16 @@ Threat model for this app: a purely on-device Android finance app that reads the
 
 ### SEC-1 (High for a finance app) — Financial data leaves the device via backup: `allowBackup` defaults to true over a plaintext DB
 
-**Evidence.** The release manifest (`android/app/src/main/AndroidManifest.xml:3–6`) declares `<application>` with **no** `android:allowBackup="false"`, **no** `android:fullBackupContent`, and **no** `android:dataExtractionRules`. Android therefore treats the app as backup-eligible (default `allowBackup=true`). The data it protects is unencrypted: `transaction_database.dart` opens a plain `sqflite` database (`paisa_transactions.db`) with no cipher, and `shared_preferences` holds the profile name/email, hidden-account masks, and budgets.
+**Evidence.** The release manifest (`android/app/src/main/AndroidManifest.xml:3–6`) declares `<application>` with **no** `android:allowBackup="false"`, **no** `android:fullBackupContent`, and **no** `android:dataExtractionRules` (repo-wide search: none exist anywhere). Android therefore treats the app as backup-eligible (default `allowBackup=true`). The data it protects is unencrypted and all lives under the app's data dir, which Auto Backup includes by default:
+- `transaction_database.dart` opens a plain `sqflite` DB (`paisa_transactions.db`) with no cipher, holding every transaction, every discovered savings/card/loan account, **and** every budget limit (`category_budgets` table);
+- `shared_preferences` holds the profile name/email (`profile_user_name` / `profile_user_email`), the merchant-mask toggle, and the hidden-account masks (`app_settings.dart:15–18`).
 
-**Impact.** The full parsed financial history — every transaction (merchant, amount, bank, masked account, category, timestamp), every discovered savings/card/loan account, and the user's name/email — is swept into:
-- **Google Auto Backup** → uploaded to the user's Google Drive backup, off-device and outside the app's control (the README's "nothing is uploaded and there is no backend" promise is technically defeated by the OS backup path the app opted into by default);
-- **`adb backup`** on devices where it still works;
-- **device-to-device transfer** flows.
+**Impact.** The full parsed financial history — every transaction (merchant, amount, bank, masked account, category, timestamp), every discovered account, budgets, and the user's name/email — is swept off-device via:
+- **Google Auto Backup** → uploaded to the user's Google Drive backup, off-device and outside the app's control. This is the **primary live vector** and applies regardless of `targetSdk`: any app with `allowBackup` unset (default true) and a backup-enabled Google account is auto-backed-up. The README's "nothing is uploaded and there is no backend" promise is technically defeated by the OS backup path the app opted into by default.
+- **Device-to-device / cloud restore transfer** flows — also live.
+- **`adb backup`** — *nuance, corrected*: `targetSdkVersion` here is unpinned and resolves to the Flutter default (**34**), and Android **12+ (API 31+) removed app data from the `adb backup` transport** for apps unless specially flagged. So this sub-vector is effectively **dead on modern devices** and only applies to older (≤ Android 11) devices. I'm keeping it listed for completeness but it is not the main concern — the cloud backup path is.
 
-For an app whose entire pitch is "everything stays on your device," this is the highest-value gap.
+For an app whose entire pitch is "everything stays on your device," the cloud-backup path alone makes this the highest-value gap.
 
 **Fix.** Set `android:allowBackup="false"` on `<application>` (simplest), **or** keep backup but add `android:dataExtractionRules` (API 31+) and `android:fullBackupContent` (API ≤30) that exclude `paisa_transactions.db` and the shared-prefs file. Best: combine `allowBackup=false` with at-rest encryption (SEC-3). No schema bump needed (manifest-only).
 
