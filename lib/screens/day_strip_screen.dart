@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -13,17 +12,15 @@ import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/neo_surface.dart';
+import '../widgets/paisa_coin.dart';
 import '../widgets/pulse_calendar_sheet.dart';
 import '../widgets/transaction_sort_control.dart';
 
 /// OUT arc share of the Paisa Coin gauge ring (`out / (out + income)`).
 /// Returns `0` when there is no flow so the ring stays idle.
 @visibleForTesting
-double dayStripOutShare(double out, double income) {
-  final total = out + income;
-  if (total <= 0) return 0.0;
-  return out / total;
-}
+double dayStripOutShare(double out, double income) =>
+    paisaCoinOutShare(out, income);
 
 enum _StripFlowFilter { all, out, inn }
 
@@ -451,25 +448,9 @@ class _CoinChrome extends StatelessWidget {
               color: PaisaColors.ink,
             ),
           ),
-          Text(
-            'PAISA',
-            style: PaisaTheme.label(
-              size: 11,
-              color: PaisaColors.primary,
-              letterSpacing: 3,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            'COIN',
-            style: PaisaTheme.label(
-              size: 11,
-              color: PaisaColors.muted,
-              letterSpacing: 3,
-            ),
-          ),
+          const PaisaCoinWordmark(suffix: 'COIN'),
           const Spacer(),
-          _ChromeIconButton(
+          PaisaChromeIconButton(
             tooltip: 'Pulse Calendar',
             onTap: onCalendar,
             icon: Icons.calendar_month_rounded,
@@ -477,12 +458,12 @@ class _CoinChrome extends StatelessWidget {
           ),
           if (!isRange) ...[
             const SizedBox(width: 6),
-            _ChromeIconButton(
+            PaisaChromeIconButton(
               onTap: onPrev,
               icon: Icons.chevron_left_rounded,
             ),
             const SizedBox(width: 4),
-            _ChromeIconButton(
+            PaisaChromeIconButton(
               onTap: onNext,
               icon: Icons.chevron_right_rounded,
             ),
@@ -490,46 +471,6 @@ class _CoinChrome extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _ChromeIconButton extends StatelessWidget {
-  const _ChromeIconButton({
-    required this.icon,
-    required this.onTap,
-    this.tooltip,
-    this.accent = false,
-  });
-
-  final IconData icon;
-  final VoidCallback onTap;
-  final String? tooltip;
-  final bool accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final child = GestureDetector(
-      onTap: onTap,
-      child: NeoSurface(
-        width: 36,
-        height: 36,
-        radius: 10,
-        borderWidth: 1.5,
-        borderColor: accent
-            ? PaisaColors.primary.withOpacity(0.45)
-            : PaisaColors.border,
-        padding: EdgeInsets.zero,
-        shadow: accent,
-        shadowOffset: 2,
-        child: Icon(
-          icon,
-          size: 20,
-          color: accent ? PaisaColors.primary : PaisaColors.ink,
-        ),
-      ),
-    );
-    if (tooltip == null) return child;
-    return Tooltip(message: tooltip!, child: child);
   }
 }
 
@@ -563,19 +504,7 @@ class _PaisaCoinHero extends StatelessWidget {
         ? '${end.difference(start).inDays + 1}D'
         : '${start.day}';
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 460),
-      curve: Curves.easeOutCubic,
-      builder: (context, t, child) {
-        return Opacity(
-          opacity: t.clamp(0.0, 1.0),
-          child: Transform.translate(
-            offset: Offset(0, 12 * (1 - t)),
-            child: child,
-          ),
-        );
-      },
+    return PaisaCoinRise(
       child: GestureDetector(
         onTap: onDateTap,
         onHorizontalDragEnd: onSwipeDay == null
@@ -635,318 +564,74 @@ class _CoinFace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxD = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : 300.0;
-        final d = math.min(maxD, 288.0);
-        final total = out + income;
-        final outShare = dayStripOutShare(out, income);
-
-        return SizedBox(
-          width: d,
-          height: d,
-          child: TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: 1),
-            duration: const Duration(milliseconds: 900),
-            curve: Curves.easeOutCubic,
-            builder: (context, p, child) {
-              return CustomPaint(
-                painter: _CoinPainter(
-                  progress: p,
-                  outShare: outShare,
-                  hasFlow: total > 0,
-                  emboss: emboss,
-                ),
-                child: child,
-              );
-            },
-            child: Center(
-              child: SizedBox(
-                width: d * 0.56,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'OUT',
-                      style: PaisaTheme.label(
-                        size: 10,
-                        color: PaisaColors.mutedCaption,
-                        letterSpacing: 3,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        formatInr(out),
-                        style: PaisaTheme.sora(
-                          size: 30,
-                          weight: FontWeight.w800,
-                          color: PaisaColors.ink,
-                          letterSpacing: -0.8,
-                          height: 1.0,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Container(
-                      width: 34,
-                      height: 1.5,
-                      color: PaisaColors.muted.withOpacity(0.55),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'IN',
-                          style: PaisaTheme.label(
-                            size: 10,
-                            color: PaisaColors.primary,
-                            letterSpacing: 2.4,
-                          ),
-                        ),
-                        const SizedBox(width: 7),
-                        Flexible(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              formatInr(income),
-                              style: PaisaTheme.sora(
-                                size: 14,
-                                weight: FontWeight.w800,
-                                color: PaisaColors.primary,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+    return PaisaCoinFace(
+      outShare: dayStripOutShare(out, income),
+      hasFlow: out + income > 0,
+      topLegend: emboss,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'OUT',
+            style: PaisaTheme.label(
+              size: 10,
+              color: PaisaColors.mutedCaption,
+              letterSpacing: 3,
+            ),
+          ),
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              formatInr(out),
+              style: PaisaTheme.sora(
+                size: 30,
+                weight: FontWeight.w800,
+                color: PaisaColors.ink,
+                letterSpacing: -0.8,
+                height: 1.0,
               ),
             ),
           ),
-        );
-      },
-    );
-  }
-}
-
-class _CoinPainter extends CustomPainter {
-  _CoinPainter({
-    required this.progress,
-    required this.outShare,
-    required this.hasFlow,
-    required this.emboss,
-  });
-
-  final double progress;
-  final double outShare;
-  final bool hasFlow;
-  final String emboss;
-
-  static const _twoPi = math.pi * 2;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final r = math.min(size.width, size.height) / 2 - 5;
-
-    // Hard Neo-Vault shadow — offset solid disc, no blur.
-    canvas.drawCircle(
-      center.translate(6, 6),
-      r,
-      Paint()..color = const Color(0xFF000000),
-    );
-
-    // Raised rim field.
-    canvas.drawCircle(center, r, Paint()..color = PaisaColors.cardElevated);
-    canvas.drawCircle(
-      center,
-      r,
-      Paint()
-        ..color = PaisaColors.inkOnAccent
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
-
-    _paintMilledEdge(canvas, center, r);
-
-    // Gauge ring.
-    final gaugeR = r - 14;
-    const stroke = 8.0;
-    canvas.drawCircle(
-      center,
-      gaugeR,
-      Paint()
-        ..color = PaisaColors.border
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = stroke,
-    );
-
-    if (hasFlow) {
-      const gap = 0.10; // radians of breathing room at both meeting points
-      const usable = _twoPi - gap * 2;
-      final outSweep = usable * outShare * progress;
-      final inSweep = usable * (1 - outShare) * progress;
-      final rect = Rect.fromCircle(center: center, radius: gaugeR);
-      const top = -math.pi / 2;
-
-      if (outSweep > 0.001) {
-        canvas.drawArc(
-          rect,
-          top + gap / 2,
-          outSweep,
-          false,
-          Paint()
-            ..color = PaisaColors.ink
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = stroke
-            ..strokeCap = StrokeCap.round,
-        );
-      }
-      if (inSweep > 0.001) {
-        canvas.drawArc(
-          rect,
-          top - gap / 2,
-          -inSweep,
-          false,
-          Paint()
-            ..color = PaisaColors.primary
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = stroke
-            ..strokeCap = StrokeCap.round,
-        );
-      }
-    }
-
-    // Recessed centre field with its own thin ring.
-    final fieldR = r * 0.70;
-    canvas.drawCircle(center, fieldR, Paint()..color = PaisaColors.card);
-    canvas.drawCircle(
-      center,
-      fieldR,
-      Paint()
-        ..color = PaisaColors.border
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
-    );
-
-    // Struck legends between the gauge and the field.
-    final legendR = (gaugeR + fieldR) / 2 - 2;
-    _paintArcText(
-      canvas,
-      center,
-      emboss,
-      radius: legendR,
-      centerAngle: -math.pi / 2,
-      outward: true,
-      style: _embossed(
-        PaisaTheme.sora(
-          size: 11,
-          weight: FontWeight.w800,
-          color: PaisaColors.mutedCaption,
-          letterSpacing: 1,
-        ),
-      ),
-    );
-    _paintArcText(
-      canvas,
-      center,
-      '• P A I S A •',
-      radius: legendR,
-      centerAngle: math.pi / 2,
-      outward: false,
-      style: _embossed(
-        PaisaTheme.sora(
-          size: 9,
-          weight: FontWeight.w800,
-          color: PaisaColors.muted,
-          letterSpacing: 0.5,
-        ),
-      ),
-    );
-  }
-
-  /// Hard 1px drop under each glyph so legends read as struck into the metal.
-  static TextStyle _embossed(TextStyle style) => style.copyWith(
-        shadows: const [
-          Shadow(color: Color(0xFF000000), offset: Offset(0, 1.2)),
+          const SizedBox(height: 10),
+          Container(
+            width: 34,
+            height: 1.5,
+            color: PaisaColors.muted.withOpacity(0.55),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'IN',
+                style: PaisaTheme.label(
+                  size: 10,
+                  color: PaisaColors.primary,
+                  letterSpacing: 2.4,
+                ),
+              ),
+              const SizedBox(width: 7),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    formatInr(income),
+                    style: PaisaTheme.sora(
+                      size: 14,
+                      weight: FontWeight.w800,
+                      color: PaisaColors.primary,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
-      );
-
-  void _paintMilledEdge(Canvas canvas, Offset center, double r) {
-    final paint = Paint()
-      ..color = PaisaColors.muted.withOpacity(0.45)
-      ..strokeWidth = 1.4
-      ..strokeCap = StrokeCap.round;
-    const ticks = 72;
-    for (var i = 0; i < ticks; i++) {
-      final a = _twoPi * i / ticks;
-      final c = math.cos(a);
-      final s = math.sin(a);
-      canvas.drawLine(
-        Offset(center.dx + c * (r - 2.5), center.dy + s * (r - 2.5)),
-        Offset(center.dx + c * (r - 6.5), center.dy + s * (r - 6.5)),
-        paint,
-      );
-    }
+      ),
+    );
   }
-
-  /// Draws [text] along a circle. [outward] keeps letter tops facing away from
-  /// the centre (top legends); otherwise they face in (bottom legends).
-  void _paintArcText(
-    Canvas canvas,
-    Offset center,
-    String text, {
-    required double radius,
-    required double centerAngle,
-    required bool outward,
-    required TextStyle style,
-  }) {
-    if (text.isEmpty || radius <= 0) return;
-
-    final painters = <TextPainter>[];
-    var arcLength = 0.0;
-    for (final rune in text.runes) {
-      final tp = TextPainter(
-        text: TextSpan(text: String.fromCharCode(rune), style: style),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      painters.add(tp);
-      arcLength += tp.width;
-    }
-    final totalAngle = arcLength / radius;
-    if (totalAngle >= _twoPi) return;
-
-    final dir = outward ? 1.0 : -1.0;
-    var angle = centerAngle - dir * totalAngle / 2;
-
-    for (final tp in painters) {
-      final step = (tp.width / radius) * dir;
-      final mid = angle + step / 2;
-      canvas.save();
-      canvas.translate(
-        center.dx + math.cos(mid) * radius,
-        center.dy + math.sin(mid) * radius,
-      );
-      canvas.rotate(mid + (outward ? math.pi / 2 : -math.pi / 2));
-      tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
-      canvas.restore();
-      angle += step;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _CoinPainter old) =>
-      old.progress != progress ||
-      old.outShare != outShare ||
-      old.hasFlow != hasFlow ||
-      old.emboss != emboss;
 }
 
 // ── Filters ─────────────────────────────────────────────────────────────────
@@ -1089,19 +774,9 @@ class _CoinRow extends StatelessWidget {
     // Staggered stamp-in (capped) — the second of three hero motions.
     final delayMs = math.min(index * 32, 192);
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
+    return PaisaCoinRise(
       duration: Duration(milliseconds: 340 + delayMs),
-      curve: Curves.easeOutCubic,
-      builder: (context, t, child) {
-        return Opacity(
-          opacity: t.clamp(0.0, 1.0),
-          child: Transform.translate(
-            offset: Offset(0, 8 * (1 - t)),
-            child: child,
-          ),
-        );
-      },
+      offsetY: 8,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -1122,7 +797,7 @@ class _CoinRow extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _CoinToken(
+                PaisaCoinToken(
                   color: tokenColor,
                   fill: intensity,
                   dashed: isMove,
@@ -1213,115 +888,6 @@ class _CoinRow extends StatelessWidget {
   }
 }
 
-/// Miniature struck coin: milled rim + a ring that fills with the
-/// transaction's share of the biggest movement in view.
-class _CoinToken extends StatelessWidget {
-  const _CoinToken({
-    required this.color,
-    required this.fill,
-    required this.dashed,
-  });
-
-  final Color color;
-  final double fill;
-  final bool dashed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 34,
-      height: 34,
-      child: CustomPaint(
-        painter: _TokenPainter(color: color, fill: fill, dashed: dashed),
-        child: Center(
-          child: Text(
-            '₹',
-            style: PaisaTheme.sora(
-              size: 13,
-              weight: FontWeight.w800,
-              color: color,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TokenPainter extends CustomPainter {
-  _TokenPainter({
-    required this.color,
-    required this.fill,
-    required this.dashed,
-  });
-
-  final Color color;
-  final double fill;
-  final bool dashed;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final r = math.min(size.width, size.height) / 2 - 1;
-
-    canvas.drawCircle(center, r, Paint()..color = PaisaColors.cardElevated);
-    canvas.drawCircle(
-      center,
-      r,
-      Paint()
-        ..color = PaisaColors.border
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2,
-    );
-
-    // Milled edge.
-    final milled = Paint()
-      ..color = PaisaColors.muted.withOpacity(0.4)
-      ..strokeWidth = 1
-      ..strokeCap = StrokeCap.round;
-    const ticks = 20;
-    for (var i = 0; i < ticks; i++) {
-      final a = math.pi * 2 * i / ticks;
-      final c = math.cos(a);
-      final s = math.sin(a);
-      canvas.drawLine(
-        Offset(center.dx + c * (r - 1.5), center.dy + s * (r - 1.5)),
-        Offset(center.dx + c * (r - 3.5), center.dy + s * (r - 3.5)),
-        milled,
-      );
-    }
-
-    final rect = Rect.fromCircle(center: center, radius: r - 2.2);
-    final sweep = math.pi * 2 * fill.clamp(0.0, 1.0);
-    const start = -math.pi / 2;
-    final arc = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2
-      ..strokeCap = StrokeCap.round;
-
-    if (dashed) {
-      const segments = 9;
-      final segSweep = sweep / segments;
-      for (var i = 0; i < segments; i++) {
-        canvas.drawArc(
-          rect,
-          start + i * segSweep,
-          segSweep * 0.55,
-          false,
-          arc,
-        );
-      }
-    } else {
-      canvas.drawArc(rect, start, sweep, false, arc);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _TokenPainter old) =>
-      old.color != color || old.fill != fill || old.dashed != dashed;
-}
-
 class _MoveBadge extends StatelessWidget {
   const _MoveBadge();
 
@@ -1410,19 +976,9 @@ class _NetCaption extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
         child: Center(
-          child: TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: 1),
+          child: PaisaCoinRise(
             duration: const Duration(milliseconds: 420),
-            curve: Curves.easeOutCubic,
-            builder: (context, t, child) {
-              return Opacity(
-                opacity: t,
-                child: Transform.translate(
-                  offset: Offset(0, 8 * (1 - t)),
-                  child: child,
-                ),
-              );
-            },
+            offsetY: 8,
             child: NeoSurface(
               padding:
                   const EdgeInsets.symmetric(horizontal: 22, vertical: 12),

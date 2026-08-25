@@ -1,14 +1,25 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/category_info.dart';
 import '../providers/finance_store.dart';
 import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
-import '../widgets/category_spend_chip.dart';
+import '../widgets/paisa_coin.dart';
 import 'category_transactions_screen.dart';
+import 'day_strip_screen.dart';
 import 'reports_screen.dart';
 
+/// Paisa Ledger Coin — the whole spending history struck as one coin.
+///
+/// Same family as the day Paisa Coin: milled rim, a split gauge where SPENT is
+/// white and IN is lime, a recessed field carrying the exact spend total, and
+/// legends struck along the rim. Below the hero, one job per section — three
+/// coin legends (daily average, peak day, net), then category and merchant
+/// rows each stamped with their own miniature coin token.
 class InsightsScreen extends StatelessWidget {
   const InsightsScreen({super.key});
 
@@ -19,325 +30,685 @@ class InsightsScreen extends StatelessWidget {
         final spending = store.insightsCategorySpending;
         final sorted = spending.entries.toList()
           ..sort((a, b) => b.value.compareTo(a.value));
+        final spent = store.insightsSpent;
+        final income = store.insightsIncome;
         final foodDelta = store.insightsFoodDelta();
+        final merchants = store.insightsTopMerchants;
         final hasTransactions = store.transactions.isNotEmpty;
-        final showEmpty = !store.isLoading &&
-            (!hasTransactions || store.insightsSpent <= 0);
+        final showEmpty = !store.isLoading && (!hasTransactions || spent <= 0);
 
         return RefreshIndicator(
           color: PaisaColors.primary,
           onRefresh: store.syncFromSms,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(22, 8, 22, 16),
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Insights',
-                      style: PaisaTheme.sora(
-                        size: 22,
-                        weight: FontWeight.w800,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    GestureDetector(
+                    const PaisaCoinWordmark(suffix: 'STATS'),
+                    const Spacer(),
+                    _ReportsButton(
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => const ReportsScreen(),
-                        ),
-                      ),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 7,
-                        ),
-                        decoration: BoxDecoration(
-                          color: PaisaColors.primary,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: PaisaColors.inkOnAccent,
-                            width: 2,
-                          ),
-                        ),
-                        child: Text(
-                          'REPORTS',
-                          style: PaisaTheme.sora(
-                            size: 11,
-                            weight: FontWeight.w800,
-                            color: PaisaColors.inkOnAccent,
-                            letterSpacing: 0.8,
-                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
                 if (store.isViewingHistoricalMonth) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: PaisaColors.primary.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: PaisaColors.primary.withOpacity(0.2),
+                  const SizedBox(height: 14),
+                  _StruckNote(
+                    accent: PaisaColors.primary,
+                    child: Text(
+                      'Dashboard shows ${store.currentMonthLabel}. Insights below cover ${store.insightsPeriodLabel.toLowerCase()}.',
+                      style: PaisaTheme.manrope(
+                        size: 12,
+                        weight: FontWeight.w600,
+                        color: PaisaColors.mutedCaption,
                       ),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.calendar_month_outlined,
-                          size: 18,
-                          color: PaisaColors.primary,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Dashboard shows ${store.currentMonthLabel}. Insights below cover ${store.insightsPeriodLabel.toLowerCase()}.',
-                            style: PaisaTheme.manrope(
-                              size: 12,
-                              weight: FontWeight.w600,
-                              color: PaisaColors.muted,
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ),
                 ],
-                const SizedBox(height: 14),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: PaisaColors.primary,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: PaisaColors.inkOnAccent,
-                      width: 2.5,
-                    ),
-                    boxShadow: PaisaColors.hardShadow(offset: 5),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'TOTAL SPENT · ${store.insightsPeriodLabel}'
-                            .toUpperCase(),
-                        style: PaisaTheme.manrope(
-                          size: 10.5,
-                          weight: FontWeight.w700,
-                          color: PaisaColors.inkOnAccent,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      Text(
-                        formatInr(store.insightsSpent),
-                        style: PaisaTheme.sora(
-                          size: 34,
-                          weight: FontWeight.w800,
-                          color: PaisaColors.inkOnAccent,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      if (sorted.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: PaisaColors.inkOnAccent,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '${sorted.length} categories · ${store.insightsTransactions.where((t) => !t.isCredit).length} purchases',
-                            style: PaisaTheme.manrope(
-                              size: 11.5,
-                              weight: FontWeight.w700,
-                              color: PaisaColors.primary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                const SizedBox(height: 16),
+                _LedgerCoinHero(
+                  periodLabel: store.insightsPeriodLabel,
+                  spent: spent,
+                  income: income,
+                  moves: store.insightsSpendCount,
                 ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    _StatCard(
-                      label: 'Daily average',
-                      value: formatInr(store.insightsDailyAverage),
-                    ),
-                    const SizedBox(width: 11),
-                    _StatCard(
-                      label: 'Highest day',
-                      value: formatInr(store.insightsHighestDaySpend),
-                    ),
-                  ],
+                const SizedBox(height: 22),
+                _CoinLegendRail(
+                  dailyAverage: store.insightsDailyAverage,
+                  peakDaySpend: store.insightsHighestDaySpend,
+                  peakDay: store.insightsHighestDay,
+                  net: store.insightsNet,
                 ),
                 if (store.isLoading) ...[
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
                   const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.4,
-                        color: PaisaColors.primary,
-                      ),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: PaisaColors.primary,
                     ),
                   ),
                 ] else if (showEmpty) ...[
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 8),
                   _InsightsEmptyHint(store: store),
                 ],
                 if (sorted.isNotEmpty) ...[
-                  const SizedBox(height: 18),
-                  Text(
-                    'Spending by category',
-                    style: PaisaTheme.sora(size: 14, weight: FontWeight.w700),
+                  const SizedBox(height: 26),
+                  _SectionHeading(
+                    label: 'BY CATEGORY',
+                    trailing: sorted.length == 1
+                        ? '1 CATEGORY'
+                        : '${sorted.length} CATEGORIES',
                   ),
-                  const SizedBox(height: 12),
-                  CategorySpendStickerGrid(
-                    tiles: [
-                      for (var i = 0; i < sorted.length; i++)
-                        CategorySpendTile(
-                          category: sorted[i].key,
-                          amount: sorted[i].value,
-                          share: store.insightsSpent > 0
-                              ? (sorted[i].value / store.insightsSpent)
-                                  .clamp(0.0, 1.0)
-                              : 0,
-                          emphasize: i == 0,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => CategoryTransactionsScreen(
-                                category: sorted[i].key,
-                              ),
-                            ),
+                  for (var i = 0; i < sorted.length; i++)
+                    _LedgerRow(
+                      index: i,
+                      isLast: i == sorted.length - 1,
+                      token: _categoryToken(
+                        sorted[i].key,
+                        spent > 0 ? sorted[i].value / spent : 0,
+                      ),
+                      title: CategoryInfo.forCategory(sorted[i].key).label,
+                      subtitle: _shareCaption(
+                        spent > 0 ? sorted[i].value / spent : 0,
+                      ),
+                      amount: sorted[i].value,
+                      topStamp: i == 0 && sorted.length > 1,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => CategoryTransactionsScreen(
+                            category: sorted[i].key,
                           ),
                         ),
-                    ],
-                  ),
+                      ),
+                    ),
                 ],
                 if (foodDelta != null && foodDelta != 0) ...[
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: PaisaColors.cardElevated,
-                      border: Border.all(
-                        color: PaisaColors.warning,
-                        width: 2,
+                  const SizedBox(height: 20),
+                  _StruckNote(
+                    accent: foodDelta > 0
+                        ? PaisaColors.warning
+                        : PaisaColors.primary,
+                    child: Text.rich(
+                      TextSpan(
+                        style: PaisaTheme.manrope(
+                          size: 12.5,
+                          color: PaisaColors.mutedCaption,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: foodDelta > 0
+                                ? 'You spent ${formatInr(foodDelta)} more'
+                                : 'You spent ${formatInr(foodDelta.abs())} less',
+                            style: const TextStyle(
+                              color: PaisaColors.ink,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          TextSpan(
+                            text:
+                                ' on Food in the last 90 days vs the prior 90 days.',
+                            style: TextStyle(
+                              color: foodDelta > 0
+                                  ? PaisaColors.warning
+                                  : PaisaColors.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: PaisaColors.warning,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: PaisaColors.inkOnAccent,
-                              width: 2,
-                            ),
-                          ),
-                          alignment: Alignment.center,
-                          child:
-                              const Text('🍔', style: TextStyle(fontSize: 16)),
-                        ),
-                        const SizedBox(width: 11),
-                        Expanded(
-                          child: Text.rich(
-                            TextSpan(
-                              style: PaisaTheme.manrope(
-                                size: 12.5,
-                                color: PaisaColors.mutedCaption,
-                              ),
-                              children: [
-                                TextSpan(
-                                  text: foodDelta > 0
-                                      ? 'You spent ${formatInr(foodDelta)} more'
-                                      : 'You spent ${formatInr(foodDelta.abs())} less',
-                                  style: const TextStyle(
-                                    color: PaisaColors.ink,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                TextSpan(
-                                  text:
-                                      ' on Food in the last 90 days vs the prior 90 days.',
-                                  style: TextStyle(
-                                    color: foodDelta > 0
-                                        ? PaisaColors.warning
-                                        : PaisaColors.primary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ),
                 ],
-                if (store.insightsTopMerchants.isNotEmpty) ...[
-                  const SizedBox(height: 18),
-                  Text(
-                    'Top merchants',
-                    style: PaisaTheme.sora(size: 14, weight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 4,
+                if (merchants.isNotEmpty) ...[
+                  const SizedBox(height: 26),
+                  const _SectionHeading(label: 'TOP MERCHANTS'),
+                  for (var i = 0; i < merchants.length; i++)
+                    _LedgerRow(
+                      index: i,
+                      isLast: i == merchants.length - 1,
+                      token: PaisaCoinToken(
+                        color: i == 0
+                            ? PaisaColors.primary
+                            : PaisaColors.mutedCaption,
+                        fill: merchants.first.$3 > 0
+                            ? (merchants[i].$3 / merchants.first.$3)
+                                .clamp(0.06, 1.0)
+                            : 0,
+                        glyph: '${i + 1}',
+                        glyphSize: 12,
+                      ),
+                      title: merchants[i].$1,
+                      subtitle: merchants[i].$2,
+                      amount: merchants[i].$3,
                     ),
-                    decoration: BoxDecoration(
-                      color: PaisaColors.card,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: PaisaColors.dividerAlt),
-                    ),
-                    child: Column(
-                      children: [
-                        for (var i = 0; i < store.insightsTopMerchants.length; i++) ...[
-                          _MerchantRow(
-                            rank: i + 1,
-                            name: store.insightsTopMerchants[i].$1,
-                            sub: store.insightsTopMerchants[i].$2,
-                            amount: store.insightsTopMerchants[i].$3,
-                          ),
-                          if (i < store.insightsTopMerchants.length - 1)
-                            const Divider(
-                              height: 1,
-                              color: PaisaColors.divider,
-                            ),
-                        ],
-                      ],
-                    ),
-                  ),
                 ],
               ],
             ),
           ),
         );
       },
+    );
+  }
+
+  static PaisaCoinToken _categoryToken(SpendCategory category, double share) {
+    final info = CategoryInfo.forCategory(category);
+    return PaisaCoinToken(
+      color: info.iconColor,
+      fill: share.clamp(0.06, 1.0),
+      glyph: info.emoji,
+      glyphSize: 14,
+    );
+  }
+
+  static String _shareCaption(double share) {
+    final pct = formatSharePercent(share);
+    return pct.isEmpty ? 'of the ledger' : '$pct of the ledger';
+  }
+}
+
+// ── Hero: the ledger coin ───────────────────────────────────────────────────
+
+class _LedgerCoinHero extends StatelessWidget {
+  const _LedgerCoinHero({
+    required this.periodLabel,
+    required this.spent,
+    required this.income,
+    required this.moves,
+  });
+
+  final String periodLabel;
+  final double spent;
+  final double income;
+  final int moves;
+
+  @override
+  Widget build(BuildContext context) {
+    return PaisaCoinRise(
+      child: Column(
+        children: [
+          Text(
+            'LEDGER',
+            style: PaisaTheme.label(
+              size: 10,
+              color: PaisaColors.muted,
+              letterSpacing: 2.6,
+            ),
+          ),
+          const SizedBox(height: 5),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              periodLabel.toUpperCase(),
+              style: PaisaTheme.sora(
+                size: 19,
+                weight: FontWeight.w800,
+                color: PaisaColors.ink,
+                letterSpacing: 3.4,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          PaisaCoinFace(
+            outShare: paisaCoinOutShare(spent, income),
+            hasFlow: spent + income > 0,
+            topLegend: moves > 0 ? '$moves MOVES' : '',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'SPENT',
+                  style: PaisaTheme.label(
+                    size: 10,
+                    color: PaisaColors.mutedCaption,
+                    letterSpacing: 3,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    formatInr(spent),
+                    style: PaisaTheme.sora(
+                      size: 28,
+                      weight: FontWeight.w800,
+                      color: PaisaColors.ink,
+                      letterSpacing: -0.8,
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: 34,
+                  height: 1.5,
+                  color: PaisaColors.muted.withOpacity(0.55),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'IN',
+                      style: PaisaTheme.label(
+                        size: 10,
+                        color: PaisaColors.primary,
+                        letterSpacing: 2.4,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          formatInr(income),
+                          style: PaisaTheme.sora(
+                            size: 14,
+                            weight: FontWeight.w800,
+                            color: PaisaColors.primary,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Coin legends ────────────────────────────────────────────────────────────
+
+/// Three legends struck under the coin, hairline-ruled — not floating chips.
+class _CoinLegendRail extends StatelessWidget {
+  const _CoinLegendRail({
+    required this.dailyAverage,
+    required this.peakDaySpend,
+    required this.peakDay,
+    required this.net,
+  });
+
+  final double dailyAverage;
+  final double peakDaySpend;
+  final DateTime? peakDay;
+  final double net;
+
+  @override
+  Widget build(BuildContext context) {
+    return PaisaCoinRise(
+      duration: const Duration(milliseconds: 520),
+      offsetY: 10,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: const BoxDecoration(
+          border: Border(
+            top: BorderSide(color: PaisaColors.border),
+            bottom: BorderSide(color: PaisaColors.border),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: _CoinLegend(
+                label: 'DAILY AVG',
+                value: formatInr(dailyAverage),
+                caption: 'per day',
+              ),
+            ),
+            const _LegendRule(),
+            Expanded(
+              child: _CoinLegend(
+                label: 'PEAK DAY',
+                value: formatInr(peakDaySpend),
+                caption: peakDay == null
+                    ? 'no spend yet'
+                    : formatDayStripHeader(peakDay!),
+                onTap: peakDay == null
+                    ? null
+                    : () => DayStripScreen.open(context, day: peakDay),
+              ),
+            ),
+            const _LegendRule(),
+            Expanded(
+              child: _CoinLegend(
+                label: 'NET',
+                value: formatAmount(net, isCredit: net >= 0),
+                valueColor: net >= 0 ? PaisaColors.primary : PaisaColors.ink,
+                caption: 'in − out',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LegendRule extends StatelessWidget {
+  const _LegendRule();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 46,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      color: PaisaColors.border,
+    );
+  }
+}
+
+class _CoinLegend extends StatelessWidget {
+  const _CoinLegend({
+    required this.label,
+    required this.value,
+    required this.caption,
+    this.valueColor,
+    this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final String caption;
+  final Color? valueColor;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final column = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          label,
+          style: PaisaTheme.label(
+            size: 9,
+            color: PaisaColors.muted,
+            letterSpacing: 1.6,
+          ),
+        ),
+        const SizedBox(height: 5),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: PaisaTheme.sora(
+              size: 15.5,
+              weight: FontWeight.w800,
+              color: valueColor ?? PaisaColors.ink,
+              letterSpacing: -0.3,
+            ),
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          caption,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: PaisaTheme.manrope(
+            size: 10,
+            weight: FontWeight.w600,
+            color: onTap == null
+                ? PaisaColors.muted
+                : PaisaColors.primary.withOpacity(0.85),
+          ),
+        ),
+      ],
+    );
+
+    if (onTap == null) return column;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: column,
+    );
+  }
+}
+
+// ── Stamped ledger rows ─────────────────────────────────────────────────────
+
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({required this.label, this.trailing});
+
+  final String label;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: PaisaTheme.label(
+              size: 10,
+              color: PaisaColors.mutedCaption,
+              letterSpacing: 2.4,
+            ),
+          ),
+          const Spacer(),
+          if (trailing != null)
+            Text(
+              trailing!,
+              style: PaisaTheme.manrope(
+                size: 9.5,
+                weight: FontWeight.w700,
+                color: PaisaColors.muted,
+                letterSpacing: 1,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A coin-stamped ledger row: miniature coin token, title + caption, amount.
+/// Same row language as the Paisa Coin day list.
+class _LedgerRow extends StatelessWidget {
+  const _LedgerRow({
+    required this.token,
+    required this.title,
+    required this.subtitle,
+    required this.amount,
+    required this.index,
+    required this.isLast,
+    this.topStamp = false,
+    this.onTap,
+  });
+
+  final Widget token;
+  final String title;
+  final String subtitle;
+  final double amount;
+  final int index;
+  final bool isLast;
+  final bool topStamp;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    // Staggered stamp-in, capped so long lists never crawl.
+    final delayMs = math.min(index * 32, 192);
+
+    final row = Container(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      decoration: BoxDecoration(
+        border: isLast
+            ? null
+            : const Border(
+                bottom: BorderSide(color: PaisaColors.border, width: 1),
+              ),
+      ),
+      child: Row(
+        children: [
+          token,
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    if (topStamp) ...[
+                      const _TopStamp(),
+                      const SizedBox(width: 7),
+                    ],
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: PaisaTheme.sora(
+                          size: 15,
+                          weight: FontWeight.w800,
+                          color: PaisaColors.ink,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      formatInr(amount),
+                      style: PaisaTheme.sora(
+                        size: 14,
+                        weight: FontWeight.w800,
+                        color: PaisaColors.ink,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: PaisaTheme.manrope(
+                    size: 11,
+                    weight: FontWeight.w600,
+                    color: PaisaColors.mutedCaption,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return PaisaCoinRise(
+      duration: Duration(milliseconds: 340 + delayMs),
+      offsetY: 8,
+      child: onTap == null
+          ? row
+          : Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(12),
+                child: row,
+              ),
+            ),
+    );
+  }
+}
+
+class _TopStamp extends StatelessWidget {
+  const _TopStamp();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: PaisaColors.primary,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        'TOP',
+        style: PaisaTheme.sora(
+          size: 8,
+          weight: FontWeight.w800,
+          color: PaisaColors.inkOnAccent,
+          letterSpacing: 0.7,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Chrome + notes + empty ──────────────────────────────────────────────────
+
+class _ReportsButton extends StatelessWidget {
+  const _ReportsButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(11, 7, 8, 7),
+        decoration: BoxDecoration(
+          color: PaisaColors.cardElevated,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: PaisaColors.primary.withOpacity(0.45),
+            width: 1.5,
+          ),
+          boxShadow: PaisaColors.hardShadow(offset: 2),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'REPORTS',
+              style: PaisaTheme.label(
+                size: 10,
+                color: PaisaColors.primary,
+                letterSpacing: 1.6,
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 17,
+              color: PaisaColors.primary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Hairline note with a struck accent bar — no card, no chrome clutter.
+class _StruckNote extends StatelessWidget {
+  const _StruckNote({required this.accent, required this.child});
+
+  final Color accent;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: accent, width: 2.5)),
+      ),
+      child: child,
     );
   }
 }
@@ -350,46 +721,39 @@ class _InsightsEmptyHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasTransactions = store.transactions.isNotEmpty;
-    final headline = hasTransactions
-        ? 'No spending insights yet'
-        : 'No transactions yet';
+    final headline =
+        hasTransactions ? 'No spending insights yet' : 'No transactions yet';
     final subtitle = hasTransactions
         ? 'Pull down to refresh, or go to Profile → Rescan SMS.'
         : 'Scan your SMS inbox to build spending insights from bank alerts.';
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: PaisaColors.card,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: PaisaColors.dividerAlt),
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 28, 8, 4),
       child: Column(
         children: [
-          Text(hasTransactions ? '📊' : '📭',
-              style: const TextStyle(fontSize: 32)),
-          const SizedBox(height: 8),
+          Container(width: 48, height: 2, color: PaisaColors.border),
+          const SizedBox(height: 20),
           Text(
             headline,
             textAlign: TextAlign.center,
-            style: PaisaTheme.manrope(
-              size: 13,
-              weight: FontWeight.w600,
-              color: PaisaColors.muted,
+            style: PaisaTheme.sora(
+              size: 17,
+              weight: FontWeight.w800,
+              color: PaisaColors.ink,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Text(
             subtitle,
             textAlign: TextAlign.center,
             style: PaisaTheme.manrope(
-              size: 12,
+              size: 12.5,
+              weight: FontWeight.w600,
               color: PaisaColors.mutedCaption,
             ),
           ),
           if (!hasTransactions) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -414,112 +778,6 @@ class _InsightsEmptyHint extends StatelessWidget {
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  const _StatCard({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
-        decoration: BoxDecoration(
-          color: PaisaColors.card,
-          border: Border.all(color: PaisaColors.dividerAlt),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: PaisaTheme.manrope(
-                size: 11,
-                color: PaisaColors.mutedCaption,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: PaisaTheme.sora(size: 18, weight: FontWeight.w800),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MerchantRow extends StatelessWidget {
-  const _MerchantRow({
-    required this.rank,
-    required this.name,
-    required this.sub,
-    required this.amount,
-  });
-
-  final int rank;
-  final String name;
-  final String sub;
-  final double amount;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 11),
-      child: Row(
-        children: [
-          Container(
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(
-              color: PaisaColors.dividerAlt,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              '$rank',
-              style: PaisaTheme.sora(
-                size: 12,
-                weight: FontWeight.w700,
-                color: PaisaColors.mutedCaption,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: PaisaTheme.manrope(
-                    size: 13.5,
-                    weight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  sub,
-                  style: PaisaTheme.manrope(
-                    size: 11,
-                    color: PaisaColors.mutedCaption,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            formatInr(amount),
-            style: PaisaTheme.sora(size: 14, weight: FontWeight.w700),
-          ),
         ],
       ),
     );

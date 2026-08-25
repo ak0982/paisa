@@ -985,6 +985,16 @@ class FinanceStore extends ChangeNotifier {
 
   double get insightsSpent => _sumAmount(_spendTxns(insightsTransactions));
 
+  /// IN across the whole insights window — same exclusions as every other
+  /// income KPI (no CC payment-received, no self-transfer legs).
+  double get insightsIncome => _sumAmount(_incomeTxns(insightsTransactions));
+
+  /// Signed net across the insights window: IN − OUT.
+  double get insightsNet => insightsIncome - insightsSpent;
+
+  /// Number of real spend movements in the insights window.
+  int get insightsSpendCount => _spendTxns(insightsTransactions).length;
+
   Map<SpendCategory, double> get insightsCategorySpending {
     final map = <SpendCategory, double>{};
     for (final t in _spendTxns(insightsTransactions)) {
@@ -1030,6 +1040,26 @@ class FinanceStore extends ChangeNotifier {
     }
     if (byDay.isEmpty) return 0;
     return byDay.values.reduce((a, b) => a > b ? a : b);
+  }
+
+  /// Calendar date behind [insightsHighestDaySpend] so Stats can drill into it.
+  /// Null when nothing has been spent yet.
+  DateTime? get insightsHighestDay {
+    final byDay = <DateTime, double>{};
+    for (final t in _spendTxns(insightsTransactions)) {
+      final key = DateTime(
+        t.timestamp.year,
+        t.timestamp.month,
+        t.timestamp.day,
+      );
+      byDay[key] = (byDay[key] ?? 0) + t.amount;
+    }
+    if (byDay.isEmpty) return null;
+    var best = byDay.entries.first;
+    for (final e in byDay.entries) {
+      if (e.value > best.value) best = e;
+    }
+    return best.key;
   }
 
   double? insightsFoodDelta() {
