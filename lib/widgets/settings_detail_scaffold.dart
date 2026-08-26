@@ -120,10 +120,26 @@ class SettingsToggleRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Switch.adaptive(
-            value: value,
-            activeColor: PaisaColors.primary,
-            onChanged: onChanged,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                value ? 'ON' : 'OFF',
+                style: PaisaTheme.label(
+                  size: 9,
+                  color: value ? PaisaColors.primary : PaisaColors.muted,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Material Switch (not .adaptive): theme SwitchThemeData applies.
+              // Do not set activeColor — on M3 it paints thumb+track the same
+              // primary lime and the handle disappears into a solid green blob.
+              Switch(
+                value: value,
+                onChanged: onChanged,
+              ),
+            ],
           ),
         ],
       ),

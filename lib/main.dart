@@ -7,6 +7,7 @@ import 'providers/app_settings.dart';
 import 'providers/finance_store.dart';
 import 'screens/main_shell.dart';
 import 'screens/onboarding/welcome_screen.dart';
+import 'services/screen_security.dart';
 import 'theme/paisa_theme.dart';
 
 /// Bumped when the categorizer's rules change enough to need a rebuild.
@@ -183,6 +184,12 @@ Future<void> main() async {
   );
 
   WidgetsBinding.instance.addPostFrameCallback((_) async {
+    // SEC-2: MainActivity already set FLAG_SECURE before the first frame, so
+    // this only has to relax it when the customer turned the protection off.
+    // Not awaited — hydration must not wait on a window flag (ISSUE-7).
+    const ScreenSecurity().apply(
+      blockScreenshots: appSettings.blockScreenshots,
+    );
     await store.init();
     // Onboarding still owns the first permission scan. Returning users get
     // the launch scan (full rescan or incremental) after the first frame.

@@ -9,6 +9,7 @@ import 'account_discovery.dart';
 import 'original_sms_lookup.dart';
 import 'parsed_sms_transaction.dart';
 import 'sms_parse_isolate.dart';
+import 'sms_parser.dart';
 
 /// A bank SMS that passed all pipeline stages and was parsed.
 class SmsScanHit {
@@ -252,7 +253,12 @@ class SmsReaderService {
           return SmsMessageInput(
             id: map['id']?.toString() ?? '',
             sender: map['sender']?.toString() ?? '',
-            body: map['body']?.toString() ?? '',
+            // Cap what the scan stages ever regex over. Discovery and
+            // enrichment run their own `.*`-heavy patterns over these bodies,
+            // so the guard belongs at the boundary too, not only inside
+            // SmsParser. The Coin Flip reverse reads the full body straight
+            // from the inbox (getSmsById) and is unaffected.
+            body: SmsParser.capScanBody(map['body']?.toString() ?? ''),
             timestamp: DateTime.fromMillisecondsSinceEpoch(
               (map['timestamp'] as num?)?.toInt() ?? 0,
             ),

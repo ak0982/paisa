@@ -29,7 +29,8 @@ classifies each account, and surfaces spend/income summaries, budgets, insights 
   (`github.com/ak0982/paisa`). No SMS content, account masks, or personal data is committed.
 - **No backend.** Everything (SMS scan, parse, classify, storage) runs locally on the device.
   Storage is on-device SQLite via `sqflite` (**plaintext** — biometric lock / SQLCipher are
-  deliberately deferred; see ISSUE-15 in §6).
+  deliberately deferred; see ISSUE-15 in §6). OS-level export paths are shut off: cloud backup
+  and device-to-device transfer are disabled in the manifest (SEC-1, §5.4).
 
 ---
 
@@ -87,7 +88,9 @@ The user develops against **physical Android devices**. When operating on them:
 | `lib/utils/formatters.dart` | INR (`decimalDigits: 2`, no whole-rupee roundoff), `formatSharePercent` (tiny Stats shares), date/time. |
 | `lib/theme/` | Colors + theme. |
 | `android/.../SmsNativeFilter.kt` | Native coarse thinner only (sender / length / OTP) — **not** the promo/scam gate. |
-| `android/.../MainActivity.kt` | Platform channel; SMS batch reads run on a **background executor** (ISSUE-10). |
+| `android/.../MainActivity.kt` | Platform channels (`/sms` + `/security`); SMS batch reads run on a **background executor** (ISSUE-10); sets **`FLAG_SECURE`** in `onCreate` (SEC-2). |
+| `android/app/src/main/res/xml/` | `data_extraction_rules.xml` (API 31+ cloud + D2D) and `backup_rules.xml` (API ≤30) — both exclude **every** domain (SEC-1). |
+| `lib/services/screen_security.dart` | Applies the screenshot/recents protection preference to the Android window (SEC-2). |
 | `.github/workflows/flutter_ci.yml` | CI: `flutter analyze` + `flutter test` on push/PR to `main` (ISSUE-16). |
 | `test/fixtures/synthetic_sms_corpus.txt` | Synthetic SMS fixtures (no personal data) so gate coverage runs without the private dump. |
 | `docs/india_bank_sms_research.md` | RBI bank inventory, SMS taxonomy, public template notes, and parser expansion roadmap (research only). |
@@ -95,6 +98,7 @@ The user develops against **physical Android devices**. When operating on them:
 | `test/` | ~500 focused tests + ~3000-case account matrix (see §7). |
 | `code_review_by_fable_claude.md` | Fable/Claude round-1 review that drove ISSUES 1–16 (historical evidence + proposed fixes). |
 | `code_review_round2_by_fable_claude.md` | Fable/Claude round-2 review (R2-1…R2-10). P0/P1 items are fixed in code; P2 nits documented in §5.3. |
+| `code_review_round3_security_by_fable_claude.md` | Fable/Claude round-3 **security** review (SEC-1…SEC-7). Verdicts + what shipped in §5.4. |
 
 ### End-to-end SMS data flow
 ```
@@ -477,6 +481,32 @@ Source: `code_review_round2_by_fable_claude.md` (on `main`). Do **not** re-intro
 | **R2-9** | Mixed | Trailing-3-month budget seed: **fixed**. User-edit floor ₹100 vs suggestion floor ₹1,000: **intentional**. `formatCompactInr` is an alias of `formatInr` after paise unification. Hidden-mask drilldown mismatch is cosmetic (You list already hides those accounts). |
 | **R2-10** | Fixed | Order-sensitive R2-1 tests exist (`merchant_categorizer_test` + matrix). Schema bumps still land when parse/classify changes; batch when possible. |
 
+### 5.4 Fable round 3 — security (SEC-1…SEC-8) — Aug 2026
+
+Source: `code_review_round3_security_by_fable_claude.md`. Every finding was reproduced against
+the code before being fixed; the ones that were **not** real (or were already deliberate) are
+recorded here so nobody "fixes" them for optics. Regression cover:
+`test/security_hardening_test.dart` + `test/sms_parser_redos_test.dart`. **No schema bump** — none
+of this changes how a real SMS parses or classifies.
+
+| ID | Verdict | Notes |
+| --- | --- | --- |
+| **SEC-1** | **Fixed** | Reproduced in the merged release manifest: no `allowBackup`, so Auto Backup swept the plaintext DB + prefs to Google Drive. Now `allowBackup="false"` **plus** `dataExtractionRules` / `fullBackupContent` — `allowBackup=false` alone does **not** stop device-to-device transfer on Android 12+. Do not drop either XML file. |
+| **SEC-2** | **Fixed** | No `FLAG_SECURE` anywhere. `MainActivity.onCreate` now sets it **before** `super.onCreate` (protects the recents thumbnail from launch), and the `/security` channel (`setSecureScreen`) lets Dart relax it. `AppSettings.blockScreenshots` **defaults to on**; Privacy → "Block screenshots" turns it off for people who want screenshots. Secure-by-default is the invariant — do not flip the default. |
+| **SEC-3** | Intentional | Restatement of ISSUE-15 (plaintext `sqflite`, no app lock). Still deliberately deferred — see §6. SEC-1 removes the backup-extraction path that made it worse. |
+| **SEC-4** | **Fixed** | Real: `debugPrint`/`debugPrintStack` are not compiled out of release, so scan exceptions reached logcat. Now behind `kDebugMode`. A test scans `lib/` and fails on any ungated `print`/`debugPrint`. |
+| **SEC-5** | Not a vuln | `getSmsById` verified in-process: registered on the engine's binary messenger, no exported `<service>`/`<provider>`/`<receiver>`, `_ID` passed as a `?` selection arg. SEC-2 covers the on-screen exposure. (Residual, accepted: the reverse's Copy button puts the body on the clipboard.) |
+| **SEC-6** | Not a vuln | `minifyEnabled false` confirmed, but there are no secrets/keys/network in the app, so R8 buys no confidentiality — only size. Left off deliberately: shrinking the SMS channel + sqflite paths needs on-device QA that a lint-clean build cannot replace. Revisit with the SEC-3 work. |
+| **SEC-7** | Intentional | `allRows` really does cross the channel, by design (ISSUE-2): native is a coarse thinner and Dart re-gates. Keeping the promo/scam gate in one place beats trimming the payload. Do not move filtering back into Kotlin. |
+| **SEC-8** | **Fixed** (missed by the review) | The review's §3 cleared the parser of ReDoS after testing only `(?:\w+\s+)+bank card`, which really is linear. It missed the patterns pairing two `.*`/`.+` runs. Re-measured on a pre-fix checkout, full pipeline, with bodies that hit the prefix but never the tail: `payment of…received towards your` ×n = 0.6 s at 8 kB and **33 s at 34 kB**; `credited with rs…against reversa` ×n = 5.7 s at 30 kB and **93 s at 122 kB**; `cashback of…credited to you` ×n = 24 s at 118 kB. Worse than quadratic, and a concatenated multipart SMS reaches that size, so one message sent to the user stalls a whole scan. Fixed with `SmsParser.maxScanBodyLength` (2,000 chars — longest real message in the dump is 1,696) applied in `parseTransaction` / `isRealTransactionSms` / `isPromoOrOfferSms` **and** at the reader boundary, since discovery and enrichment regex the same rows. Post-fix all three are flat at tens of ms at any size. **The display path must stay uncapped** — the Coin Flip reverse shows the verbatim body. |
+
+Also checked this round and clean, so don't re-audit them from scratch: the **sqflite** layer has
+zero string interpolation — every `where:` uses `whereArgs`, the one `rawInsert` uses `?`
+placeholders, and the `execute` calls are static DDL; there is **no in-app export/share path**
+(no `share_plus`, no file writes outside the DB) so the DB only leaves via the OS paths SEC-1
+closed; and the only exported component is the launcher activity with a MAIN/LAUNCHER filter —
+no deep links, no `url_launcher`, no custom scheme. `INTERNET` stays debug/profile-only.
+
 ---
 
 ## 6. Known issues / limitations / remaining work
@@ -486,9 +516,12 @@ Source: `code_review_round2_by_fable_claude.md` (on `main`). Do **not** re-intro
 - Blocking splash on DB hydrate / schema rescan — ISSUE-7 is fully done (see §3 / §4.9).
 
 **Still true:**
-- **ISSUE-15 deferred — no biometric app lock, DB still plaintext `sqflite`.** Privacy *copy* is
-  honest; at-rest encryption (`sqflite_sqlcipher`) and `local_auth` lock were **intentionally not
-  shipped**. Do not pretend they exist. Revisit when productizing.
+- **ISSUE-15 / SEC-3 deferred — no biometric app lock, DB still plaintext `sqflite`.** Privacy
+  *copy* is honest; at-rest encryption (`sqflite_sqlcipher`) and `local_auth` lock were
+  **intentionally not shipped**. Do not pretend they exist. Revisit when productizing. Round 3
+  did close the platform-level export paths around it (SEC-1 backup, SEC-2 screen capture).
+- **Release APK is unminified (SEC-6).** Deliberate: no secrets to hide, and R8 over the SMS
+  channel / sqflite needs device QA. Not an open vulnerability.
 - **Android-only SMS features.** iOS does not allow inbox access. The Flutter app builds for
   other platforms but the core feature only works on Android.
 - **No live SMS receiver.** Data refreshes when the app opens / user rescans. `RECEIVE_SMS` was
@@ -540,6 +573,10 @@ Source: `code_review_round2_by_fable_claude.md` (on `main`). Do **not** re-intro
     copy, and masking that never redacts the SMS (§4.10).
   - `sms_coin_slab_corners_test.dart` — money/paise matrix, verbatim body, Unicode,
     every `OriginalSmsStatus`, flip mechanics, list journeys, `getSmsById` contract.
+  - `security_hardening_test.dart` — SEC-1 manifest/backup rules, SEC-2 `FLAG_SECURE` +
+    screenshot toggle, SEC-4 no ungated logging in `lib/` (§5.4).
+  - `sms_parser_redos_test.dart` — SEC-8 scan-body cap: adversarial bodies stay bounded,
+    real alerts still parse, cap keeps headroom over the live corpus.
   - Plus parser / discovery / registry / enrichment / categorizer / insights / reports /
     `audit_*` / `*_scenarios` / `widget_test.dart`.
 - **Never commit SMS dumps, `paisa_sms_analysis.db`, real account masks, `.env`, secrets, or
@@ -583,3 +620,7 @@ Source: `code_review_round2_by_fable_claude.md` (on `main`). Do **not** re-intro
    - Seed `AccountBankRegistry` from stored data; don't start incremental scans empty.
    - You drilldown must use `transactionsForAccount` / the same ledger buckets as
      `bankAccounts()`; product↔funding links must not double-count covered EMIs.
+8. **Do not undo the round-3 security invariants** (§5.4): `allowBackup="false"` + both backup
+   rule files stay; `FLAG_SECURE` stays set in `onCreate` and `blockScreenshots` stays
+   default-on; release builds stay silent (`kDebugMode`-gated logging); regex stages stay behind
+   `SmsParser.capScanBody` while the Coin Flip reverse keeps the **uncapped** body.

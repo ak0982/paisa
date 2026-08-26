@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Telephony
+import android.view.WindowManager
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -17,6 +18,7 @@ import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
     private val channelName = "com.paisa.paisa_app/sms"
+    private val securityChannelName = "com.paisa.paisa_app/security"
     private val inboxUri: Uri = Uri.parse("content://sms/inbox")
     private val projection = arrayOf(
         Telephony.Sms._ID,
@@ -30,6 +32,21 @@ class MainActivity : FlutterActivity() {
     // batches are already sequential from Dart.
     private val smsExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    /**
+     * SEC-2: screens show balances, the whole transaction history and — since
+     * the Coin Flip reverse — the verbatim bank alert SMS. FLAG_SECURE is set
+     * before the first frame so the recents thumbnail, screenshots and screen
+     * recorders (including other apps' MediaProjection) never capture them.
+     *
+     * Secure is the default; Dart clears the flag right after launch only when
+     * the customer switched screenshot protection off in Privacy settings, so
+     * there is no unprotected window at startup either way.
+     */
+    override fun onCreate(savedInstanceState: Bundle?) {
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        super.onCreate(savedInstanceState)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -94,6 +111,25 @@ class MainActivity : FlutterActivity() {
                                 }
                             }
                         }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // Screenshot / recents protection toggle (SEC-2). Method-channel calls
+        // arrive on the platform main thread, so the window flag can be
+        // changed inline.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, securityChannelName)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "setSecureScreen" -> {
+                        val enabled = call.argument<Boolean>("enabled") ?: true
+                        if (enabled) {
+                            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        } else {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        }
+                        result.success(enabled)
                     }
                     else -> result.notImplemented()
                 }

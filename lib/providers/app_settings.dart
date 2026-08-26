@@ -13,11 +13,19 @@ class AppSettings extends ChangeNotifier {
   final SharedPreferences _prefs;
 
   static const _maskMerchantsKey = 'privacy_mask_merchants';
+  static const _blockScreenshotsKey = 'privacy_block_screenshots';
   static const _userNameKey = 'profile_user_name';
   static const _userEmailKey = 'profile_user_email';
   static const _hiddenBankAccountsKey = 'hidden_bank_account_masks';
 
   bool get maskMerchantNames => _prefs.getBool(_maskMerchantsKey) ?? false;
+
+  /// Screenshot / screen-recording / recents protection (Android FLAG_SECURE).
+  ///
+  /// Defaults to **on** (SEC-2): the screens show balances and the Coin Flip
+  /// reverse shows the verbatim bank SMS, so the protected state is the safe
+  /// default. The customer can turn it off to take screenshots.
+  bool get blockScreenshots => _prefs.getBool(_blockScreenshotsKey) ?? true;
 
   /// Full name entered during profile setup (empty when not yet set).
   String get userName => _prefs.getString(_userNameKey)?.trim() ?? '';
@@ -77,6 +85,11 @@ class AppSettings extends ChangeNotifier {
 
   Future<void> setMaskMerchantNames(bool value) async {
     await _prefs.setBool(_maskMerchantsKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setBlockScreenshots(bool value) async {
+    await _prefs.setBool(_blockScreenshotsKey, value);
     notifyListeners();
   }
 

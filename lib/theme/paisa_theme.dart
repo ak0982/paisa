@@ -105,6 +105,8 @@ abstract final class PaisaTheme {
       progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: PaisaColors.primary,
       ),
+      // M3 defaults paint selected thumb + track both in primary → solid lime
+      // blob. Force a dark thumb on lime track, muted off track + clear thumb.
       switchTheme: SwitchThemeData(
         thumbColor: MaterialStateProperty.resolveWith((states) {
           if (states.contains(MaterialState.selected)) {
@@ -116,7 +118,19 @@ abstract final class PaisaTheme {
           if (states.contains(MaterialState.selected)) {
             return PaisaColors.primary;
           }
-          return PaisaColors.border;
+          return PaisaColors.cardElevated;
+        }),
+        trackOutlineColor: MaterialStateProperty.resolveWith((states) {
+          if (states.contains(MaterialState.selected)) {
+            return Colors.transparent;
+          }
+          return PaisaColors.muted;
+        }),
+        overlayColor: MaterialStateProperty.resolveWith((states) {
+          if (states.contains(MaterialState.selected)) {
+            return PaisaColors.primary.withOpacity(0.18);
+          }
+          return PaisaColors.muted.withOpacity(0.14);
         }),
       ),
     );

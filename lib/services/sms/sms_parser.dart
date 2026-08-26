@@ -7,6 +7,27 @@ import 'sms_keyword_lists.dart';
 class SmsParser {
   SmsParser._();
 
+  /// Longest body the regex stages ever look at.
+  ///
+  /// A real bank/UPI alert is a few hundred characters (longest message in the
+  /// live corpus: 1,696), and the transaction facts are always near the start.
+  /// A *concatenated* multipart SMS can carry tens of thousands, and several
+  /// patterns pair two `.*`/`.+` runs (`payment of.*received towards your.*
+  /// credit card`, `credited with rs…\.*(?:on \d|against reversal)`, `cashback
+  /// of….+credited to your`), which the Dart regex engine explores without
+  /// memoisation. Measured on the full pipeline with crafted bodies that hit
+  /// the prefix but never the tail: 0.6 s at 8 kB and 33 s at 34 kB, 5.7 s at
+  /// 30 kB and 93 s at 122 kB — worse than quadratic, so a single SMS sent to
+  /// the user could stall an entire scan. Capping the input holds the cost
+  /// flat (tens of ms) no matter what lands in the inbox.
+  static const int maxScanBodyLength = 2000;
+
+  /// Truncates [body] to [maxScanBodyLength] for regex scanning. Display paths
+  /// (the Coin Flip reverse) must keep using the untruncated body.
+  static String capScanBody(String body) => body.length <= maxScanBodyLength
+      ? body
+      : body.substring(0, maxScanBodyLength);
+
   /// Indian (1,25,000) and Western (1,250,000) comma grouping.
   /// Decimal part allows 1–2 digits so "Rs 500.5" parses as 500.5 (ISSUE-14).
   static final _amount = r'(\d+(?:,\d+)*(?:\.\d{1,2})?)';
@@ -140,7 +161,8 @@ class SmsParser {
   );
 
   /// True when SMS looks like a loan/card/marketing offer, not a real transaction.
-  static bool isPromoOrOfferSms(String body, {String sender = ''}) {
+  static bool isPromoOrOfferSms(String rawBody, {String sender = ''}) {
+    final body = capScanBody(rawBody);
     if (_completedTxnPattern.hasMatch(body)) return false;
 
     if (_promoOfferPattern.hasMatch(body)) return true;
@@ -195,7 +217,7 @@ class SmsParser {
 
   /// Multi-check filter: promos, scams, and weak "received Rs" alerts are rejected.
   static bool isRealTransactionSms(String sender, String body) {
-    final trimmed = body.trim();
+    final trimmed = capScanBody(body.trim());
     if (trimmed.length < 20) return false;
     if (isOtpOnly(trimmed)) return false;
     if (isNonBankWalletMovement(trimmed)) return false;
@@ -484,7 +506,9 @@ class SmsParser {
     SmsMessageInput message, {
     AccountBankRegistry? registry,
   }) {
-    final body = message.body.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ');
+    final body = capScanBody(
+      message.body.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' '),
+    );
     // ISSUE-9: reuse the once-built pattern list — rebuilding ~50 RegExps per
     // candidate was compiling ~1M regexes on a large inbox scan.
     for (final pattern in _patterns) {

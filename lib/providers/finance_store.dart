@@ -642,8 +642,13 @@ class FinanceStore extends ChangeNotifier {
     } catch (e, stackTrace) {
       // ISSUE-8: never surface raw PlatformException / stack internals in the
       // UI. Log the details for debugging, show a short friendly message.
-      debugPrint('FinanceStore: SMS scan failed: $e');
-      debugPrintStack(stackTrace: stackTrace);
+      // SEC-4: debugPrint is NOT compiled out of release builds — it writes to
+      // logcat, where anything with READ_LOGS or an ADB cable can read it. The
+      // scan path handles SMS, so keep release builds silent.
+      if (kDebugMode) {
+        debugPrint('FinanceStore: SMS scan failed: $e');
+        debugPrintStack(stackTrace: stackTrace);
+      }
       _error = friendlyScanError(e);
       _loading = false;
       _scanProgress = null;
@@ -660,7 +665,7 @@ class FinanceStore extends ChangeNotifier {
 
   /// Maps a raw scan exception to a short, user-facing message. Never leaks
   /// PlatformException internals or stack details into the UI (ISSUE-8) — those
-  /// are logged via debugPrint instead.
+  /// are logged via debugPrint in debug builds only (SEC-4).
   @visibleForTesting
   static String friendlyScanError(Object error) {
     if (error is PlatformException) {

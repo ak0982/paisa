@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/app_settings.dart';
 import '../../providers/finance_store.dart';
+import '../../services/screen_security.dart';
 import '../../theme/paisa_colors.dart';
 import '../../theme/paisa_theme.dart';
 import '../../widgets/settings_detail_scaffold.dart';
@@ -32,6 +33,18 @@ class PrivacySettingsScreen extends StatelessWidget {
                         'Show abbreviated names in transaction lists for extra privacy.',
                     value: settings.maskMerchantNames,
                     onChanged: settings.setMaskMerchantNames,
+                  ),
+                  settingsDivider(),
+                  SettingsToggleRow(
+                    title: 'Block screenshots',
+                    subtitle:
+                        'Hide Paisa from screenshots, screen recording and the recent-apps preview.',
+                    value: settings.blockScreenshots,
+                    onChanged: (value) async {
+                      await settings.setBlockScreenshots(value);
+                      await const ScreenSecurity()
+                          .apply(blockScreenshots: value);
+                    },
                   ),
                   settingsDivider(),
                   Padding(
