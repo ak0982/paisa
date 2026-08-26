@@ -115,6 +115,7 @@ class TransactionSectionCard extends StatelessWidget {
                     showTime: !showDate,
                     showDate: showDate,
                     compact: true,
+                    showNavChevron: true,
                   ),
                 ),
                 if (i < section.items.length - 1)

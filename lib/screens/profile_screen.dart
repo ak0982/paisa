@@ -11,6 +11,7 @@ import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/bank_logo.dart';
+import '../widgets/paisa_nav_chevron.dart';
 import 'edit_profile_screen.dart';
 import 'filtered_transactions_screen.dart';
 import 'onboarding/welcome_screen.dart';
@@ -291,11 +292,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ],
                       ),
                     ),
-                    const Icon(
-                      Icons.chevron_right,
-                      color: PaisaColors.muted,
-                      size: 20,
-                    ),
+                    const PaisaNavChevron(size: 20),
                   ],
                 ),
                 ),
@@ -604,11 +601,7 @@ class _BankRow extends StatelessWidget {
               ),
             ),
             if (onOpen != null)
-              const Icon(
-                Icons.chevron_right_rounded,
-                size: 22,
-                color: PaisaColors.muted,
-              ),
+              const PaisaNavChevron(size: 22, color: PaisaColors.muted),
             if (onHide != null)
               IconButton(
                 tooltip: 'Not my account',
@@ -731,11 +724,7 @@ class _SettingsRow extends StatelessWidget {
                 ),
               )
             else
-              const Icon(
-                Icons.chevron_right,
-                size: 18,
-                color: PaisaColors.muted,
-              ),
+              const PaisaNavChevron(color: PaisaColors.muted),
           ],
         ),
       ),

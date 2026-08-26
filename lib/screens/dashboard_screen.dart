@@ -433,6 +433,7 @@ class _TxnCard extends StatelessWidget {
               child: TransactionRow(
                 transaction: transactions[i],
                 showDate: showDates,
+                showNavChevron: true,
               ),
             ),
             if (i < transactions.length - 1)

@@ -5,6 +5,7 @@ import '../models/category_info.dart';
 import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
+import 'paisa_nav_chevron.dart';
 
 /// Rank stamp on Stats / Reports category stickers.
 enum ShareBadgeKind { top, mid, low }
@@ -75,11 +76,12 @@ class CategorySpendChip extends StatelessWidget {
 
     final fill = share?.clamp(0.0, 1.0);
     final borderRadius = BorderRadius.circular(13);
-    final radius = 13.0;
+    const radius = 13.0;
     final borderWidth = emphasize ? 2.75 : 2.0;
     final showArc = fill != null && fill > 0;
     final pctLabel = fill == null ? '' : formatSharePercent(fill);
     final showBadge = pctLabel.isNotEmpty && badgeKind != null;
+    final showChevron = onTap != null && expanded;
 
     final inner = ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 48),
@@ -91,6 +93,10 @@ class CategorySpendChip extends StatelessWidget {
             Text(info.emoji, style: const TextStyle(fontSize: 14)),
             const SizedBox(width: 8),
             if (expanded) Expanded(child: labelColumn) else labelColumn,
+            if (showChevron) ...[
+              const SizedBox(width: 2),
+              const PaisaNavChevron(size: 16),
+            ],
           ],
         ),
       ),
@@ -112,6 +118,14 @@ class CategorySpendChip extends StatelessWidget {
             )
           : inner,
     );
+
+    if (onTap != null) {
+      chip = Semantics(
+        button: true,
+        label: '${info.label} ${formatInr(amount)}',
+        child: chip,
+      );
+    }
 
     if (showArc || showBadge) {
       chip = Stack(

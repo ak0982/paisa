@@ -7,6 +7,7 @@ import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/paisa_progress_bar.dart';
+import '../widgets/paisa_nav_chevron.dart';
 
 class BudgetsScreen extends StatelessWidget {
   const BudgetsScreen({super.key});
@@ -148,94 +149,100 @@ class BudgetsScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 ...budgets.map((budget) {
                   final info = budget.info;
-                  return Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(18),
-                      onTap: () => _editBudgetLimit(context, store, budget),
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 11),
-                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                        decoration: BoxDecoration(
-                          color: PaisaColors.card,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: PaisaColors.border,
-                            width: 1.5,
+                  return Semantics(
+                    button: true,
+                    label: 'Edit ${info.label} budget',
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(18),
+                        onTap: () => _editBudgetLimit(context, store, budget),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 11),
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                          decoration: BoxDecoration(
+                            color: PaisaColors.card,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: PaisaColors.border,
+                              width: 1.5,
+                            ),
                           ),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 38,
-                                  height: 38,
-                                  decoration: BoxDecoration(
-                                    color: info.tintBg,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: PaisaColors.inkOnAccent,
-                                      width: 2,
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 38,
+                                    height: 38,
+                                    decoration: BoxDecoration(
+                                      color: info.tintBg,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: PaisaColors.inkOnAccent,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(info.emoji,
+                                        style: const TextStyle(fontSize: 17)),
+                                  ),
+                                  const SizedBox(width: 11),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          info.label,
+                                          style: PaisaTheme.manrope(
+                                            size: 13.5,
+                                            weight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        Text(
+                                          budget.statusLabel,
+                                          style: PaisaTheme.manrope(
+                                            size: 11,
+                                            color: budget.statusColor,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  alignment: Alignment.center,
-                                  child: Text(info.emoji,
-                                      style: const TextStyle(fontSize: 17)),
-                                ),
-                                const SizedBox(width: 11),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        info.label,
-                                        style: PaisaTheme.manrope(
-                                          size: 13.5,
-                                          weight: FontWeight.w700,
+                                  RichText(
+                                    text: TextSpan(
+                                      children: [
+                                        TextSpan(
+                                          text: formatInr(budget.spent),
+                                          style: PaisaTheme.sora(
+                                            size: 14,
+                                            weight: FontWeight.w700,
+                                          ),
                                         ),
-                                      ),
-                                      Text(
-                                        budget.statusLabel,
-                                        style: PaisaTheme.manrope(
-                                          size: 11,
-                                          color: budget.statusColor,
+                                        TextSpan(
+                                          text: ' / ${formatInr(budget.limit)}',
+                                          style: PaisaTheme.manrope(
+                                            size: 11.5,
+                                            weight: FontWeight.w600,
+                                            color: PaisaColors.navInactive,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                RichText(
-                                  text: TextSpan(
-                                    children: [
-                                      TextSpan(
-                                        text: formatInr(budget.spent),
-                                        style: PaisaTheme.sora(
-                                          size: 14,
-                                          weight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      TextSpan(
-                                        text: ' / ${formatInr(budget.limit)}',
-                                        style: PaisaTheme.manrope(
-                                          size: 11.5,
-                                          weight: FontWeight.w600,
-                                          color: PaisaColors.navInactive,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            PaisaProgressBar(
-                              progress: budget.ratio.clamp(0.0, 1.0),
-                              color: budget.barColor,
-                              height: 7,
-                            ),
-                          ],
+                                  const SizedBox(width: 2),
+                                  const PaisaNavChevron(),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              PaisaProgressBar(
+                                progress: budget.ratio.clamp(0.0, 1.0),
+                                color: budget.barColor,
+                                height: 7,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),

@@ -12,6 +12,7 @@ import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/category_spend_chip.dart';
 import '../widgets/grouped_transaction_list.dart';
+import '../widgets/paisa_nav_chevron.dart';
 import '../widgets/pulse_calendar_sheet.dart';
 import '../widgets/transaction_sort_control.dart';
 import 'category_transactions_screen.dart';
@@ -597,63 +598,65 @@ class _ReportsScreenState extends State<ReportsScreen> {
           child: Column(
             children: [
               for (var i = 0; i < report.incomeSources.length; i++) ...[
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => FilteredTransactionsScreen.incomeSource(
-                          source: report.incomeSources[i].$1,
-                          range: range,
-                          periodLabel: periodLabel,
+                Semantics(
+                  button: true,
+                  label:
+                      '${report.incomeSources[i].$1}, ${formatInr(report.incomeSources[i].$2)}',
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              FilteredTransactionsScreen.incomeSource(
+                            source: report.incomeSources[i].$1,
+                            range: range,
+                            periodLabel: periodLabel,
+                          ),
                         ),
                       ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 30,
-                            height: 30,
-                            decoration: BoxDecoration(
-                              color: PaisaColors.cardElevated,
-                              borderRadius: BorderRadius.circular(9),
-                            ),
-                            alignment: Alignment.center,
-                            child: const Text(
-                              '💰',
-                              style: TextStyle(fontSize: 14),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              report.incomeSources[i].$1,
-                              style: PaisaTheme.manrope(
-                                size: 13.5,
-                                weight: FontWeight.w600,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: PaisaColors.cardElevated,
+                                borderRadius: BorderRadius.circular(9),
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                              alignment: Alignment.center,
+                              child: const Text(
+                                '💰',
+                                style: TextStyle(fontSize: 14),
+                              ),
                             ),
-                          ),
-                          Text(
-                            '+${formatInr(report.incomeSources[i].$2)}',
-                            style: PaisaTheme.sora(
-                              size: 14,
-                              weight: FontWeight.w700,
-                              color: PaisaColors.credit,
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                report.incomeSources[i].$1,
+                                style: PaisaTheme.manrope(
+                                  size: 13.5,
+                                  weight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.chevron_right_rounded,
-                            size: 18,
-                            color: PaisaColors.mutedCaption,
-                          ),
-                        ],
+                            Text(
+                              '+${formatInr(report.incomeSources[i].$2)}',
+                              style: PaisaTheme.sora(
+                                size: 14,
+                                weight: FontWeight.w700,
+                                color: PaisaColors.credit,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const PaisaNavChevron(),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -691,24 +694,29 @@ class _ReportsScreenState extends State<ReportsScreen> {
           child: Column(
             children: [
               for (var i = 0; i < report.topMerchants.length; i++) ...[
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => FilteredTransactionsScreen.merchant(
-                          merchant: report.topMerchants[i].$1,
-                          range: range,
-                          periodLabel: periodLabel,
+                Semantics(
+                  button: true,
+                  label:
+                      '${report.topMerchants[i].$1}, ${formatInr(report.topMerchants[i].$3)}',
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => FilteredTransactionsScreen.merchant(
+                            merchant: report.topMerchants[i].$1,
+                            range: range,
+                            periodLabel: periodLabel,
+                          ),
                         ),
                       ),
-                    ),
-                    child: _MerchantRow(
-                      rank: i + 1,
-                      name: report.topMerchants[i].$1,
-                      sub: report.topMerchants[i].$2,
-                      amount: report.topMerchants[i].$3,
+                      child: _MerchantRow(
+                        rank: i + 1,
+                        name: report.topMerchants[i].$1,
+                        sub: report.topMerchants[i].$2,
+                        amount: report.topMerchants[i].$3,
+                      ),
                     ),
                   ),
                 ),
@@ -823,11 +831,7 @@ class _MerchantRow extends StatelessWidget {
             style: PaisaTheme.sora(size: 14, weight: FontWeight.w700),
           ),
           const SizedBox(width: 4),
-          const Icon(
-            Icons.chevron_right_rounded,
-            size: 18,
-            color: PaisaColors.mutedCaption,
-          ),
+          const PaisaNavChevron(),
         ],
       ),
     );

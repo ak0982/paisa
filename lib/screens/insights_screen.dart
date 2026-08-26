@@ -9,6 +9,7 @@ import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/paisa_coin.dart';
+import '../widgets/paisa_nav_chevron.dart';
 import 'category_transactions_screen.dart';
 import 'day_strip_screen.dart';
 import 'reports_screen.dart';
@@ -427,6 +428,7 @@ class _CoinLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tappable = onTap != null;
     final column = Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -452,26 +454,52 @@ class _CoinLegend extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 3),
-        Text(
-          caption,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: PaisaTheme.manrope(
-            size: 10,
-            weight: FontWeight.w600,
-            color: onTap == null
-                ? PaisaColors.muted
-                : PaisaColors.primary.withOpacity(0.85),
+        if (!tappable)
+          Text(
+            caption,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: PaisaTheme.manrope(
+              size: 10,
+              weight: FontWeight.w600,
+              color: PaisaColors.muted,
+            ),
+          )
+        else
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  caption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: PaisaTheme.manrope(
+                    size: 10,
+                    weight: FontWeight.w600,
+                    color: PaisaColors.primary.withOpacity(0.85),
+                  ),
+                ),
+              ),
+              const PaisaNavChevron(
+                size: 14,
+                color: PaisaColors.primary,
+              ),
+            ],
           ),
-        ),
       ],
     );
 
-    if (onTap == null) return column;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: column,
+    if (!tappable) return column;
+    return Semantics(
+      button: true,
+      label: '$label, $caption',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: column,
+      ),
     );
   }
 }
@@ -588,6 +616,10 @@ class _LedgerRow extends StatelessWidget {
                         color: PaisaColors.ink,
                       ),
                     ),
+                    if (onTap != null) ...[
+                      const SizedBox(width: 2),
+                      const PaisaNavChevron(),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 3),
@@ -613,12 +645,16 @@ class _LedgerRow extends StatelessWidget {
       offsetY: 8,
       child: onTap == null
           ? row
-          : Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: onTap,
-                borderRadius: BorderRadius.circular(12),
-                child: row,
+          : Semantics(
+              button: true,
+              label: '$title, ${formatInr(amount)}',
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(12),
+                  child: row,
+                ),
               ),
             ),
     );
@@ -658,36 +694,39 @@ class _ReportsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(11, 7, 8, 7),
-        decoration: BoxDecoration(
-          color: PaisaColors.cardElevated,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: PaisaColors.primary.withOpacity(0.45),
-            width: 1.5,
+    return Semantics(
+      button: true,
+      label: 'Reports',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(11, 7, 8, 7),
+          decoration: BoxDecoration(
+            color: PaisaColors.cardElevated,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: PaisaColors.primary.withOpacity(0.45),
+              width: 1.5,
+            ),
+            boxShadow: PaisaColors.hardShadow(offset: 2),
           ),
-          boxShadow: PaisaColors.hardShadow(offset: 2),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'REPORTS',
-              style: PaisaTheme.label(
-                size: 10,
-                color: PaisaColors.primary,
-                letterSpacing: 1.6,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'REPORTS',
+                style: PaisaTheme.label(
+                  size: 10,
+                  color: PaisaColors.primary,
+                  letterSpacing: 1.6,
+                ),
               ),
-            ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 17,
-              color: PaisaColors.primary,
-            ),
-          ],
+              const PaisaNavChevron(
+                size: 17,
+                color: PaisaColors.primary,
+              ),
+            ],
+          ),
         ),
       ),
     );

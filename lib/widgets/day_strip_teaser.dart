@@ -8,6 +8,7 @@ import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
 import 'neo_surface.dart';
+import 'paisa_nav_chevron.dart';
 
 /// Mini Day Strip entry under the Home month hero.
 ///
@@ -63,52 +64,56 @@ class _DayStripTeaserState extends State<DayStripTeaser> {
           child: Row(
             children: [
               Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => DayStripScreen.open(context, day: _day),
-                  onHorizontalDragEnd: (details) {
-                    final v = details.primaryVelocity ?? 0;
-                    if (v < -240) {
-                      _shift(1);
-                    } else if (v > 240) {
-                      _shift(-1);
-                    }
-                  },
-                  child: Row(
-                    children: [
-                      Text(
-                        'DAY',
-                        style: PaisaTheme.label(
-                          size: 10,
-                          color: PaisaColors.primary,
-                          letterSpacing: 1.6,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${_day.day}',
-                        style: PaisaTheme.sora(
-                          size: 15,
-                          weight: FontWeight.w800,
-                          color: PaisaColors.ink,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      _IntensityTicks(series: series, peak: peak),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'out ${formatInr(out)}  in ${formatInr(income)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: PaisaTheme.manrope(
-                            size: 12,
-                            weight: FontWeight.w600,
-                            color: PaisaColors.mutedCaption,
+                child: Semantics(
+                  button: true,
+                  label: 'Open day coin for ${formatDayStripHeader(_day)}',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => DayStripScreen.open(context, day: _day),
+                    onHorizontalDragEnd: (details) {
+                      final v = details.primaryVelocity ?? 0;
+                      if (v < -240) {
+                        _shift(1);
+                      } else if (v > 240) {
+                        _shift(-1);
+                      }
+                    },
+                    child: Row(
+                      children: [
+                        Text(
+                          'DAY',
+                          style: PaisaTheme.label(
+                            size: 10,
+                            color: PaisaColors.primary,
+                            letterSpacing: 1.6,
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Text(
+                          '${_day.day}',
+                          style: PaisaTheme.sora(
+                            size: 15,
+                            weight: FontWeight.w800,
+                            color: PaisaColors.ink,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        _IntensityTicks(series: series, peak: peak),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'out ${formatInr(out)}  in ${formatInr(income)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: PaisaTheme.manrope(
+                              size: 12,
+                              weight: FontWeight.w600,
+                              color: PaisaColors.mutedCaption,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -116,7 +121,8 @@ class _DayStripTeaserState extends State<DayStripTeaser> {
                 tooltip: 'Pulse Calendar',
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                constraints:
+                    const BoxConstraints(minWidth: 36, minHeight: 36),
                 onPressed: () => DayStripScreen.open(
                   context,
                   day: _day,
@@ -128,8 +134,7 @@ class _DayStripTeaserState extends State<DayStripTeaser> {
                   color: PaisaColors.primary,
                 ),
               ),
-              const Icon(
-                Icons.chevron_right_rounded,
+              const PaisaNavChevron(
                 size: 20,
                 color: PaisaColors.primary,
               ),

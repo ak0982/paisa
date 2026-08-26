@@ -8,6 +8,7 @@ import 'package:paisa_app/screens/day_strip_screen.dart';
 import 'package:paisa_app/services/sms/account_discovery.dart';
 import 'package:paisa_app/utils/formatters.dart';
 import 'package:paisa_app/widgets/day_strip_teaser.dart';
+import 'package:paisa_app/widgets/paisa_coin.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'helpers/test_harness.dart';
@@ -577,7 +578,12 @@ void main() {
     expect(find.text('SatCafe'), findsOneWidget);
     expect(find.text(formatInr(15.15)), findsWidgets);
 
-    await tester.tap(find.byIcon(Icons.chevron_right_rounded));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(PaisaChromeIconButton),
+        matching: find.byIcon(Icons.chevron_right_rounded),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('SUN 16 AUG'), findsOneWidget);

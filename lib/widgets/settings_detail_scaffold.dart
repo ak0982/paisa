@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import 'neo_surface.dart';
+import 'paisa_nav_chevron.dart';
 
 /// Shared scaffold for profile sub-settings screens.
 class SettingsDetailScaffold extends StatelessWidget {
@@ -197,9 +198,7 @@ class SettingsActionRow extends StatelessWidget {
               ),
             ),
             trailing ??
-                Icon(
-                  Icons.chevron_right,
-                  size: 18,
+                PaisaNavChevron(
                   color: destructive
                       ? PaisaColors.overBudget.withOpacity(0.6)
                       : PaisaColors.muted,

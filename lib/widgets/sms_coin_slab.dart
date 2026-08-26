@@ -521,23 +521,27 @@ class TransactionCoinTap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          if (onTap != null) {
-            onTap!(transaction);
-            return;
-          }
-          showTransactionCoinSlab(
-            context,
-            transaction,
-            isMove: transaction.isCreditCardBillPayment ||
-                transaction.isCreditCardPaymentReceived,
-          );
-        },
-        child: child,
+    return Semantics(
+      button: true,
+      label: '${transaction.merchant} transaction details',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            if (onTap != null) {
+              onTap!(transaction);
+              return;
+            }
+            showTransactionCoinSlab(
+              context,
+              transaction,
+              isMove: transaction.isCreditCardBillPayment ||
+                  transaction.isCreditCardPaymentReceived,
+            );
+          },
+          child: child,
+        ),
       ),
     );
   }

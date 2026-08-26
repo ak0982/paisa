@@ -13,6 +13,7 @@ import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/neo_surface.dart';
 import '../widgets/paisa_coin.dart';
+import '../widgets/paisa_nav_chevron.dart';
 import '../widgets/pulse_calendar_sheet.dart';
 import '../widgets/sms_coin_slab.dart';
 import '../widgets/transaction_sort_control.dart';
@@ -661,109 +662,115 @@ class _CoinRow extends StatelessWidget {
     return PaisaCoinRise(
       duration: Duration(milliseconds: 340 + delayMs),
       offsetY: 8,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(2, 11, 2, 11),
-            decoration: BoxDecoration(
-              border: isLast
-                  ? null
-                  : const Border(
-                      bottom: BorderSide(
-                        color: PaisaColors.border,
-                        width: 1,
+      child: Semantics(
+        button: true,
+        label: '$merchant, ${formatAmount(transaction.amount, isCredit: transaction.isCredit)}',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(2, 11, 2, 11),
+              decoration: BoxDecoration(
+                border: isLast
+                    ? null
+                    : const Border(
+                        bottom: BorderSide(
+                          color: PaisaColors.border,
+                          width: 1,
+                        ),
                       ),
-                    ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                PaisaCoinToken(
-                  color: tokenColor,
-                  fill: intensity,
-                  dashed: isMove,
-                ),
-                const SizedBox(width: 13),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          if (isMove) ...[
-                            const _MoveBadge(),
-                            const SizedBox(width: 7),
-                          ],
-                          Expanded(
-                            child: Text(
-                              merchant,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: PaisaTheme.sora(
-                                size: 15,
-                                weight: FontWeight.w800,
-                                color: PaisaColors.ink,
-                                letterSpacing: -0.2,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  PaisaCoinToken(
+                    color: tokenColor,
+                    fill: intensity,
+                    dashed: isMove,
+                  ),
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            if (isMove) ...[
+                              const _MoveBadge(),
+                              const SizedBox(width: 7),
+                            ],
+                            Expanded(
+                              child: Text(
+                                merchant,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: PaisaTheme.sora(
+                                  size: 15,
+                                  weight: FontWeight.w800,
+                                  color: PaisaColors.ink,
+                                  letterSpacing: -0.2,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            formatAmount(
-                              transaction.amount,
-                              isCredit: transaction.isCredit,
+                            const SizedBox(width: 10),
+                            Text(
+                              formatAmount(
+                                transaction.amount,
+                                isCredit: transaction.isCredit,
+                              ),
+                              style: PaisaTheme.sora(
+                                size: 14,
+                                weight: FontWeight.w800,
+                                color: amountColor,
+                              ),
                             ),
-                            style: PaisaTheme.sora(
-                              size: 14,
-                              weight: FontWeight.w800,
-                              color: amountColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          Text(
-                            transaction.categoryInfo.label,
-                            style: PaisaTheme.manrope(
-                              size: 11,
-                              weight: FontWeight.w700,
-                              color: PaisaColors.mutedCaption,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            timeLabel,
-                            style: PaisaTheme.manrope(
-                              size: 11,
-                              weight: FontWeight.w600,
-                              color: PaisaColors.muted,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              transaction.accountLine,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.right,
+                            const SizedBox(width: 2),
+                            const PaisaNavChevron(),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Text(
+                              transaction.categoryInfo.label,
                               style: PaisaTheme.manrope(
                                 size: 11,
-                                weight: FontWeight.w500,
+                                weight: FontWeight.w700,
+                                color: PaisaColors.mutedCaption,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              timeLabel,
+                              style: PaisaTheme.manrope(
+                                size: 11,
+                                weight: FontWeight.w600,
                                 color: PaisaColors.muted,
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                transaction.accountLine,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.right,
+                                style: PaisaTheme.manrope(
+                                  size: 11,
+                                  weight: FontWeight.w500,
+                                  color: PaisaColors.muted,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

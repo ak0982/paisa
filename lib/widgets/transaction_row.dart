@@ -5,6 +5,7 @@ import '../providers/app_settings.dart';
 import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
+import 'paisa_nav_chevron.dart';
 
 class TransactionRow extends StatelessWidget {
   const TransactionRow({
@@ -15,6 +16,7 @@ class TransactionRow extends StatelessWidget {
     this.showTime = false,
     this.showDate = false,
     this.compact = false,
+    this.showNavChevron = false,
   });
 
   final Transaction transaction;
@@ -23,6 +25,9 @@ class TransactionRow extends StatelessWidget {
   final bool showTime;
   final bool showDate;
   final bool compact;
+
+  /// Trailing chevron when the row opens transaction detail on tap.
+  final bool showNavChevron;
 
   static String _displayMerchant(String merchant, bool mask) {
     if (!mask || merchant.length <= 2) return merchant;
@@ -81,25 +86,29 @@ class TransactionRow extends StatelessWidget {
                 if (showCategoryChip)
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: PaisaColors.cardElevated,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: flowColor.withOpacity(0.5),
-                            width: 1.5,
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
                           ),
-                        ),
-                        child: Text(
-                          transaction.flowLabel,
-                          style: PaisaTheme.manrope(
-                            size: 9.5,
-                            weight: FontWeight.w700,
-                            color: flowColor,
+                          decoration: BoxDecoration(
+                            color: PaisaColors.cardElevated,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: flowColor.withOpacity(0.5),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Text(
+                            transaction.flowLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: PaisaTheme.manrope(
+                              size: 9.5,
+                              weight: FontWeight.w700,
+                              color: flowColor,
+                            ),
                           ),
                         ),
                       ),
@@ -171,6 +180,10 @@ class TransactionRow extends StatelessWidget {
               ],
             ],
           ),
+          if (showNavChevron) ...[
+            const SizedBox(width: 2),
+            const PaisaNavChevron(),
+          ],
         ],
       ),
     );

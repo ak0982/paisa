@@ -130,10 +130,60 @@ void main() {
       isTrue,
     );
 
+    // Tappable category rows show a trailing chevron; static merchant rows do not.
+    final chevrons = find.byIcon(Icons.chevron_right_rounded);
+    // REPORTS chrome + PEAK DAY legend + 2 category rows.
+    expect(chevrons, findsNWidgets(4));
+    final foodY = tester.getTopLeft(find.text('Food')).dy;
+    final shoppingY = tester.getTopLeft(find.text('Shopping')).dy;
+    final swiggyY = tester.getTopLeft(find.text('Swiggy')).dy;
+    final chevronTops = <double>[
+      for (var i = 0; i < tester.widgetList(chevrons).length; i++)
+        tester.getTopLeft(chevrons.at(i)).dy,
+    ];
+    expect(
+      chevronTops.any((y) => (y - foodY).abs() < 24),
+      isTrue,
+      reason: 'Food category row should show a nav chevron',
+    );
+    expect(
+      chevronTops.any((y) => (y - shoppingY).abs() < 24),
+      isTrue,
+      reason: 'Shopping category row should show a nav chevron',
+    );
+    expect(
+      chevronTops.any((y) => (y - swiggyY).abs() < 24),
+      isFalse,
+      reason: 'Merchant rows stay non-tappable without a chevron',
+    );
+
     // Top merchants reuse the same stamped rows.
     expect(find.text('TOP MERCHANTS'), findsOneWidget);
     expect(find.text('Swiggy'), findsOneWidget);
     expect(find.text('Blinkit'), findsOneWidget);
+  });
+
+  testWidgets('tapping a category row opens category transactions',
+      (tester) async {
+    final now = DateTime.now();
+    final store = FinanceStore()
+      ..seedTransactions([
+        tx(
+          id: 'food',
+          amount: 320.58,
+          isCredit: false,
+          category: SpendCategory.food,
+          merchant: 'Swiggy',
+          timestamp: now.subtract(const Duration(days: 2)),
+        ),
+      ]);
+
+    await pumpStats(tester, store);
+
+    await tester.tap(find.text('Food'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Swiggy'), findsOneWidget);
   });
 
   testWidgets('peak day legend opens the Paisa Coin for that day',
