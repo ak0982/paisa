@@ -90,7 +90,7 @@ void main() {
     };
 
     for (final shape in shapes.entries) {
-      test('${shape.key} parse stays under a second at scale', () {
+      test('${shape.key} parse does not blow up at scale', () {
         final body = shape.value(4000);
         expect(body.length, greaterThan(SmsParser.maxScanBodyLength * 3));
 
@@ -98,9 +98,13 @@ void main() {
         SmsScanPipeline.process(craft(body));
         sw.stop();
 
+        // A deliberately loose ceiling: this is the tripwire for the 33 s / 93 s
+        // regression, and a tight wall-clock budget only produces false alarms
+        // when several suites share the machine. The sharp scale-invariance
+        // assertions live in security_scan_body_cap_test.dart.
         expect(
           sw.elapsedMilliseconds,
-          lessThan(1000),
+          lessThan(5000),
           reason: 'super-linear parse cost is back (${sw.elapsedMilliseconds}ms)',
         );
       });
