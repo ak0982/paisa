@@ -17,14 +17,18 @@
 inbox** into a complete, automatic picture of the user's money. It reads bank / UPI alert SMS
 **on-device**, parses them into transactions, discovers bank accounts / credit cards / loans,
 classifies each account, and surfaces spend/income summaries, budgets, insights and reports —
-**with zero manual entry**.
+**with zero manual entry** for bank SMS — plus an optional **manual mint** for
+cash / off-SMS moves (`source: manual`, bank Cash; never creates a You account).
 
 - **Domain:** Indian banks and payment providers (HDFC, SBI, ICICI, Axis, Kotak, IDFC, PNB,
   Federal + its neobanks Fi/Jupiter, Yes Bank, IndusInd, BOB, HSBC, plus major wallets/UPI apps).
 - **Guiding goal:** **"record and classify every transaction."** Lists still show every money
   movement (including transfers). **Cashflow KPIs** (spend / income / savings rate) intentionally
   **exclude internal movement** (self-transfers, CCBP legs) — see ISSUE-4 in §5.2. Tracking in
-  lists ≠ inflating the headline numbers.
+  lists ≠ inflating the headline numbers. Manual mints are first-class rows sorted by chosen date.
+- **Manual mint exception:** Moves FAB + Day Strip empty-day CTA → Date / Amount / Type → auto
+  message → Save. Ids are `manual_<hex>` with `smsId: null`. Full SMS rescan **preserves**
+  `source IN (manual, paste)`; logout / Clear local data still wipe them.
 - **Status:** **private / personal project**, AI-built. Repo is private
   (`github.com/ak0982/paisa`). No SMS content, account masks, or personal data is committed.
 - **No backend.** Everything (SMS scan, parse, classify, storage) runs locally on the device.
@@ -261,7 +265,8 @@ scan start (ISSUE-12) so incremental syncs do not start with an empty registry.
 
 **Discovered-account persistence:** incremental sync uses `TransactionDatabase.mergeDiscoveredAccounts`
 (upsert new keys; **do not re-add** `sms_hits`/totals on conflict — the 1h overlap would inflate
-counters, R2-6). Destructive replace is reserved for `fullRescanFromSms` / `clearAll`. Do **not**
+counters, R2-6). Full rescan uses `clearSmsDerivedData()` (SMS rows + discoveries only) so
+**manual / paste mints survive**; logout / `clearAll` still wipe everything. Do **not**
 reintroduce delete-all-then-insert on the incremental path (ISSUE-1).
 
 ### 4.3 Cashflow KPIs vs lists (ISSUE-4)

@@ -80,9 +80,9 @@ typedef OriginalSmsLoader = Future<OriginalSmsLookup> Function(String smsId);
   return switch (status) {
     OriginalSmsStatus.loaded => (title: '', body: ''),
     OriginalSmsStatus.noSmsId => (
-        title: 'Not struck from an SMS',
-        body: 'This entry has no linked bank alert, so the reverse of the '
-            'coin is blank.',
+        title: 'Minted by you',
+        body: 'This move was added manually — there is no bank alert on the '
+            'reverse of the coin.',
       ),
     OriginalSmsStatus.notFound => (
         title: 'Alert no longer in the inbox',

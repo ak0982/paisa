@@ -206,7 +206,7 @@ void main() {
     await tester.tap(find.text('FLIP TO SMS'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Not struck from an SMS'), findsOneWidget);
+    expect(find.text('Minted by you'), findsOneWidget);
     expect(find.text(smsBody), findsNothing);
   });
 

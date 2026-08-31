@@ -120,7 +120,7 @@ class PrivacySettingsScreen extends StatelessWidget {
                   SettingsActionRow(
                     title: 'Clear local data',
                     subtitle:
-                        'Delete all transactions and scan history from this device. Your SMS inbox is not modified.',
+                        'Delete all transactions (including minted moves) and scan history from this device. Your SMS inbox is not modified.',
                     destructive: true,
                     onTap: () => _confirmClearData(context, store),
                   ),
@@ -145,7 +145,7 @@ class PrivacySettingsScreen extends StatelessWidget {
           style: PaisaTheme.sora(size: 17, weight: FontWeight.w700),
         ),
         content: Text(
-          'This removes all transactions and scan history from Paisa. Your SMS messages will not be deleted.',
+          'This removes all transactions — including moves you minted — and scan history from Paisa. Your SMS messages will not be deleted.',
           style: PaisaTheme.manrope(size: 13.5, color: PaisaColors.muted),
         ),
         actions: [

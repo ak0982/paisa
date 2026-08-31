@@ -11,6 +11,7 @@ import '../providers/finance_store.dart';
 import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
+import '../widgets/mint_transaction_sheet.dart';
 import '../widgets/neo_surface.dart';
 import '../widgets/paisa_coin.dart';
 import '../widgets/paisa_nav_chevron.dart';
@@ -212,7 +213,12 @@ class _DayStripScreenState extends State<DayStripScreen> {
                             ),
                           ),
                           if (items.isEmpty)
-                            const SliverToBoxAdapter(child: _EmptyDay())
+                            SliverToBoxAdapter(
+                              child: _EmptyDay(
+                                day: _start,
+                                canMint: !_isRange,
+                              ),
+                            )
                           else
                             SliverPadding(
                               padding: const EdgeInsets.fromLTRB(18, 4, 18, 88),
@@ -810,7 +816,29 @@ class _MoveBadge extends StatelessWidget {
 // ── Empty + net ─────────────────────────────────────────────────────────────
 
 class _EmptyDay extends StatelessWidget {
-  const _EmptyDay();
+  const _EmptyDay({required this.day, required this.canMint});
+
+  final DateTime day;
+  final bool canMint;
+
+  Future<void> _mint(BuildContext context) async {
+    final id = await showMintTransactionSheet(context, initialDay: day);
+    if (id == null || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Minted · Manually added',
+          style: PaisaTheme.manrope(
+            size: 13,
+            color: PaisaColors.inkOnAccent,
+          ),
+        ),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: PaisaColors.primary,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -843,6 +871,33 @@ class _EmptyDay extends StatelessWidget {
               color: PaisaColors.mutedCaption,
             ),
           ),
+          if (canMint) ...[
+            const SizedBox(height: 18),
+            GestureDetector(
+              onTap: () => _mint(context),
+              child: NeoSurface(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 12,
+                ),
+                radius: 14,
+                borderWidth: 2,
+                borderColor: PaisaColors.inkOnAccent,
+                color: PaisaColors.primary,
+                shadow: true,
+                shadowOffset: 4,
+                child: Text(
+                  'MINT A MOVE',
+                  textAlign: TextAlign.center,
+                  style: PaisaTheme.label(
+                    size: 12,
+                    color: PaisaColors.inkOnAccent,
+                    letterSpacing: 1.3,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

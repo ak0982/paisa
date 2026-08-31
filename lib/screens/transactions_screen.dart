@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/category_info.dart';
@@ -10,6 +11,7 @@ import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/grouped_transaction_list.dart';
+import '../widgets/mint_transaction_sheet.dart';
 import '../widgets/transaction_sort_control.dart';
 
 enum _FlowFilter { all, incoming, outgoing, creditCard, loan }
@@ -25,6 +27,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   String _query = '';
   _FlowFilter _flow = _FlowFilter.all;
   TransactionSort _sort = TransactionSort.defaultSort;
+  bool _fabOpen = false;
 
   bool _isLoanTransaction(Transaction t) {
     return t.accountKind == AccountKind.loan ||
@@ -149,6 +152,26 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       SnackBar(
         content: Text(
           message,
+          style: PaisaTheme.manrope(
+            size: 13,
+            color: PaisaColors.inkOnAccent,
+          ),
+        ),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: PaisaColors.primary,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<void> _handleMint(BuildContext context) async {
+    setState(() => _fabOpen = false);
+    final id = await showMintTransactionSheet(context);
+    if (id == null || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Minted · Manually added',
           style: PaisaTheme.manrope(
             size: 13,
             color: PaisaColors.inkOnAccent,
@@ -310,46 +333,143 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 ),
               ],
             ),
+            if (_fabOpen)
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: () => setState(() => _fabOpen = false),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(color: Colors.black.withOpacity(0.35)),
+                ),
+              ),
             Positioned(
               right: 20,
               bottom: 20,
-              child: FloatingActionButton(
-                onPressed: store.isLoading
-                    ? null
-                    : () => _handleSync(context, store),
-                elevation: 0,
-                backgroundColor: Colors.transparent,
-                child: Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: PaisaColors.primary,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: PaisaColors.inkOnAccent,
-                      width: 2.5,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_fabOpen) ...[
+                    _FabSpeedItem(
+                      label: 'Sync SMS',
+                      icon: Icons.sync,
+                      onTap: store.isLoading
+                          ? null
+                          : () {
+                              setState(() => _fabOpen = false);
+                              _handleSync(context, store);
+                            },
                     ),
-                    boxShadow: PaisaColors.hardShadow(offset: 4),
-                  ),
-                  child: store.isLoading
-                      ? const Padding(
-                          padding: EdgeInsets.all(14),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: PaisaColors.inkOnAccent,
-                          ),
-                        )
-                      : const Icon(
-                          Icons.sync,
+                    const SizedBox(height: 10),
+                    _FabSpeedItem(
+                      label: 'Add move',
+                      icon: Icons.add_rounded,
+                      accent: true,
+                      onTap: () => _handleMint(context),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  FloatingActionButton(
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      setState(() => _fabOpen = !_fabOpen);
+                    },
+                    elevation: 0,
+                    backgroundColor: Colors.transparent,
+                    child: Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        color: PaisaColors.primary,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
                           color: PaisaColors.inkOnAccent,
-                          size: 24,
+                          width: 2.5,
                         ),
-                ),
+                        boxShadow: PaisaColors.hardShadow(offset: 4),
+                      ),
+                      child: store.isLoading && !_fabOpen
+                          ? const Padding(
+                              padding: EdgeInsets.all(14),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: PaisaColors.inkOnAccent,
+                              ),
+                            )
+                          : Icon(
+                              _fabOpen ? Icons.close_rounded : Icons.bolt_rounded,
+                              color: PaisaColors.inkOnAccent,
+                              size: 24,
+                            ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         );
       },
+    );
+  }
+}
+
+class _FabSpeedItem extends StatelessWidget {
+  const _FabSpeedItem({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.accent = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: PaisaColors.cardElevated,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: PaisaColors.border, width: 1.5),
+              boxShadow: PaisaColors.hardShadow(offset: 3),
+            ),
+            child: Text(
+              label,
+              style: PaisaTheme.manrope(
+                size: 12.5,
+                weight: FontWeight.w700,
+                color: PaisaColors.ink,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: accent ? PaisaColors.primary : PaisaColors.card,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: PaisaColors.inkOnAccent,
+                width: 2,
+              ),
+              boxShadow: PaisaColors.hardShadow(offset: 3),
+            ),
+            child: Icon(
+              icon,
+              size: 22,
+              color: accent ? PaisaColors.inkOnAccent : PaisaColors.ink,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

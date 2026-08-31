@@ -103,7 +103,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           style: PaisaTheme.sora(size: 17, weight: FontWeight.w700),
         ),
         content: Text(
-          'This clears all local transactions and returns you to the welcome screen. Your SMS inbox is not modified.',
+          'This clears all local transactions — including moves you minted — and returns you to the welcome screen. Your SMS inbox is not modified.',
           style: PaisaTheme.manrope(size: 13.5, color: PaisaColors.muted),
         ),
         actions: [

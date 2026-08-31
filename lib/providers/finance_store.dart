@@ -5,6 +5,7 @@ import 'package:flutter/services.dart' show PlatformException;
 import '../models/bank_account.dart';
 import '../models/budget.dart';
 import '../models/category_info.dart';
+import '../models/manual_transaction.dart';
 import '../models/range_report.dart';
 import '../models/transaction.dart';
 import '../data/transaction_database.dart';
@@ -290,7 +291,7 @@ class FinanceStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Wipes all local transactions and scan progress.
+  /// Wipes all local transactions (including manual mints) and scan progress.
   Future<void> clearAllData() async {
     await _db.clearAll();
     await _db.resetScanState();
@@ -304,6 +305,74 @@ class FinanceStore extends ChangeNotifier {
     _loading = false;
     _invalidateLedgerCache();
     notifyListeners();
+  }
+
+  /// Persists a user-minted cash move (`source: manual`, bank Cash, no smsId).
+  ///
+  /// Does **not** add Cash to `_realBanks` / You accounts — empty mask +
+  /// non-allowlisted bank keep it out of [bankAccounts].
+  ///
+  /// Throws [ArgumentError] when amount is missing/≤0. Future dates are
+  /// clamped to today. Commits to SQLite before refreshing memory so an
+  /// in-flight [_runSync] final `getAll()` still includes the row.
+  Future<Transaction> addManualTransaction({
+    required double amount,
+    required DateTime date,
+    required SpendCategory category,
+    required String message,
+    required bool isCredit,
+    DateTime? now,
+  }) async {
+    await _awaitInit();
+    final amountError = validateManualAmount(amount);
+    if (amountError != null) {
+      throw ArgumentError(amountError);
+    }
+    final rounded = roundManualAmount(amount);
+    final clock = now ?? DateTime.now();
+    final timestamp = manualTimestampForDay(date, now: clock);
+    final trimmed = message.trim();
+    final merchant =
+        trimmed.isEmpty ? defaultManualMessage(category) : trimmed;
+
+    final tx = Transaction(
+      id: newManualTransactionId(),
+      smsId: null,
+      merchant: merchant,
+      bank: 'Cash',
+      maskedAccount: '',
+      category: category,
+      amount: rounded,
+      isCredit: isCredit,
+      timestamp: timestamp,
+      source: kManualSource,
+      accountKind: AccountKind.savings,
+    );
+
+    await _db.upsertAll([tx]);
+    _transactions = await _db.getAll();
+    _invalidateLedgerCache();
+    notifyListeners();
+    return tx;
+  }
+
+  /// Deletes a user-minted row. Returns false when the id is missing or not
+  /// `source == manual` (SMS rows are never deleted this way).
+  Future<bool> deleteManualTransaction(String id) async {
+    await _awaitInit();
+    Transaction? existing;
+    for (final t in _transactions) {
+      if (t.id == id) {
+        existing = t;
+        break;
+      }
+    }
+    if (existing == null || !existing.isManual) return false;
+    await _db.deleteByIds([id]);
+    _transactions = await _db.getAll();
+    _invalidateLedgerCache();
+    notifyListeners();
+    return true;
   }
 
   /// Reads SMS inbox, parses with regex, persists new transactions.
@@ -415,19 +484,20 @@ class FinanceStore extends ChangeNotifier {
     return syncFromSms();
   }
 
-  /// Re-reads the full SMS inbox from scratch and refreshes every stored
+  /// Re-reads the full SMS inbox from scratch and refreshes every SMS-derived
   /// transaction (e.g. after parser improvements).
   ///
-  /// Clears existing transactions first so phantom accounts from older parser
-  /// versions cannot linger in Profile.
+  /// Clears SMS rows and discoveries first so phantom accounts from older
+  /// parser versions cannot linger in Profile. **Manual / paste mints are
+  /// preserved** across the wipe; logout / [clearAllData] still removes them.
   Future<ScanResult> fullRescanFromSms() async {
     await _awaitInit();
     _rescanSeedVotes = _mergeBankVotes(
       _bankVotesFromTransactions(_transactions),
       _bankVotesFromDiscoveries(_discoveredAccounts),
     );
-    await _db.clearAll();
-    _transactions = [];
+    await _db.clearSmsDerivedData();
+    _transactions = await _db.getAll();
     _discoveredAccounts = [];
     _invalidateLedgerCache();
     await _db.resetScanState();

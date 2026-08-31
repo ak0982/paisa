@@ -301,6 +301,30 @@ class TransactionDatabase {
     await db.delete('discovered_accounts');
   }
 
+  /// Wipes SMS-derived rows and discoveries, but keeps user-minted
+  /// (`manual`) and paste rows so a full inbox rescan does not erase them.
+  Future<void> clearSmsDerivedData() async {
+    final db = await database;
+    await db.delete(
+      'transactions',
+      where: "source NOT IN (?, ?)",
+      whereArgs: const ['manual', 'paste'],
+    );
+    await db.delete('discovered_accounts');
+  }
+
+  /// Rows that must survive [clearSmsDerivedData] / full SMS rescan.
+  Future<List<models.Transaction>> getPreservedAcrossSmsRescan() async {
+    final db = await database;
+    final rows = await db.query(
+      'transactions',
+      where: 'source IN (?, ?)',
+      whereArgs: const ['manual', 'paste'],
+      orderBy: 'timestamp DESC',
+    );
+    return rows.map(_fromRow).toList();
+  }
+
   Future<void> resetScanState() async {
     final db = await database;
     await db.update(

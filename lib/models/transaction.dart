@@ -1,4 +1,5 @@
 import 'category_info.dart';
+import 'manual_transaction.dart';
 import '../services/sms/account_discovery.dart';
 
 class Transaction {
@@ -29,6 +30,12 @@ class Transaction {
   final DateTime timestamp;
   final String source;
   final AccountKind accountKind;
+
+  /// User-minted cash move (`source == manual`), not parsed from SMS.
+  bool get isManual => source == kManualSource;
+
+  /// Survives SMS wipe / full rescan (manual mint or paste).
+  bool get preservedAcrossSmsRescan => isPreservedAcrossSmsRescan(source);
 
   /// Ingest-only (not persisted). Debit-card / CCBP / BBPS spend alert that
   /// may share an event with a same-account sibling SMS.

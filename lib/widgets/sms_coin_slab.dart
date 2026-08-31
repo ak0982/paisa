@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../models/transaction.dart';
 import '../providers/app_settings.dart';
+import '../providers/finance_store.dart';
 import '../services/sms/original_sms_lookup.dart';
 import '../services/sms/sms_reader_service.dart';
 import '../theme/paisa_colors.dart';
@@ -134,6 +135,50 @@ class _TransactionCoinSlabState extends State<TransactionCoinSlab>
       const SnackBar(content: Text('Original SMS copied')),
     );
   }
+
+  Future<void> _deleteManual() async {
+    final t = widget.transaction;
+    if (!t.isManual) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: PaisaColors.card,
+        title: Text(
+          'Delete this mint?',
+          style: PaisaTheme.sora(size: 17, weight: FontWeight.w700),
+        ),
+        content: Text(
+          'Remove this manually added move from Paisa. This cannot be undone.',
+          style: PaisaTheme.manrope(size: 13.5, color: PaisaColors.muted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Delete',
+              style: PaisaTheme.manrope(
+                weight: FontWeight.w600,
+                color: PaisaColors.overBudget,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final ok =
+        await context.read<FinanceStore>().deleteManualTransaction(t.id);
+    if (!mounted) return;
+    if (ok) {
+      Navigator.of(context).maybePop();
+    }
+  }
+
+  bool get _isManual => widget.transaction.isManual;
 
   @override
   Widget build(BuildContext context) {
@@ -321,6 +366,7 @@ class _TransactionCoinSlabState extends State<TransactionCoinSlab>
   Widget _slabFace() {
     final sms = _lookup?.sms;
     final sender = sms?.sender.trim();
+    final reverseTitle = _isManual ? 'MINT NOTE' : 'ORIGINAL SMS';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
@@ -336,7 +382,7 @@ class _TransactionCoinSlabState extends State<TransactionCoinSlab>
             Row(
               children: [
                 Text(
-                  'ORIGINAL SMS',
+                  reverseTitle,
                   style: PaisaTheme.label(
                     size: 10,
                     color: PaisaColors.primary,
@@ -476,24 +522,35 @@ class _TransactionCoinSlabState extends State<TransactionCoinSlab>
         animation: _flip,
         builder: (context, _) {
           final back = _showingBack;
+          final flipLabel = back
+              ? 'FLIP TO COIN'
+              : (_isManual ? 'FLIP TO NOTE' : 'FLIP TO SMS');
+          final flipIcon = back
+              ? Icons.monetization_on_outlined
+              : (_isManual ? Icons.edit_note_rounded : Icons.sms_outlined);
           return Row(
             children: [
               Expanded(
                 child: _SlabAction(
-                  label: back ? 'FLIP TO COIN' : 'FLIP TO SMS',
-                  icon: back
-                      ? Icons.monetization_on_outlined
-                      : Icons.sms_outlined,
+                  label: flipLabel,
+                  icon: flipIcon,
                   accent: true,
                   onTap: _toggleFlip,
                 ),
               ),
               const SizedBox(width: 10),
-              _SlabAction(
-                label: 'COPY SMS',
-                icon: Icons.copy_rounded,
-                onTap: (_lookup?.hasBody ?? false) ? _copySms : null,
-              ),
+              if (_isManual)
+                _SlabAction(
+                  label: 'DELETE',
+                  icon: Icons.delete_outline_rounded,
+                  onTap: _deleteManual,
+                )
+              else
+                _SlabAction(
+                  label: 'COPY SMS',
+                  icon: Icons.copy_rounded,
+                  onTap: (_lookup?.hasBody ?? false) ? _copySms : null,
+                ),
             ],
           );
         },

@@ -781,7 +781,7 @@ void main() {
       );
       await flipToSms(tester);
 
-      expect(find.text('Not struck from an SMS'), findsOneWidget);
+      expect(find.text('Minted by you'), findsOneWidget);
       expect(find.text(debitBody), findsNothing);
     });
 
@@ -794,7 +794,7 @@ void main() {
       );
       await flipToSms(tester);
 
-      expect(find.text('Not struck from an SMS'), findsOneWidget);
+      expect(find.text('Minted by you'), findsOneWidget);
     });
 
     testWidgets('an empty reverse still keeps the coin usable', (tester) async {

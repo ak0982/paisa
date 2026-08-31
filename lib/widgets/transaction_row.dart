@@ -177,6 +177,16 @@ class TransactionRow extends StatelessWidget {
                     color: PaisaColors.muted,
                   ),
                 ),
+              ] else if (showSmsLabel && transaction.isManual) ...[
+                const SizedBox(height: 3),
+                Text(
+                  '✍️ Manual',
+                  style: PaisaTheme.manrope(
+                    size: 9.5,
+                    weight: FontWeight.w600,
+                    color: PaisaColors.muted,
+                  ),
+                ),
               ],
             ],
           ),
