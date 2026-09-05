@@ -85,21 +85,13 @@ void main() {
           lower.contains('nach-10-') && lower.contains('debited');
       if (isNachDebit) {
         nachDebits++;
-        // R2-2: only NACH that remaps onto a discovered loan must be loan-kind.
-        final display = TransactionEnrichment.resolveLoanDisplay(
+        // R2-2 / schema 38: NACH that associates to a discovered loan must be
+        // loan-kind, while display identity stays on the funding account.
+        final associated = TransactionEnrichment.resolveAssociatedLoanProduct(
           body: msg.body,
-          parsedBank: parsed.bank,
-          parsedMask: mask,
           discoveries: discoveries,
         );
-        final remappedToLoan = discoveries.any(
-          (d) =>
-              d.kind == AccountKind.loan &&
-              d.mask.isNotEmpty &&
-              d.mask == display.mask &&
-              d.bank.toLowerCase() == display.bank.toLowerCase(),
-        );
-        if (remappedToLoan && kind != AccountKind.loan) nachLoanMissed++;
+        if (associated != null && kind != AccountKind.loan) nachLoanMissed++;
       }
 
       if (kind == AccountKind.loan) loanKind++;
@@ -123,7 +115,7 @@ void main() {
     for (final s in emiSavingsSamples) print('  emi+savings: $s');
 
     expect(nachLoanMissed, 0,
-        reason: 'NACH remapped onto a discovered loan must be loan-kind');
+        reason: 'NACH associated to a discovered loan must be loan-kind');
     expect(unparsedLoanSms.length, 0,
         reason: 'PNB and other loan payment SMS should parse');
     // R2-2: bare NACH/SIP is not loan-kind, so this is no longer 60+ NACH rows.

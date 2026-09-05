@@ -10,6 +10,7 @@ import 'package:paisa_app/screens/edit_profile_screen.dart';
 import 'package:paisa_app/screens/profile_screen.dart';
 import 'package:paisa_app/screens/settings/help_support_screen.dart';
 import 'package:paisa_app/screens/settings/privacy_settings_screen.dart';
+import 'package:paisa_app/services/sms/account_discovery.dart';
 import 'package:paisa_app/widgets/transaction_row.dart';
 
 import 'helpers/dummy_data.dart';
@@ -59,6 +60,34 @@ void main() {
       expect(find.text('Privacy Settings'), findsOneWidget);
       expect(find.text('Help & Support'), findsOneWidget);
       expect(find.text('Logout'), findsOneWidget);
+    });
+
+    testWidgets('U15b Profile hides Loan filter and loan accounts',
+        (tester) async {
+      final store = FinanceStore()
+        ..seedTransactions([
+          ...dummyTransactionHistory(),
+          dummyTxn(
+            id: 'loan_ui',
+            merchant: 'PNB Loan payment',
+            amount: 5000,
+            isCredit: false,
+            category: SpendCategory.emi,
+            bank: 'PNB',
+            maskedAccount: '••••0310',
+            accountKind: AccountKind.loan,
+            timestamp: dummyElapsedMonth(day: 4, hour: 9),
+          ),
+        ]);
+
+      await pump(tester, const ProfileScreen(), store: store);
+
+      expect(find.text('Your bank accounts'), findsOneWidget);
+      // Filter chips use UPPERCASE "LABEL (n)" — Loan chip must be gone.
+      expect(find.textContaining('LOAN'), findsNothing);
+      expect(find.textContaining('SAVINGS'), findsWidgets);
+      // Loan product mask must not appear as a You bank-account row.
+      expect(find.text('••••0310'), findsNothing);
     });
 
     testWidgets('U17 Profile navigates to Privacy Settings', (tester) async {

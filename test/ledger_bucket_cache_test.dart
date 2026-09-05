@@ -105,7 +105,7 @@ void main() {
       expect(unhidden.map((a) => a.mask).toSet(), {'••••5300', '••••3649'});
     });
 
-    test('seeded discoveries invalidate linked EMI buckets', () {
+    test('seeded discoveries keep funding EMI on Kotak savings', () {
       final store = FinanceStore()
         ..seedTransactions([
           _txn(
@@ -136,14 +136,26 @@ void main() {
           smsHits: 5,
           accountLabel: 'Home Loan',
         ),
+        const DiscoveredAccount(
+          bank: 'Kotak',
+          mask: '••••3649',
+          kind: AccountKind.savings,
+          smsHits: 10,
+        ),
       ]);
 
       final after = store.bankAccounts();
       expect(identical(before, after), isFalse);
+      final kotak = after.firstWhere((a) => a.mask == '••••3649');
+      expect(kotak.kind, AccountKind.savings);
+      expect(
+        store.transactionsForAccount(evidenceKey: kotak.evidenceKey).map((t) => t.id),
+        ['emi'],
+      );
       final loan = after.firstWhere((a) => a.isLoan && a.mask == '••••0855');
       expect(
-        store.transactionsForAccount(evidenceKey: loan.evidenceKey).map((t) => t.id),
-        ['emi'],
+        store.transactionsForAccount(evidenceKey: loan.evidenceKey),
+        isEmpty,
       );
     });
   });

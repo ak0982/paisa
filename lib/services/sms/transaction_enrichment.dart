@@ -50,20 +50,14 @@ abstract final class TransactionEnrichment {
       return AccountKind.loan;
     }
     if (_looksLikeNachMandate(lower)) {
-      final display = resolveLoanDisplay(
-        body: body,
-        parsedBank: bank,
-        parsedMask: mask,
-        discoveries: discoveries,
-      );
-      final remappedToLoan = discoveries.any(
-        (d) =>
-            d.kind == AccountKind.loan &&
-            d.mask.isNotEmpty &&
-            d.mask == display.mask &&
-            d.bank.toLowerCase() == display.bank.toLowerCase(),
-      );
-      if (remappedToLoan) return AccountKind.loan;
+      // Kind only — do not rewrite funding bank/mask onto the loan product.
+      if (resolveAssociatedLoanProduct(
+            body: body,
+            discoveries: discoveries,
+          ) !=
+          null) {
+        return AccountKind.loan;
+      }
     }
 
     // Debit-card / BLOCK DC / CCBBPSNO spends are savings, not credit card
@@ -387,25 +381,39 @@ abstract final class TransactionEnrichment {
     return false;
   }
 
-  /// When EMI is paid via NACH / UPI from a savings account, attach it to the
-  /// loan product mask when known. Never rewrite bank without a loan mask
-  /// (that creates phantom keys like ICICI|fundingLast4).
+  /// Display bank/mask for a loan-kind SMS row.
   ///
-  /// Remap confidence order (same idea as CCBP / card routing):
-  /// 1. Explicit loan last-4 in the SMS body
-  /// 2. Mandate / beneficiary bank hint → **unique** loan at that bank
-  /// 3. Ambiguous payee (MBK EMI, bare "EMI") → **unique** loan overall only
-  ///
-  /// Never guess from the funding bank when multiple loans exist — that puts
-  /// e.g. HDFC UPI "To MBK EMI" (paying a PNB loan) onto the HDFC loan.
+  /// **Always keeps the funding (debited/credited) identity** — same idea as
+  /// CCBP. A Kotak NACH paying an HDFC loan stays `Kotak|fundingMask` for You
+  /// listing and balance. Product context comes from
+  /// [resolveAssociatedLoanProduct] / merchant text, not from rewriting the
+  /// ledger key onto the loan bank.
   static ({String bank, String mask}) resolveLoanDisplay({
     required String body,
     required String parsedBank,
     required String parsedMask,
     required Iterable<DiscoveredAccount> discoveries,
   }) {
+    // [body]/[discoveries] kept for call-site API stability; product link is
+    // [resolveAssociatedLoanProduct] — never rewrite funding identity here.
+    return (bank: parsedBank, mask: parsedMask);
+  }
+
+  /// Which discovered loan product a funding EMI/NACH/UPI payment relates to,
+  /// without changing the transaction's bank/mask.
+  ///
+  /// Confidence order:
+  /// 1. Explicit loan last-4 in the SMS body
+  /// 2. UPI / NEFT destination last-4 → **unique** loan with that mask
+  /// 3. Mandate / beneficiary bank hint → **unique** loan at that bank
+  /// 4. Ambiguous payee (MBK EMI, bare "EMI") → **unique** loan overall only
+  ///
+  /// Never guess from the funding bank when multiple loans exist.
+  static DiscoveredAccount? resolveAssociatedLoanProduct({
+    required String body,
+    required Iterable<DiscoveredAccount> discoveries,
+  }) {
     final lower = body.toLowerCase();
-    final funding = (bank: parsedBank, mask: parsedMask);
 
     String? loanLast4FromBody() {
       final patterns = [
@@ -432,7 +440,6 @@ abstract final class TransactionEnrichment {
       return null;
     }
 
-    /// Unique loan whose bank matches [bankHint], or null if 0 or 2+.
     DiscoveredAccount? loanFor(String bankHint) {
       final matches = discoveries
           .where(
@@ -460,54 +467,38 @@ abstract final class TransactionEnrichment {
       final byMask = discoveries
           .where((d) => d.kind == AccountKind.loan && d.mask == mask)
           .toList();
-      if (byMask.isNotEmpty) {
-        return (bank: byMask.first.bank, mask: mask);
-      }
-      return (bank: parsedBank, mask: mask);
+      if (byMask.isNotEmpty) return byMask.first;
     }
 
-    ({String bank, String mask})? remapToLoan(DiscoveredAccount? loan) {
-      if (loan == null || loan.mask.isEmpty) return null;
-      return (bank: loan.bank, mask: loan.mask);
-    }
-
-    // UPI / NEFT destination last-4: "to a/c **0310" — only when that mask is
-    // a unique discovered loan (never guess across two loans sharing digits).
     final destLast4 = destinationAccountLast4(lower);
     if (destLast4 != null) {
       final mask = SmsParser.maskFromLast4(destLast4);
       final byMask = discoveries
           .where((d) => d.kind == AccountKind.loan && d.mask == mask)
           .toList();
-      if (byMask.length == 1) {
-        return (bank: byMask.first.bank, mask: mask);
-      }
+      if (byMask.length == 1) return byMask.first;
     }
 
-    // NACH / ACH mandate beneficiary is a strong product-bank signal (not the
-    // funding bank). Only remap when that bank has exactly one loan mask, and
-    // only when the bank token sits in the beneficiary clause (R2-2).
     if (_nachBeneficiaryMentionsBank(lower, 'hdfc')) {
-      return remapToLoan(loanFor('hdfc')) ?? funding;
+      final loan = loanFor('hdfc');
+      if (loan != null) return loan;
     }
     if (_nachBeneficiaryMentionsBank(lower, 'icici')) {
-      return remapToLoan(loanFor('icici')) ?? funding;
+      final loan = loanFor('icici');
+      if (loan != null) return loan;
     }
     if (_nachBeneficiaryMentionsBank(lower, 'idfc')) {
-      return remapToLoan(loanFor('idfc')) ?? funding;
+      final loan = loanFor('idfc');
+      if (loan != null) return loan;
     }
 
-    // Ambiguous funding-side EMI (MBK EMI / bare EMI): never use the funding
-    // bank as a loan hint — multi-loan users would contaminate the wrong loan.
-    // Product-side SMS ("against Loan Ac XX…") already carries the mask.
     if (lower.contains('mbk emi') ||
         RegExp(r'\bemi\b').hasMatch(lower) ||
         lower.contains('loan instal')) {
-      final remapped = remapToLoan(uniqueLoan());
-      if (remapped != null) return remapped;
+      return uniqueLoan();
     }
 
-    return funding;
+    return null;
   }
 
   /// Last-4 of a transfer destination when present, e.g. `to a/c **0310`.

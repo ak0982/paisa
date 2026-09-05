@@ -4,21 +4,25 @@ import '../../models/category_info.dart';
 import '../../models/transaction.dart';
 import 'account_discovery.dart';
 
-/// Links funding-account EMI / NACH / UPI payments onto the **product**
-/// account (loan or credit card) for You-section drilldown — without rewriting
-/// identity via the funding bank (unsafe when multiple products exist).
+/// Links funding-account CCBP payments onto the **credit-card** product for
+/// You-section drilldown — without rewriting identity via the funding bank.
 ///
-/// Confidence order:
+/// Loan EMI/NACH stays on the funding account for listing/balance (same idea
+/// as CCBP). Use `TransactionEnrichment.resolveAssociatedLoanProduct` for
+/// product context; do not attach loan funding rows onto loan buckets.
+///
+/// Confidence order (cards):
 /// 1. Funding row already stored on the product mask (caller handles)
 /// 2. Amount + time pairing with a product-side SMS on that mask: if a
 ///    product ack already covers the same amount within [pairingWindow],
-///    **do not** attach the funding row (one economic EMI → one drilldown
+///    **do not** attach the funding row (one economic bill → one drilldown
 ///    row; funding debit stays on savings only)
 /// 3. Orphan funding (no covering product SMS): attach only when this
-///    product is the unique loan/CC among [discoveries]
+///    product is the unique CC among [discoveries]
 /// 4. (Ingest) destination last-4 / NACH beneficiary — see [TransactionEnrichment]
 ///
 /// Ambiguous: same amount/time matches two different products → link neither.
+/// Loan linking helpers remain for tests / association queries.
 abstract final class ProductPaymentLinker {
   /// Max gap between funding debit and product acknowledgment SMS.
   static const Duration pairingWindow = Duration(hours: 48);

@@ -765,18 +765,16 @@ class FinanceStore extends ChangeNotifier {
           discoveries: _discoveredAccounts,
         );
         if (accountKind == AccountKind.loan) {
+          // Keep the funding (debited) bank|mask — never rewrite onto the loan
+          // product (CCBP-parallel). Association is merchant / product link only.
           final loanDisplay = TransactionEnrichment.resolveLoanDisplay(
             body: message.body,
             parsedBank: bank,
             parsedMask: mask,
             discoveries: _discoveredAccounts,
           );
-          // Only rewrite identity when we have a real loan mask — never leave
-          // funding last-4 under a different issuer bank.
-          if (loanDisplay.mask.isNotEmpty) {
-            bank = loanDisplay.bank;
-            displayMask = loanDisplay.mask;
-          }
+          bank = loanDisplay.bank;
+          if (loanDisplay.mask.isNotEmpty) displayMask = loanDisplay.mask;
         } else if (accountKind == AccountKind.creditCard) {
           final ccDisplay = TransactionEnrichment.resolveCreditCardDisplay(
             body: message.body,
@@ -2041,45 +2039,9 @@ class FinanceStore extends ChangeNotifier {
         continue;
       }
 
-      // EMI/NACH often still carries the funding savings mask. When there is
-      // exactly one discovered loan product, attribute those loan-kind rows to it.
-      // With multiple loans, do NOT guess here — ingest-time resolveLoanDisplay
-      // must have already remapped via body mask or unique NACH beneficiary bank.
-      // Ambiguous MBK EMI stays on the funding account (same idea as CCBP).
-      // If a product-side SMS already covers the same amount+window, keep the
-      // funding debit on savings — do not double-list the EMI under the loan.
-      if (t.accountKind == AccountKind.loan) {
-        final loans = merged.values
-            .where((d) => d.kind == AccountKind.loan && d.mask.isNotEmpty)
-            .toList();
-        if (loans.length == 1) {
-          final loan = loans.first;
-          final onProduct = canonicalizeBank(t.bank) ==
-                  canonicalizeBank(loan.bank) &&
-              t.maskedAccount == loan.mask;
-          if (!onProduct &&
-              pairingIndex.productSideCoversFunding(
-                funding: t,
-                productBank: loan.bank,
-                productMask: loan.mask,
-              )) {
-            // fall through to funding-account assignment
-          } else {
-            final key = accountEvidenceKey(loan.bank, loan.mask);
-            final bucket = buckets.putIfAbsent(key, _LedgerAccountBucket.new);
-            final voteBank = canonicalizeBank(loan.bank);
-            bucket.add(
-              t,
-              voteBank: voteBank.isNotEmpty ? voteBank : loan.bank,
-              mask: loan.mask,
-              evidenceKey: key,
-            );
-            bucket.kind = AccountKind.loan;
-            assignedIds.add(t.id);
-            continue;
-          }
-        }
-      }
+      // Loan-kind EMI/NACH stays on the funding bank|mask (same as CCBP).
+      // Product association is merchant / resolveAssociatedLoanProduct — never
+      // move the debit onto the loan issuer account for listing/balance.
 
       final kind = kinds.kindFor(t.bank, t.maskedAccount);
       if (!_isAccountTransaction(t.bank, t.maskedAccount, kind)) {
@@ -2236,9 +2198,8 @@ class FinanceStore extends ChangeNotifier {
       assignedIds.add(t.id);
     }
 
-    // Orphan funding EMI/CCBP under the product they paid (unique product, or
-    // no covering product SMS). Identity stays on the funding account. When a
-    // product ack already matches amount+time, funding stays on savings only.
+    // Orphan CCBP under the unique card for drilldown. Loan funding EMI stays
+    // on the funding account only (never dual-listed onto the loan bucket).
     _attachLinkedProductPayments(buckets, pairingIndex);
 
     return buckets;
@@ -2254,7 +2215,9 @@ class FinanceStore extends ChangeNotifier {
     )) {
       final bucket = entry.value;
       final kind = bucket.kind;
-      if (kind != AccountKind.loan && kind != AccountKind.creditCard) continue;
+      // Credit-card orphans only. Loan EMI must not move onto the loan bucket
+      // (spend/balance belong on the funding bank that was debited).
+      if (kind != AccountKind.creditCard) continue;
       final productBank = canonicalizeBank(bucket.majorityBank);
       if (productBank.isEmpty || bucket.mask.isEmpty) continue;
 
@@ -2629,8 +2592,13 @@ class _AccountKindEvidence {
           _vote(_ccBankVotes, key, bankLabel, 1);
         }
       case AccountKind.loan:
-        _loan[key] = (_loan[key] ?? 0) + 1;
-        _vote(_loanBankVotes, key, bankLabel, 1);
+        // EMI/NACH paid FROM a savings account must not flip that mask to loan.
+        if (_isFundingSideLoanPayment(t)) {
+          _savings[key] = (_savings[key] ?? 0) + 1;
+        } else {
+          _loan[key] = (_loan[key] ?? 0) + 1;
+          _vote(_loanBankVotes, key, bankLabel, 1);
+        }
       case AccountKind.savings:
         _savings[key] = (_savings[key] ?? 0) + 1;
     }
@@ -2642,6 +2610,29 @@ class _AccountKindEvidence {
     if (t.isCredit) return false;
     final m = t.merchant.toLowerCase();
     return m.contains('credit card bill payment') || m.contains('ccbp');
+  }
+
+  /// True when a loan-kind row is a funding-account EMI/NACH debit rather than
+  /// activity on the loan product mask itself (PNB deposit, disbursal, etc.).
+  static bool _isFundingSideLoanPayment(Transaction t) {
+    if (t.isCredit) return false;
+    final m = t.merchant.toLowerCase();
+    // Product-side acknowledgments / disbursals stay loan evidence.
+    if (m.contains('disburs') ||
+        m.contains('loan payment') ||
+        m.contains('against loan') ||
+        m.contains('depositing')) {
+      return false;
+    }
+    // Explicit funding-rail merchants only — do not treat every EMI-categorised
+    // row as funding (product-side loan activity also uses SpendCategory.emi).
+    return m.contains('nach') ||
+        m.contains('tp ach') ||
+        m.contains('mbk emi') ||
+        m.contains('home loan emi') ||
+        m.contains('personal loan emi') ||
+        m.contains('car loan emi') ||
+        RegExp(r'\b[a-z]+\s+emi\b').hasMatch(m);
   }
 
   AccountKind kindFor(String bank, String mask) {

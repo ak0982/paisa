@@ -135,7 +135,10 @@ const int categorizerVersion = 5;
 // Bumped 36 -> 37: Tier-2 India banks — Bandhan/IDBI/AU/Equitas/IPPB/
 // South Indian/Central/Karnataka DLT headers + body patterns (PennyWise
 // public SMS shapes only; original Dart). Forces a rescan.
-const int transactionSchemaVersion = 37;
+// Bumped 37 -> 38: loan EMI listing/balance stays on the funding bank|mask
+// (Kotak NACH paying HDFC/ICICI loan no longer remaps onto the loan account).
+// Product association via resolveAssociatedLoanProduct / merchant only.
+const int transactionSchemaVersion = 38;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

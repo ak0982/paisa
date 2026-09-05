@@ -492,6 +492,12 @@ List<_Case> _loanEmiMatrix() {
                   smsHits: 5,
                   accountLabel: loan.$3,
                 ),
+                DiscoveredAccount(
+                  bank: fund.$1,
+                  mask: fund.$2,
+                  kind: AccountKind.savings,
+                  smsHits: 10,
+                ),
               ])
               ..seedTransactions([
                 _tx(
@@ -512,15 +518,26 @@ List<_Case> _loanEmiMatrix() {
                   isCredit: false,
                   kind: AccountKind.loan,
                   category: SpendCategory.emi,
+                  merchant: 'Loan payment',
                 ),
               ]);
-            final accounts = store.bankAccounts().where((a) => a.isLoan).toList();
-            expect(accounts.where((a) => a.mask == loan.$2).length, 1);
-            final a = accounts.firstWhere((a) => a.mask == loan.$2);
-            final list =
-                store.transactionsForAccount(evidenceKey: a.evidenceKey);
-            expect(list.map((t) => t.id).contains('emi_${li}_$fi'), isTrue);
-            expect(list.map((t) => t.id).contains('loanrow_${li}_$fi'), isTrue);
+            final loanAcct = store
+                .bankAccounts()
+                .firstWhere((a) => a.isLoan && a.mask == loan.$2);
+            final loanList = store.transactionsForAccount(
+              evidenceKey: loanAcct.evidenceKey,
+            );
+            // Funding EMI stays on the funding account; product-side row on loan.
+            expect(loanList.map((t) => t.id).toSet(), {'loanrow_${li}_$fi'});
+            expect(loanList.any((t) => t.id == 'emi_${li}_$fi'), isFalse);
+
+            final fundAcct = store.bankAccounts().firstWhere(
+                  (a) => a.mask == fund.$2 && a.bank == fund.$1,
+                );
+            final fundList = store.transactionsForAccount(
+              evidenceKey: fundAcct.evidenceKey,
+            );
+            expect(fundList.map((t) => t.id).contains('emi_${li}_$fi'), isTrue);
             _expectParity(store);
           },
         ),
@@ -557,7 +574,7 @@ List<_Case> _loanEmiMatrix() {
     );
   }
 
-  // resolveLoanDisplay NACH matrix
+  // resolveLoanDisplay keeps funding identity; association is separate.
   for (final hint in [
     ('NACH-10-HDFC BANK LIMITED', 'hdfc', 'HDFC', '••••0855'),
     ('towards NACH-10-TP ACH ICICI', 'icici', 'ICICI', '••••1041'),
@@ -565,22 +582,30 @@ List<_Case> _loanEmiMatrix() {
   ]) {
     for (var i = 0; i < 5; i++) {
       out.add(
-        _Case('resolveLoan NACH ${hint.$2} #$i', () {
+        _Case('resolveLoan NACH ${hint.$2} funding #$i', () {
+          final body = 'Rs.${8000 + i} debited from A/c XX3649 towards ${hint.$1}';
+          final discoveries = [
+            DiscoveredAccount(
+              bank: hint.$3,
+              mask: hint.$4,
+              kind: AccountKind.loan,
+              smsHits: 3,
+            ),
+          ];
           final result = TransactionEnrichment.resolveLoanDisplay(
-            body: 'Rs.${8000 + i} debited from A/c XX3649 towards ${hint.$1}',
+            body: body,
             parsedBank: 'Kotak',
             parsedMask: '••••3649',
-            discoveries: [
-              DiscoveredAccount(
-                bank: hint.$3,
-                mask: hint.$4,
-                kind: AccountKind.loan,
-                smsHits: 3,
-              ),
-            ],
+            discoveries: discoveries,
           );
-          expect(result.bank, hint.$3);
-          expect(result.mask, hint.$4);
+          expect(result.bank, 'Kotak');
+          expect(result.mask, '••••3649');
+          final linked = TransactionEnrichment.resolveAssociatedLoanProduct(
+            body: body,
+            discoveries: discoveries,
+          );
+          expect(linked?.bank, hint.$3);
+          expect(linked?.mask, hint.$4);
         }),
       );
     }
@@ -624,17 +649,24 @@ List<_Case> _loanEmiMatrix() {
   }
   for (var i = 0; i < 8; i++) {
     out.add(
-      _Case('multi-loan NACH HDFC still remaps #$i', () {
+      _Case('multi-loan NACH HDFC keeps Kotak funding #$i', () {
+        final body =
+            'INR ${25000 + i}.00 is debited from your Account XXXXXX3649 on '
+            '07/0${(i % 9) + 1}/2026 towards NACH-10-HDFC BANK LIMITED';
         final result = TransactionEnrichment.resolveLoanDisplay(
-          body:
-              'INR ${25000 + i}.00 is debited from your Account XXXXXX3649 on '
-              '07/0${(i % 9) + 1}/2026 towards NACH-10-HDFC BANK LIMITED',
+          body: body,
           parsedBank: 'Kotak',
           parsedMask: '••••3649',
           discoveries: multiLoans,
         );
-        expect(result.bank, 'HDFC');
-        expect(result.mask, '••••0855');
+        expect(result.bank, 'Kotak');
+        expect(result.mask, '••••3649');
+        final linked = TransactionEnrichment.resolveAssociatedLoanProduct(
+          body: body,
+          discoveries: multiLoans,
+        );
+        expect(linked?.bank, 'HDFC');
+        expect(linked?.mask, '••••0855');
       }),
     );
   }
@@ -1324,8 +1356,21 @@ List<_Case> _nachFromToMatrix() {
                 ),
               ],
             );
-            expect(result.bank, hint.$3);
-            expect(result.mask, hint.$4);
+            expect(result.bank, 'Kotak');
+            expect(result.mask, '••••3649');
+            final linked = TransactionEnrichment.resolveAssociatedLoanProduct(
+              body: body,
+              discoveries: [
+                DiscoveredAccount(
+                  bank: hint.$3,
+                  mask: hint.$4,
+                  kind: AccountKind.loan,
+                  smsHits: 3,
+                ),
+              ],
+            );
+            expect(linked?.bank, hint.$3);
+            expect(linked?.mask, hint.$4);
 
             final kind = TransactionEnrichment.resolveAccountKind(
               bank: 'Kotak',
@@ -1546,23 +1591,36 @@ List<_Case> _upiDestLast4Matrix() {
             parsedMask: '••••5300',
             discoveries: unique,
           );
-          expect(remapped.bank, dest.$2);
-          expect(remapped.mask, '••••${dest.$1}');
+          expect(remapped.bank, 'HDFC');
+          expect(remapped.mask, '••••5300');
+          final linkedUnique =
+              TransactionEnrichment.resolveAssociatedLoanProduct(
+            body: body,
+            discoveries: unique,
+          );
+          expect(linkedUnique?.bank, dest.$2);
+          expect(linkedUnique?.mask, '••••${dest.$1}');
 
-          // Multi-loan: dest last-4 still remaps only that unique mask.
+          // Multi-loan: dest last-4 still associates only that unique mask.
           final multi = TransactionEnrichment.resolveLoanDisplay(
             body: body,
             parsedBank: 'HDFC',
             parsedMask: '••••5300',
             discoveries: multiLoans,
           );
+          expect(multi.bank, 'HDFC');
+          expect(multi.mask, '••••5300');
+          final linkedMulti =
+              TransactionEnrichment.resolveAssociatedLoanProduct(
+            body: body,
+            discoveries: multiLoans,
+          );
           final known = multiLoans.any((d) => d.mask == '••••${dest.$1}');
           if (known) {
-            expect(multi.bank, dest.$2);
-            expect(multi.mask, '••••${dest.$1}');
+            expect(linkedMulti?.bank, dest.$2);
+            expect(linkedMulti?.mask, '••••${dest.$1}');
           } else {
-            expect(multi.bank, 'HDFC');
-            expect(multi.mask, '••••5300');
+            expect(linkedMulti, isNull);
           }
         }),
       );

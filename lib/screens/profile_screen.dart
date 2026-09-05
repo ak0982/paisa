@@ -21,14 +21,13 @@ import 'settings/privacy_settings_screen.dart';
 
 enum _SettingAction { rescan, privacy, help, logout }
 
-enum _AccountFilter { all, savings, creditCard, loan }
+enum _AccountFilter { all, savings, creditCard }
 
 extension on _AccountFilter {
   String get chipLabel => switch (this) {
         _AccountFilter.all => 'All',
         _AccountFilter.savings => 'Savings',
         _AccountFilter.creditCard => 'Credit card',
-        _AccountFilter.loan => 'Loan',
       };
 
   /// Empty-state copy shown when the selected filter has no accounts.
@@ -37,14 +36,12 @@ extension on _AccountFilter {
             'auto-detect accounts from your alerts.',
         _AccountFilter.savings => 'No savings accounts yet.',
         _AccountFilter.creditCard => 'No credit card accounts yet.',
-        _AccountFilter.loan => 'No loan accounts yet.',
       };
 
   bool matches(BankAccount account) => switch (this) {
         _AccountFilter.all => true,
         _AccountFilter.savings => account.kind == AccountKind.savings,
         _AccountFilter.creditCard => account.kind == AccountKind.creditCard,
-        _AccountFilter.loan => account.kind == AccountKind.loan,
       };
 }
 
@@ -202,9 +199,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ];
 
-        final allAccounts = store.bankAccounts(
-          hiddenMasks: appSettings.hiddenBankAccountMasks,
-        );
+        // Loan products stay in the ledger/parser; You only lists savings + cards.
+        final allAccounts = store
+            .bankAccounts(hiddenMasks: appSettings.hiddenBankAccountMasks)
+            .where((a) => !a.isLoan)
+            .toList(growable: false);
         final counts = <_AccountFilter, int>{
           for (final f in _AccountFilter.values)
             f: allAccounts.where(f.matches).length,

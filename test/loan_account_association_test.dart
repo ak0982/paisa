@@ -32,8 +32,8 @@ void main() {
     });
   });
 
-  group('resolveLoanDisplay', () {
-    test('NACH-HDFC remaps onto discovered loan mask', () {
+  group('resolveLoanDisplay keeps funding identity', () {
+    test('NACH-HDFC keeps Kotak funding bank|mask', () {
       final result = TransactionEnrichment.resolveLoanDisplay(
         body: 'Rs.8500 debited from A/c XX3649 towards NACH-10-HDFC BANK LIMITED',
         parsedBank: 'Kotak',
@@ -48,8 +48,8 @@ void main() {
           ),
         ],
       );
-      expect(result.bank, 'HDFC');
-      expect(result.mask, '••••0855');
+      expect(result.bank, 'Kotak');
+      expect(result.mask, '••••3649');
     });
 
     test('NACH without loan discovery keeps funding identity', () {
@@ -63,7 +63,7 @@ void main() {
       expect(result.mask, '••••3649');
     });
 
-    test('MBK EMI attaches to unique loan', () {
+    test('MBK EMI keeps funding identity even with unique loan', () {
       final result = TransactionEnrichment.resolveLoanDisplay(
         body: 'UPI payment of Rs 2000 from a/c XX5300 to MBK EMI is successful',
         parsedBank: 'HDFC',
@@ -77,13 +77,11 @@ void main() {
           ),
         ],
       );
-      expect(result.bank, 'PNB');
-      expect(result.mask, '••••0310');
+      expect(result.bank, 'HDFC');
+      expect(result.mask, '••••5300');
     });
 
     test('MBK EMI with multiple loans keeps funding identity (no bank guess)', () {
-      // Live shape: HDFC UPI "To MBK EMI" pays PNB loan ••••0310 — must NOT
-      // land on HDFC home loan ••••0855 just because funding bank is HDFC.
       final result = TransactionEnrichment.resolveLoanDisplay(
         body:
             'Sent Rs.5199.39\nFrom HDFC Bank A/C *5300\nTo MBK EMI\nOn 27/02/26',
@@ -116,7 +114,7 @@ void main() {
       expect(result.mask, '••••5300');
     });
 
-    test('PNB loan deposit body last-4 wins with multiple loans', () {
+    test('PNB loan deposit body last-4 keeps PNB funding identity', () {
       final result = TransactionEnrichment.resolveLoanDisplay(
         body:
             'Thanks for depositing an amount of Rs. 5199.39 against your '
@@ -142,7 +140,7 @@ void main() {
       expect(result.mask, '••••0310');
     });
 
-    test('NACH HDFC remaps only when HDFC loan is unique at that bank', () {
+    test('NACH HDFC never remaps onto loan mask (unique or multi)', () {
       final multiAtHdfc = TransactionEnrichment.resolveLoanDisplay(
         body:
             'INR 25,797.00 is debited from your Account XXXXXX3649 on '
@@ -188,8 +186,95 @@ void main() {
           ),
         ],
       );
-      expect(unique.bank, 'HDFC');
-      expect(unique.mask, '••••0855');
+      expect(unique.bank, 'Kotak');
+      expect(unique.mask, '••••3649');
+    });
+
+    test('UPI destination last-4 keeps funding identity', () {
+      final result = TransactionEnrichment.resolveLoanDisplay(
+        body:
+            'HDFC Bank:Rs. 5200.00 debited from a/c *5300 on 21/12/25 to '
+            'a/c **0310 (UPI Ref No. 874150616776).',
+        parsedBank: 'HDFC',
+        parsedMask: '••••5300',
+        discoveries: const [
+          DiscoveredAccount(
+            bank: 'HDFC',
+            mask: '••••0855',
+            kind: AccountKind.loan,
+            smsHits: 5,
+          ),
+          DiscoveredAccount(
+            bank: 'PNB',
+            mask: '••••0310',
+            kind: AccountKind.loan,
+            smsHits: 4,
+          ),
+        ],
+      );
+      expect(result.bank, 'HDFC');
+      expect(result.mask, '••••5300');
+    });
+  });
+
+  group('resolveAssociatedLoanProduct', () {
+    test('NACH-HDFC associates unique HDFC loan without rewriting display', () {
+      const discoveries = [
+        DiscoveredAccount(
+          bank: 'HDFC',
+          mask: '••••0855',
+          kind: AccountKind.loan,
+          smsHits: 5,
+          accountLabel: 'Home Loan',
+        ),
+        DiscoveredAccount(
+          bank: 'ICICI',
+          mask: '••••1041',
+          kind: AccountKind.loan,
+          smsHits: 5,
+        ),
+      ];
+      const body =
+          'INR 25,797.00 is debited from your Account XXXXXX3649 on '
+          '07/03/2026 towards NACH-10-HDFC BANK LIMITED Kotak Bank';
+      final linked = TransactionEnrichment.resolveAssociatedLoanProduct(
+        body: body,
+        discoveries: discoveries,
+      );
+      expect(linked?.bank, 'HDFC');
+      expect(linked?.mask, '••••0855');
+      final display = TransactionEnrichment.resolveLoanDisplay(
+        body: body,
+        parsedBank: 'Kotak',
+        parsedMask: '••••3649',
+        discoveries: discoveries,
+      );
+      expect(display.bank, 'Kotak');
+      expect(display.mask, '••••3649');
+    });
+
+    test('NACH-ICICI associates unique ICICI loan', () {
+      final linked = TransactionEnrichment.resolveAssociatedLoanProduct(
+        body:
+            'INR 12,345.00 is debited from your Account XXXXXX3649 towards '
+            'NACH-10-TP ACH ICICI Kotak Bank',
+        discoveries: const [
+          DiscoveredAccount(
+            bank: 'HDFC',
+            mask: '••••0855',
+            kind: AccountKind.loan,
+            smsHits: 5,
+          ),
+          DiscoveredAccount(
+            bank: 'ICICI',
+            mask: '••••1041',
+            kind: AccountKind.loan,
+            smsHits: 5,
+          ),
+        ],
+      );
+      expect(linked?.bank, 'ICICI');
+      expect(linked?.mask, '••••1041');
     });
   });
 
@@ -225,7 +310,6 @@ void main() {
           ),
         ])
         ..seedTransactions([
-          // Ambiguous funding UPI — must not appear under HDFC loan.
           Transaction(
             id: 'mbk5199',
             smsId: 'mbk5199',
@@ -275,8 +359,6 @@ void main() {
 
       expect(hdfcTx.map((t) => t.id).toSet(), {'hdfc-emi'});
       expect(hdfcTx.any((t) => t.amount == 5199.39), isFalse);
-      // Product SMS already covers ₹5199.39 — show only that row on PNB.
-      // Funding MBK debit stays on HDFC savings.
       expect(pnbTx.map((t) => t.id).toSet(), {'pnb5199'});
       expect(pnbTx.where((t) => t.amount == 5199.39).length, 1);
       expect(pnbLoan.spentTotal, 5199.39);
@@ -340,38 +422,11 @@ void main() {
           store.bankAccounts().firstWhere((a) => a.mask == '••••0310');
       final pnbTx =
           store.transactionsForAccount(evidenceKey: pnbLoan.evidenceKey);
-      // No product SMS for 1111.11 → funding EMI must not invent a link.
       expect(pnbTx.map((t) => t.id).toSet(), {'pnb-other'});
       expect(pnbTx.any((t) => t.id == 'mbk-orphan'), isFalse);
     });
 
-    test('UPI destination last-4 remaps onto unique loan', () {
-      final result = TransactionEnrichment.resolveLoanDisplay(
-        body:
-            'HDFC Bank:Rs. 5200.00 debited from a/c *5300 on 21/12/25 to '
-            'a/c **0310 (UPI Ref No. 874150616776).',
-        parsedBank: 'HDFC',
-        parsedMask: '••••5300',
-        discoveries: const [
-          DiscoveredAccount(
-            bank: 'HDFC',
-            mask: '••••0855',
-            kind: AccountKind.loan,
-            smsHits: 5,
-          ),
-          DiscoveredAccount(
-            bank: 'PNB',
-            mask: '••••0310',
-            kind: AccountKind.loan,
-            smsHits: 4,
-          ),
-        ],
-      );
-      expect(result.bank, 'PNB');
-      expect(result.mask, '••••0310');
-    });
-
-    test('EMI on funding mask appears under unique loan account', () {
+    test('EMI on funding mask stays under Kotak, not under unique loan', () {
       final store = FinanceStore()
         ..seedDiscoveredAccounts([
           const DiscoveredAccount(
@@ -380,6 +435,12 @@ void main() {
             kind: AccountKind.loan,
             smsHits: 5,
             accountLabel: 'Home Loan',
+          ),
+          const DiscoveredAccount(
+            bank: 'Kotak',
+            mask: '••••3649',
+            kind: AccountKind.savings,
+            smsHits: 20,
           ),
         ])
         ..seedTransactions([
@@ -423,9 +484,106 @@ void main() {
 
       final loan = store.bankAccounts().firstWhere((a) => a.isLoan);
       expect(loan.mask, '••••0855');
-      final txns = store.transactionsForAccount(evidenceKey: loan.evidenceKey);
-      expect(txns.map((t) => t.id).toSet(), {'emi1', 'emi2', 'loan-credit'});
-      expect(loan.spentTotal, 17000);
+      final loanTxns =
+          store.transactionsForAccount(evidenceKey: loan.evidenceKey);
+      expect(loanTxns.map((t) => t.id).toSet(), {'loan-credit'});
+      expect(loan.spentTotal, 0);
+
+      final kotak = store.bankAccounts().firstWhere((a) => a.mask == '••••3649');
+      expect(kotak.kind, AccountKind.savings);
+      final kotakTxns =
+          store.transactionsForAccount(evidenceKey: kotak.evidenceKey);
+      expect(kotakTxns.map((t) => t.id).toSet(), {'emi1', 'emi2'});
+      expect(kotak.spentTotal, 17000);
     });
+
+    test(
+      'Kotak-funded HDFC+ICICI EMI stays under Kotak, not loan banks',
+      () {
+        final store = FinanceStore()
+          ..seedDiscoveredAccounts([
+            const DiscoveredAccount(
+              bank: 'HDFC',
+              mask: '••••0855',
+              kind: AccountKind.loan,
+              smsHits: 5,
+              accountLabel: 'Home Loan',
+            ),
+            const DiscoveredAccount(
+              bank: 'ICICI',
+              mask: '••••1041',
+              kind: AccountKind.loan,
+              smsHits: 5,
+              accountLabel: 'Personal Loan',
+            ),
+            const DiscoveredAccount(
+              bank: 'Kotak',
+              mask: '••••3649',
+              kind: AccountKind.savings,
+              smsHits: 30,
+            ),
+          ])
+          ..seedTransactions([
+            Transaction(
+              id: 'kotak-hdfc-emi',
+              smsId: 'kotak-hdfc-emi',
+              merchant: 'NACH-10-HDFC BANK LIMITED',
+              bank: 'Kotak',
+              maskedAccount: '••••3649',
+              category: SpendCategory.emi,
+              amount: 25797,
+              isCredit: false,
+              timestamp: DateTime(2026, 3, 7),
+              accountKind: AccountKind.loan,
+            ),
+            Transaction(
+              id: 'kotak-icici-emi',
+              smsId: 'kotak-icici-emi',
+              merchant: 'NACH-10-TP ACH ICICI',
+              bank: 'Kotak',
+              maskedAccount: '••••3649',
+              category: SpendCategory.emi,
+              amount: 12345,
+              isCredit: false,
+              timestamp: DateTime(2026, 3, 8),
+              accountKind: AccountKind.loan,
+            ),
+            Transaction(
+              id: 'kotak-food',
+              smsId: 'kotak-food',
+              merchant: 'Swiggy',
+              bank: 'Kotak',
+              maskedAccount: '••••3649',
+              category: SpendCategory.food,
+              amount: 400,
+              isCredit: false,
+              timestamp: DateTime(2026, 3, 9),
+              accountKind: AccountKind.savings,
+            ),
+          ]);
+
+        final kotak =
+            store.bankAccounts().firstWhere((a) => a.mask == '••••3649');
+        expect(kotak.kind, AccountKind.savings);
+        final kotakTx =
+            store.transactionsForAccount(evidenceKey: kotak.evidenceKey);
+        expect(
+          kotakTx.map((t) => t.id).toSet(),
+          {'kotak-hdfc-emi', 'kotak-icici-emi', 'kotak-food'},
+        );
+        expect(kotak.spentTotal, 25797 + 12345 + 400);
+
+        final hdfcLoan =
+            store.bankAccounts().where((a) => a.mask == '••••0855');
+        final iciciLoan =
+            store.bankAccounts().where((a) => a.mask == '••••1041');
+        for (final loan in [...hdfcLoan, ...iciciLoan]) {
+          final list =
+              store.transactionsForAccount(evidenceKey: loan.evidenceKey);
+          expect(list.any((t) => t.id.startsWith('kotak-')), isFalse);
+          expect(loan.spentTotal, 0);
+        }
+      },
+    );
   });
 }
