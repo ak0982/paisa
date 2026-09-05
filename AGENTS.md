@@ -21,7 +21,9 @@ classifies each account, and surfaces spend/income summaries, budgets, insights 
 cash / off-SMS transactions (`source: manual`, bank Cash; never creates a You account).
 
 - **Domain:** Indian banks and payment providers (HDFC, SBI, ICICI, Axis, Kotak, IDFC, PNB,
-  Federal + its neobanks Fi/Jupiter, Yes Bank, IndusInd, BOB, HSBC, plus major wallets/UPI apps).
+  Federal + its neobanks Fi/Jupiter, Yes Bank, IndusInd, Canara, BOB, Union Bank, Bank of India,
+  Indian Bank, Bandhan, IDBI, AU Bank, Equitas, South Indian Bank, Central Bank, Karnataka Bank,
+  IPPB, HSBC, Slice SFB, plus major wallets/UPI apps).
 - **Guiding goal:** **"record and classify every transaction."** Lists still show every money
   movement (including transfers). **Cashflow KPIs** (spend / income / savings rate) intentionally
   **exclude internal movement** (self-transfers, CCBP legs) — see ISSUE-4 in §5.2. Tracking in
@@ -86,7 +88,7 @@ The user develops against **physical Android devices**. When operating on them:
 ### Directory pointers
 | Area | What lives there |
 | --- | --- |
-| `lib/main.dart` | App bootstrap, provider wiring, **schema-version gate** (`transactionSchemaVersion` **35** / `categorizerVersion` **5**). `store.init()` + launch scan run **after first frame** (ISSUE-7, fully done). |
+| `lib/main.dart` | App bootstrap, provider wiring, **schema-version gate** (`transactionSchemaVersion` **37** / `categorizerVersion` **5**). `store.init()` + launch scan run **after first frame** (ISSUE-7, fully done). |
 | `lib/screens/` | Bottom-nav tabs: HOME (`dashboard_screen.dart` + **Day Strip teaser**), TRANSACTIONS (`transactions_screen.dart`), BUDGET (`budgets_screen.dart`), STATS (`insights_screen.dart` **ledger coin** + `reports_screen.dart`), YOU (`profile_screen.dart`). Day browse: `day_strip_screen.dart` (**Paisa Coin** circular day/range ledger). Drill-downs: `category_transactions_screen.dart`, `filtered_transactions_screen.dart` (incl. You-account lists). Onboarding + settings (privacy / help only — no notification toggles). `main_shell.dart` uses **lazy keep-alive** tabs. |
 | `lib/widgets/` | `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `paisa_bottom_nav.dart`, `category_spend_chip.dart` (Home chips + Stats/Reports sticker grid / rim arc / TOP·mid·LOW badges), `paisa_coin.dart` (shared struck-disc chrome for Day Strip + Stats), `day_strip_teaser.dart` (Home DAY entry), `pulse_calendar_sheet.dart` (**Pulse Calendar** day/range picker), `sms_coin_slab.dart` (**Coin Flip / Mint Slab** transaction detail — see §4.10), buttons/progress bars, `bank_logo.dart`. |
 | `lib/providers/finance_store.dart` | Core store: txns + discoveries, analytics, `bankAccounts()` / `_ledgerAccountBuckets()` (**memoized**), `_AccountKindEvidence` keyed by `bank\|mask`, You rematch + loan association, user budget limits, launch-scan, **throttled** `scanProgressListenable`. |
@@ -198,6 +200,8 @@ installs keep stale data and your change appears to "do nothing."
 | 32 → 33 | Live-inbox parse gaps: HDFC Spent Rs On/From Bank Card (CC vs debit-card BBPS), ICICI cashback + "your" CC refunds, SBI CC reversal/cashback + e-mandate + UPI/IMPS/CBS credits, Kotak CC spend, PNB bank charges, IDFC savings interest + CC thank-you payment, ICICI CMS `Account XX credited:Rs.`. Debit-card `BLOCK DC` discoveries stay savings. |
 | 33 → 34 | Leftover live inbox: ICICI CC refund **successfully transferred** onto savings last-4 (4-digit only; 3-digit `XX505` CMS left unparsed); HDFC `spent via Debit Card` / `BLOCK DC` / `CCBBPSNO` store as **savings**, not creditCard. |
 | 34 → 35 | Same-source debit-card / CCBP / BBPS **alert twins** collapse (keep `Spent … Bal … BLOCK DC`; drop `ALERT: spent via Debit Card`). SmartPay `Bill Paid:` stays unparsed. |
+| 35 → 36 | **Tier-1 India banks:** DLT headers `CANBNK`/`BOBSMS`/`BOBTXN`/`BOBCRD`/`UNIONB`/`BOIIND`/`INDBNK`/`INDUSB`; Canara Dr/Cr, BOB savings + BOBCARD, Union/BOI/Indian Bank first-class, PNB UPI/IMPS deepen, IndusInd Card Avl Lmt + savings. |
+| 36 → 37 | **Tier-2 India banks:** Bandhan/`BDNSMS`, IDBI/`IDBIBK`, AU/`AUBANK` (+ CC), Equitas/`EQUTAS`, IPPB/`IPBMSG`, South Indian/`SIBSMS` (before SBI), Central/`CENTBK`, Karnataka/`KBLBNK` — original Dart from public SMS shapes (PennyWise research only). |
 
 `categorizerVersion` is **5** (R2-1: brand keywords beat generic SBI-style `trf to`, while
 BBPS/CCBP stay Transfer ahead of bills). ISSUE-13's categorizer precision rode the schema bump
@@ -293,9 +297,13 @@ impossible). Limits are seeded once from historical spend suggestion, then owned
 
 ### 4.5 Supported banks / issuers / neobanks / wallets (from code)
 - **Banks:** HDFC, SBI, ICICI, Axis, Kotak, IDFC (FIRST), Yes Bank, IndusInd, PNB, Federal,
-  Canara (sender detection), Bank of Baroda (sender detection), **HSBC** (savings + CC), **Slice** SFB (savings UPI/IMPS + CC).
-- **Credit-card issuers:** SBI, ICICI, Axis, HDFC, Kotak, IDFC (FIRST), Yes Bank, IndusInd, BOB
-  (BOBCARD), **HSBC**. Card schemes detected in text: Visa, Mastercard, RuPay, Amex, Maestro, Diners.
+  Canara (`CANBNK` Dr/Cr + UPI), Bank of Baroda (`BOBSMS`/`BOBTXN` savings + BOBCARD),
+  Union Bank (`UNIONB`), Bank of India (`BOIIND`), Indian Bank (`INDBNK`), Bandhan (`BDNSMS`),
+  IDBI (`IDBIBK`), AU Bank (`AUBANK` + CC), Equitas (`EQUTAS`), South Indian Bank (`SIBSMS`),
+  Central Bank (`CENTBK`), Karnataka Bank (`KBLBNK`), IPPB (`IPBMSG`/`MYIPPB`), **HSBC** (savings + CC),
+  **Slice** SFB (savings UPI/IMPS + CC).
+- **Credit-card issuers:** SBI, ICICI, Axis, HDFC, Kotak, IDFC (FIRST), Yes Bank, IndusInd
+  (Card + Avl Lmt), BOB (BOBCARD), AU Bank, **HSBC**. Card schemes detected in text: Visa, Mastercard, RuPay, Amex, Maestro, Diners.
 - **Neobanks:** Fi (`FEDFIB`) and Jupiter (`MYJPTR`) — both ride on **Federal Bank** savings
   accounts and resolve to `Federal`.
 - **Wallets / UPI providers:** Paytm, PhonePe, Google Pay (GPay), Amazon Pay, MobiKwik,
@@ -541,9 +549,9 @@ no deep links, no `url_launcher` (privacy URL opens via security-channel `ACTION
 - **Heuristic / regex-based classification.** Parsing, enrichment, and account-kind voting can
   still misclassify edge cases (unusual SMS wording, new templates, ambiguous senders).
   Multi-loan users: ambiguous MBK/generic EMI stays on the **funding** account by design.
-- **Uneven bank coverage.** Majors have rich patterns; **Canara** and **Bank of Baroda** are
-  mostly sender-detection only (BOB cards via BOBCARD). Research inventory + expansion roadmap:
-  `docs/india_bank_sms_research.md`.
+- **Uneven bank coverage.** Tier-1 + Tier-2 (schema 36–37) cover major PSUs plus Bandhan/IDBI/AU/
+  Equitas/IPPB/SIB/Central/Karnataka. Still thin/missing: RBL, Ujjivan, UCO, IOB, Maharashtra,
+  P&SB, City Union, Jana, and most other SFBs/payments banks. See `docs/india_bank_sms_research.md`.
 - **Account discovery depends on masks.** Unrecognized masking styles may hide accounts.
 - **Testing uses a private SMS dump** at `~/Downloads/my_sms.txt` (and `my_sms_live.txt`) that
   is **NOT in the repo**. Dump-dependent suites **skip when absent**. Synthetic fixtures
@@ -575,6 +583,10 @@ no deep links, no `url_launcher` (privacy URL opens via security-channel `ACTION
   - `budget_limits_test.dart` — fixed editable budgets (ISSUE-5).
   - `home_consistency_test.dart` — Home KPIs vs listed rows / exclusions.
   - `sms_scan_pipeline_test.dart` / synthetic corpus — production gate coverage.
+  - `tier1_bank_sms_support_test.dart` — Canara/BOB/Union/BOI/Indian Bank/PNB/IndusInd
+    DLT headers + body parse + discovery (schema 36).
+  - `tier2_bank_sms_support_test.dart` — Bandhan/IDBI/AU/Equitas/IPPB/SIB/Central/Karnataka
+    DLT headers + body parse + discovery (schema 37).
   - `same_source_alert_twins_test.dart` — schema 35 Spent vs ALERT debit-card twin collapse.
   - `day_strip_test.dart` / `day_strip_widget_test.dart` — Day Strip OUT/IN vs Home KPIs;
     Paisa Coin UI + Pulse Calendar entry (§4.8a).

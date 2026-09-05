@@ -11,6 +11,14 @@ VM-KOTAKB	Rs.500.00 credited to your Kotak Bank a/c XX3649 via NEFT from EMPLOYE
 # HSBC India (synthetic; headers HSBCIN — Med–High conf from public templates)
 VM-HSBCIN-S	HSBC: INR 1,234.56 is paid from your A/c 074-260***-006 to AMAZON on 20-Dec-25. Your Avl Bal is INR 98,765.44 .
 HSBCIN	Your HSBC creditcard xxxxx4821 used at SWIGGY for INR 305.00 on 15-04-25.
+# Tier-1 PSU / IndusInd (DLT headers — synthetic)
+VK-CANBNK-S	Dear Customer, Acct XXX5510 Dr. INR 320.00 on 11/07/26 to PHONEPE MART; UPI: 111222333444; Bal INR 4,100.00.-CanaraBank
+VM-BOBSMS-S	Rs.750.00 Dr. from A/c XX7788 on 12-07-26. AvlBal:Rs8200.00 -Bank of Baroda
+VM-UNIONB-S	A/c *7788 Debited for Rs:1500.00 on 12-07-2026 18:28:02 by Mob Bk ref no 123456789000 Avl Bal Rs:8200.00
+JX-BOIIND-S	Rs.200.00 debited A/cXX5468 and credited to SAI MISAL via UPI Ref No 315439383341 on 23Aug25. -BOI
+VM-INDBNK-S	Sent Rs.250.00 from A/c XX3344 to SWIGGY.RRN 987654321012. Avl Bal Rs.9,000.00 -Indian Bank
+VM-PNBSMS-S	Dear Customer, a/c no XX4720 is debited for Rs 450.00 on 12-07-26 thru UPI Ref ID 123456789012. Aval Bal Rs.1,200.00-PNB
+VM-INDUSB-S	INR 499.00 spent on IndusInd Card XX4821 on 14-06-2026 04:21:45 pm at INSTAMART. Avl Lmt: INR 45000.00.
 
 # --- Promo / scam (must NOT parse) ---
 +919876543210	Congrats, Y0UR Received Rs.542000 L0AN is Approve on 11-10-2O24. Zero document. Withdraw direct T0 Y0UR A/c.

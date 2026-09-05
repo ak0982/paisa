@@ -1830,6 +1830,9 @@ class FinanceStore extends ChangeNotifier {
     'PNB',
     'Canara',
     'Bank of Baroda',
+    'Union Bank',
+    'Bank of India',
+    'Indian Bank',
     'IDFC',
     'Federal',
     'HSBC',
@@ -1879,6 +1882,14 @@ class FinanceStore extends ChangeNotifier {
         return 'Canara';
       case 'indusind bank':
         return 'IndusInd';
+      case 'union bank':
+      case 'union bank of india':
+        return 'Union Bank';
+      case 'boi':
+      case 'bank of india':
+        return 'Bank of India';
+      case 'indian bank':
+        return 'Indian Bank';
       default:
         return b;
     }

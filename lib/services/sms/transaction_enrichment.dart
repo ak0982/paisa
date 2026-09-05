@@ -6,7 +6,7 @@ import 'sms_parser.dart';
 abstract final class TransactionEnrichment {
   static final _creditCardBody = RegExp(
     r'credit\s+card|card ending|card\s+x\d{4}|yes\s+bank\s+card|'
-    r'axis bank card|bank card no\.|bobcard|ccbp',
+    r'axis bank card|bank card no\.|bobcard|indusind card|avl\s+lmt|ccbp',
     caseSensitive: false,
   );
 
@@ -178,6 +178,11 @@ abstract final class TransactionEnrichment {
       return true;
     }
     if (RegExp(r'spent on yes bank card', caseSensitive: false).hasMatch(lower)) {
+      return true;
+    }
+    // IndusInd: "spent on IndusInd Card XX… Avl Lmt" (Avl Lmt = card, not savings)
+    if (lower.contains('spent on indusind card') ||
+        (lower.contains('indusind card') && lower.contains('avl lmt'))) {
       return true;
     }
     // Live Axis: "Spent INR … Axis Bank Card no. XX8341" / "spent on Axis Bank Card"

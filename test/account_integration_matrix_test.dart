@@ -124,6 +124,9 @@ List<_Case> _parityMatrix() {
     'Slice',
     'Bank of Baroda',
     'IndusInd',
+    'Union Bank',
+    'Bank of India',
+    'Indian Bank',
   ];
   const masks = [
     '••••1001',
@@ -206,7 +209,7 @@ List<_Case> _parityMatrix() {
       }
     }
   }
-  // 14*24*3 = 1008
+  // 17*24*3 = 1224
   return out;
 }
 
@@ -436,6 +439,11 @@ void expectCanonicalizeCases(List<_Case> out) {
     ('punjab national bank', 'PNB'),
     ('canara bank', 'Canara'),
     ('indusind bank', 'IndusInd'),
+    ('union bank', 'Union Bank'),
+    ('union bank of india', 'Union Bank'),
+    ('bank of india', 'Bank of India'),
+    ('boi', 'Bank of India'),
+    ('indian bank', 'Indian Bank'),
     ('Bank', ''),
     ('', ''),
   ];

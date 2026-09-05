@@ -41,6 +41,8 @@ class SmsParser {
       r')(\d{4})\b';
 
   /// Known financial sender ID fragments (case-insensitive).
+  /// Prefer live DLT 6-char headers (CANBNK, BOBSMS, …) over brand substrings —
+  /// `CANBNK` does not contain `CANARA`, `BOBSMS` does not contain `BARODA`.
   static final bankSenderPatterns = [
     RegExp(r'hdfc', caseSensitive: false),
     RegExp(r'sbi', caseSensitive: false),
@@ -54,15 +56,29 @@ class SmsParser {
     RegExp(r'freecharge|frchrg', caseSensitive: false),
     RegExp(r'amazonpay|amznpay', caseSensitive: false),
     RegExp(r'bhim', caseSensitive: false),
-    RegExp(r'yesbank', caseSensitive: false),
-    RegExp(r'indusind', caseSensitive: false),
-    RegExp(r'pnb', caseSensitive: false),
-    RegExp(r'canara', caseSensitive: false),
-    RegExp(r'baroda', caseSensitive: false),
-    RegExp(r'federal', caseSensitive: false),
+    RegExp(r'yesbank|yesbnk', caseSensitive: false),
+    RegExp(r'indusb|indusind', caseSensitive: false),
+    RegExp(r'pnbsms|pnbbnk|pnb', caseSensitive: false),
+    RegExp(r'canbnk|canara', caseSensitive: false),
+    RegExp(r'bobsms|bobtxn|bobcrd|bobcard|baroda', caseSensitive: false),
+    RegExp(r'unionb|union', caseSensitive: false),
+    RegExp(r'boiind|boibnk', caseSensitive: false),
+    // Indian Bank (INDBNK) — must not collide with IndusInd (INDUSB) above.
+    RegExp(r'indbnk', caseSensitive: false),
+    // Tier-2: prefer full DLT headers (SIBSMS before bare SBI substring).
+    RegExp(r'bdnsms|bndnbk|bandhan', caseSensitive: false),
+    RegExp(r'idbibk|idbibank', caseSensitive: false),
+    RegExp(r'aubank|ausfb', caseSensitive: false),
+    RegExp(r'equtas|equita|equits|equitas', caseSensitive: false),
+    RegExp(r'ipbmsg|myippb|ippb', caseSensitive: false),
+    RegExp(r'sibsms|sibbank', caseSensitive: false),
+    RegExp(r'centbk|cboi', caseSensitive: false),
+    RegExp(r'kblbnk|ktkbank|karbank|karnatakabank', caseSensitive: false),
+    RegExp(r'federal|fedbnk|fedfib|myjptr', caseSensitive: false),
     RegExp(r'idfc', caseSensitive: false),
     RegExp(r'lenden', caseSensitive: false),
     RegExp(r'hsbc', caseSensitive: false),
+    RegExp(r'slceit|slcbnk|slice', caseSensitive: false),
   ];
 
   /// Body must look like a transaction alert, not a promo OTP message.
@@ -156,7 +172,30 @@ class SmsParser {
     r'credited:rs|'
     // Live leftovers: HDFC "ALERT: Rs spent via Debit Card" / ICICI CC→savings refund.
     r'spent via|'
-    r'refund of\s+(?:inr|rs\.?).+successfully transferred)',
+    r'refund of\s+(?:inr|rs\.?).+successfully transferred|'
+    // Tier-1 PSU / IndusInd compact templates (Canara Dr., Union Debited for Rs:,
+    // BOB amount-first Dr/Cr, BOI UPI, IndusInd Card Avl Lmt).
+    r'\bdr\.?\s*(?:inr|rs\.?|₹)|'
+    r'\bcr\.?\s*(?:inr|rs\.?|₹)|'
+    r'\bdr\.?\s+from\b|'
+    r'\bcr\.?\s+to\b|'
+    r'debited for rs:?|'
+    r'credited for rs:?|'
+    r'spent on indusind card|'
+    r'credited in your ac\b|'
+    r'debited\s+a/c\s*x+\d|'
+    // Tier-2 India banks (Bandhan / AU / Equitas / SIB / IDBI / IPPB / …).
+    r'deposited to a/c|'
+    r'debited via upi|'
+    r'credited via upi|'
+    r'\bupi\s+debit\b|'
+    r'\bupi\s+credit\b|'
+    r'\bdebit:rs|'
+    r'\bdebit\s+rs\.?|'
+    r'received a payment|'
+    r'spent at .+ on au bank credit card|'
+    r'debited for rs\.?|'
+    r'has been debited for)',
     caseSensitive: false,
   );
 
@@ -191,7 +230,12 @@ class SmsParser {
     r'(debited|credited|spent\s+on|spent\s+via|spent\s+(?:inr|rs\.?)|paid\s+to|sent\s+rs|'
     r'withdrawn|deposited|depositing|payment of\s+(?:inr|rs)|has a credit by|'
     r'is debited to|received\s+rs\.?\s*[\d,]+.*in your|'
-    r'successfully transferred)',
+    r'successfully transferred|'
+    r'\bdr\.?\s*(?:inr|rs\.?|₹)|'
+    r'\bcr\.?\s*(?:inr|rs\.?|₹)|'
+    r'\bdr\.?\s+from\b|'
+    r'\bcr\.?\s+to\b|'
+    r'debited for rs:?)',
     caseSensitive: false,
   );
 
@@ -290,6 +334,7 @@ class SmsParser {
     'KOTAKB',
     'CBSSBI',
     'PNBSMS',
+    'PNBBNK',
     'CREDIN',
     'MOBIKW',
     'PLUXEE',
@@ -316,6 +361,32 @@ class SmsParser {
     'SLCEIT',
     'SLCBNK',
     'SLICE',
+    // Tier-1 PSU / private DLT headers (live 6-char codes, not brand substrings).
+    'CANBNK',
+    'BOBSMS',
+    'BOBTXN',
+    'BOBCRD',
+    'INDUSB',
+    'UNIONB',
+    'BOIIND',
+    'BOIBNK',
+    'INDBNK',
+    // Tier-2 India DLT headers (Bandhan / IDBI / AU / Equitas / IPPB / SIB / …).
+    'BDNSMS',
+    'BNDNBK',
+    'IDBIBK',
+    'AUBANK',
+    'AUBSMS',
+    'EQUTAS',
+    'EQUITA',
+    'IPBMSG',
+    'MYIPPB',
+    'SIBSMS',
+    'SIBBANK',
+    'CENTBK',
+    'KBLBNK',
+    'KTKBANK',
+    'KARBANK',
   ];
 
   static bool isOtpOnly(String body) {
@@ -342,6 +413,10 @@ class SmsParser {
   static String? _detectBankFromSender(String sender) {
     final s = sender.toUpperCase();
     if (s.contains('HDFC')) return 'HDFC';
+    // South Indian Bank (SIBSMS) before SBI — header contains "SBI" as substring.
+    if (s.contains('SIBSMS') || s.contains('SIBBANK')) {
+      return 'South Indian Bank';
+    }
     if (s.contains('SBI') || s.contains('SBIN')) return 'SBI';
     if (s.contains('ICICI')) return 'ICICI';
     if (s.contains('AXIS')) return 'Axis';
@@ -353,10 +428,52 @@ class SmsParser {
     if (s.contains('AMZNPAY') || s.contains('AMAZONPAY')) return 'Amazon Pay';
     if (s.contains('GPAY') || s.contains('GOOGLE')) return 'GPay';
     if (s.contains('YES')) return 'Yes Bank';
-    if (s.contains('INDUS')) return 'IndusInd';
+    // IndusInd (INDUSB) before Indian Bank (INDBNK) — headers share IND* prefix.
+    if (s.contains('INDUSB') ||
+        s.contains('INDUSIND') ||
+        s.contains('INDUS')) {
+      return 'IndusInd';
+    }
+    if (s.contains('INDBNK')) return 'Indian Bank';
     if (s.contains('PNB')) return 'PNB';
-    if (s.contains('CANARA')) return 'Canara';
-    if (s.contains('BARODA')) return 'Bank of Baroda';
+    if (s.contains('CANBNK') || s.contains('CANARA')) return 'Canara';
+    if (s.contains('BOBSMS') ||
+        s.contains('BOBTXN') ||
+        s.contains('BOBCRD') ||
+        s.contains('BOBCARD') ||
+        s.contains('BARODA')) {
+      return 'Bank of Baroda';
+    }
+    if (s.contains('UNIONB')) return 'Union Bank';
+    if (s.contains('BOIIND') || s.contains('BOIBNK')) return 'Bank of India';
+    // Tier-2 India headers.
+    if (s.contains('BDNSMS') ||
+        s.contains('BNDNBK') ||
+        s.contains('BANDHAN')) {
+      return 'Bandhan';
+    }
+    if (s.contains('IDBIBK') || s.contains('IDBIBANK') || s.contains('IDBI')) {
+      return 'IDBI';
+    }
+    if (s.contains('AUBANK') || s.contains('AUBSMS') || s.contains('AUSFB')) {
+      return 'AU Bank';
+    }
+    if (s.contains('EQUTAS') ||
+        s.contains('EQUITA') ||
+        s.contains('EQUITS') ||
+        s.contains('EQUITAS')) {
+      return 'Equitas';
+    }
+    if (s.contains('IPBMSG') || s.contains('MYIPPB') || s.contains('IPPB')) {
+      return 'IPPB';
+    }
+    if (s.contains('CENTBK') || s.contains('CBOI')) return 'Central Bank';
+    if (s.contains('KBLBNK') ||
+        s.contains('KTKBANK') ||
+        s.contains('KARBANK') ||
+        s.contains('KARNATAKABANK')) {
+      return 'Karnataka Bank';
+    }
     if (s.contains('IDFC')) return 'IDFC';
     if (s.contains('FEDBNK') ||
         s.contains('FEDFIB') ||
@@ -388,6 +505,35 @@ class SmsParser {
     if (b.contains('federal bank')) return 'Federal';
     if (RegExp(r'\bpnb\b').hasMatch(b) || b.contains('punjab national')) {
       return 'PNB';
+    }
+    if (b.contains('indusind')) return 'IndusInd';
+    if (b.contains('canarabank') || b.contains('canara bank')) return 'Canara';
+    if (b.contains('bank of baroda') || b.contains('bobcard')) {
+      return 'Bank of Baroda';
+    }
+    if (b.contains('union bank')) return 'Union Bank';
+    if (b.contains('bank of india') ||
+        RegExp(r'\s-boi\s*$').hasMatch(b.trim())) {
+      return 'Bank of India';
+    }
+    // South Indian before bare "indian bank" (substring collision).
+    if (b.contains('south indian bank')) return 'South Indian Bank';
+    if (b.contains('indian bank')) return 'Indian Bank';
+    if (b.contains('bandhan bank') || b.contains('bandhan')) return 'Bandhan';
+    if (b.contains('idbi bank') || RegExp(r'\bidbi\b').hasMatch(b)) {
+      return 'IDBI';
+    }
+    if (b.contains('au bank') || b.contains('-au bank')) return 'AU Bank';
+    if (b.contains('equitas')) return 'Equitas';
+    if (b.contains('central bank') ||
+        RegExp(r'-cboi\s*$').hasMatch(b.trim())) {
+      return 'Central Bank';
+    }
+    if (b.contains('karnataka bank')) return 'Karnataka Bank';
+    if (b.contains('india post payments') ||
+        RegExp(r'\bippb\b').hasMatch(b) ||
+        b.contains('thru ippb')) {
+      return 'IPPB';
     }
     if (b.contains('hsbc')) return 'HSBC';
     // Slice alerts usually end with " - slice"
@@ -546,13 +692,24 @@ class SmsParser {
               }()
             : _extractMerchantFallback(body, isCredit);
 
+        // Info: … often carries IMPS/UPI path (not merchant). Prefer an explicit
+        // merchant capture group when the pattern already extracted one.
         final infoMerchant = RegExp(
           r"Info[:\s]+([A-Za-z0-9 .&'-]{3,40})",
           caseSensitive: false,
         ).firstMatch(body);
-        final resolvedMerchant = infoMerchant != null && isCredit
-            ? _cleanMerchant(infoMerchant.group(1)!)
-            : merchant;
+        final infoRaw = infoMerchant?.group(1)?.trim() ?? '';
+        final infoLooksLikeRail = infoRaw.toLowerCase().startsWith('upi') ||
+            infoRaw.toLowerCase().startsWith('imps') ||
+            infoRaw.toLowerCase().startsWith('neft');
+        final resolvedMerchant = pattern.merchantGroup != null
+            ? merchant
+            : (infoMerchant != null &&
+                    isCredit &&
+                    infoRaw.isNotEmpty &&
+                    !infoLooksLikeRail)
+                ? _cleanMerchant(infoRaw)
+                : merchant;
 
         final accountLast4 = account;
         final bank = _resolveBank(
@@ -1165,6 +1322,404 @@ class SmsParser {
         ),
         accountGroup: 1,
         amountGroup: 2,
+      ),
+      // --- Tier-1 India banks (Canara / BOB / Union / BOI / Indian / PNB / IndusInd) ---
+      // Canara compact: "Acct XXX5510 Dr. INR 320.00 on 11/07/26 to PHONEPE MART; UPI: …"
+      _SmsPattern(
+        RegExp(
+          r"Acct\s+X+(\d{4,})\s+Dr\.?\s+(?:INR|Rs\.?|₹)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+on\s+\S+\s+to\s+([A-Za-z0-9 .&'_-]+?)(?:\s*;|\s+UPI|\.|$)",
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Canara credit: "Acct XXX5510 Cr. INR 5,000.00 …"
+      _SmsPattern(
+        RegExp(
+          r'Acct\s+X+(\d{4,})\s+Cr\.?\s+(?:INR|Rs\.?|₹)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+        isCredit: true,
+      ),
+      // Canara verbose: "has been DEBITED with Rs. …" / "DEBITED INR … from Acct XX"
+      _SmsPattern(
+        RegExp(
+          r'(?:has been\s+)?DEBITED\s+(?:with\s+)?(?:INR|Rs\.?|₹)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).*?(?:Acct|A/?c)\s+X+(\d{4,})',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+      ),
+      // Bank of Baroda savings: "Rs.500.00 Dr. from A/c XX7788 … AvlBal"
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+Dr\.?\s+from\s+A/?c\s*(?:XX|xx|\*+)?(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+      ),
+      // Bank of Baroda credit to account: "Rs.1,000.00 Cr. to A/c XX7788"
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+Cr\.?\s+to\s+A/?c\s*(?:XX|xx|\*+)?(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // Bank of Baroda UPI credit phrasing: "Rs.200.00 Cr. to merchant@upi"
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+Cr\.?\s+to\s+([A-Za-z0-9@._+\-]+)',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        merchantGroup: 2,
+        isCredit: true,
+      ),
+      // Union Bank: "A/c *7788 Debited for Rs:1500.00 on … Avl Bal Rs:8200.00"
+      _SmsPattern(
+        RegExp(
+          r'A/?c\s*\*?(\d{4})\s+Debited for Rs:?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+      ),
+      // Union Bank credit: "A/c *7788 Credited for Rs:…"
+      _SmsPattern(
+        RegExp(
+          r'A/?c\s*\*?(\d{4})\s+Credited for Rs:?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+        isCredit: true,
+      ),
+      // Bank of India UPI: "Rs.200.00 debited A/cXX5468 and credited to SAI MISAL via UPI"
+      _SmsPattern(
+        RegExp(
+          r"(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+debited\s+A/?c\s*(?:XX|xx)?(\d{4})\s+and credited to\s+([A-Za-z0-9 .&'_-]+?)\s+via\s+UPI",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Bank of India NEFT credit: "Rs 500 Credited in your Ac XX5468 … By NEFTINWARD"
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+Credited in your Ac\s*(?:XX|xx)?(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // Indian Bank UPI: "Sent Rs.250.00 from A/c XX3344 to MERCHANT.RRN 123…"
+      _SmsPattern(
+        RegExp(
+          r"Sent\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).*?(?:from\s+)?(?:A/?c|Acct)\s*(?:XX|xx|\*+)?(\d{4}).*?\s+to\s+([A-Za-z0-9 .&'_-]+?)\.?RRN",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Indian Bank: "A/c XX3344 debited Rs. 500.00" / "debited Rs.500"
+      _SmsPattern(
+        RegExp(
+          r'(?:A/?c|Acct|Account)\s*(?:XX|xx|\*+)?(\d{4}).*?debited\s+Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+      ),
+      // Indian Bank credit: "A/c XX3344 credited Rs. …"
+      _SmsPattern(
+        RegExp(
+          r'(?:A/?c|Acct|Account)\s*(?:XX|xx|\*+)?(\d{4}).*?credited\s+Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+        isCredit: true,
+      ),
+      // PNB deepen: "a/c no XX•••• is debited for Rs {amt}" (UPI/IMPS/thru card)
+      _SmsPattern(
+        RegExp(
+          r'a/c no\.?\s*X+(\d{4,})\s+is debited for Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+      ),
+      // PNB deepen: "a/c no XX•••• is credited by|for Rs {amt}"
+      _SmsPattern(
+        RegExp(
+          r'a/c no\.?\s*X+(\d{4,})\s+is credited (?:by|for|with)\s+Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+        isCredit: true,
+      ),
+      // PNB UPI Ref / IMPS Ref debit with amount first: "Rs.200 debited from a/c no XX… UPI Ref"
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+debited from a/c no\.?\s*X+(\d{4,})',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+      ),
+      // IndusInd CC: "INR 499.00 spent on IndusInd Card XX4821 … at INSTAMART. Avl Lmt:"
+      _SmsPattern(
+        RegExp(
+          r"(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent on IndusInd Card\s+(?:XX|xx)?(\d{4})\s+on\s+.+?\s+at\s+([A-Za-z0-9 .&'_-]+?)\.?\s+Avl\s+Lmt",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // IndusInd savings debit: "INR 500.00 debited from your A/c XX4821 … Avl Bal"
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+debited from (?:your\s+)?(?:IndusInd\s+)?(?:A/?c|Acct|Account)\s*(?:XX|xx|\*+)?(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+      ),
+      // IndusInd savings credit: "INR 1,000.00 credited to your A/c XX4821 … Avl Bal"
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+credited to (?:your\s+)?(?:IndusInd\s+)?(?:A/?c|Acct|Account)\s*(?:XX|xx|\*+)?(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // --- Tier-2 India banks (Bandhan / AU / Equitas / IDBI / SIB / Central / IPPB / KBL) ---
+      // Bandhan UPI debit: "INR 180.00 debited from A/c XXXXXXXXXX1234 towards UPI/DR/…/Merchant"
+      _SmsPattern(
+        RegExp(
+          r"(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+debited from A/?c\s*X+(\d{4,})\s+towards\s+(?:UPI/DR/[A-Za-z0-9]+/)?([A-Za-z0-9 .&'_-]+?)(?:\s+Value|\s*\.|$)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Bandhan UPI credit deposit: "INR 25,000.00 deposited to A/c XXXXXXXXXX1234 towards UPI/CR/…"
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+deposited to A/?c\s*X+(\d{4,})',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // Bandhan interest / account credit: "your account XXXXXXXXXX1234 is credited with INR 3.00"
+      _SmsPattern(
+        RegExp(
+          r'account\s+X+(\d{4,})\s+is credited with\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+        isCredit: true,
+      ),
+      // AU savings: "Debited INR 165.00 from A/c X7013"
+      _SmsPattern(
+        RegExp(
+          r'Debited\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+from\s+A/?c\s*X?(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+      ),
+      // AU compact: "Dr INR 29,000.00 from A/c X7661" / "Dr INR 10.00 - AU A/c X4541"
+      _SmsPattern(
+        RegExp(
+          r'\bDr\.?\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).{0,48}?A/?c\s*X?(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+      ),
+      // AU compact credit: "Cr INR 5,000.00 to A/c X4541"
+      _SmsPattern(
+        RegExp(
+          r'\bCr\.?\s+(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).{0,48}?A/?c\s*X?(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // AU CC: "INR 259.90 spent at TELEGRAM PREMIUM on AU Bank Credit Card x1234"
+      _SmsPattern(
+        RegExp(
+          r"(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+spent at\s+([A-Za-z0-9 .&'_-]+?)\s+on\s+AU Bank Credit Card\s+x+(\d{4})\b",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        merchantGroup: 2,
+        accountGroup: 3,
+      ),
+      // Equitas UPI debit: "INR 500.00 debited via UPI from Equitas A/c 1234 … to MERCHANT. Avl Bal"
+      _SmsPattern(
+        RegExp(
+          r"(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+debited via UPI from Equitas A/?c\s*(\d{4})\b.*?to\s+([A-Za-z0-9 .&'_-]+?)(?:\.|\s+Avl)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Equitas UPI credit: "INR 2,000.00 credited via UPI to Equitas A/c 9012 … from PAYER"
+      _SmsPattern(
+        RegExp(
+          r"(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+credited via UPI to Equitas A/?c\s*(\d{4})\b.*?from\s+([A-Za-z0-9 .&'_-]+?)(?:\.|\s+Avl|\s+Not)",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        merchantGroup: 3,
+        isCredit: true,
+      ),
+      // IDBI: "IDBI Bank Acct XX1234 debited for Rs 1040.00"
+      _SmsPattern(
+        RegExp(
+          r'IDBI Bank Acct\s*(?:XX|xx)?(\d{4})\s+debited for Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+      ),
+      // IDBI: "IDBI Bank Acct XX1234 credited with Rs 500.00"
+      _SmsPattern(
+        RegExp(
+          r'IDBI Bank Acct\s*(?:XX|xx)?(\d{4})\s+credited with Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+        isCredit: true,
+      ),
+      // IDBI: "successfully debited with Rs 59.00" + nearby Acct
+      _SmsPattern(
+        RegExp(
+          r'debited with Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).{0,80}?Acct\s*(?:XX|xx)?(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+      ),
+      // South Indian Bank IMPS/generic credit: "Your A/c X7377 is credited with Rs.792.02"
+      _SmsPattern(
+        RegExp(
+          r'Your A/?c\s*X+(\d{4})\s+is credited with Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+        isCredit: true,
+      ),
+      // South Indian Bank: "UPI debit:Rs.599.00 A/c X7477" / "UPI debit:INR Rs.250.50 in A/c X2468"
+      _SmsPattern(
+        RegExp(
+          r'UPI debit:(?:INR\s+)?Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).{0,40}?A/?c\s*X+(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+      ),
+      // South Indian Bank: "UPI Credit:INR Rs.15000.00 in A/c X2468"
+      _SmsPattern(
+        RegExp(
+          r'UPI Credit:(?:INR\s+)?Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).{0,40}?A/?c\s*X+(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // South Indian Bank POS: "A/c X7477 DEBIT:Rs.983.75 SPICE KITCHEN MCT Bal:"
+      _SmsPattern(
+        RegExp(
+          r"A/?c\s*X+(\d{4})\s+DEBIT:Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+([A-Za-z0-9 .&'_-]+?)\s+Bal:",
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+        merchantGroup: 3,
+      ),
+      // Central Bank NEFT: "Rs. 500.00 credited to your A/c xxxxxx1234 … through NEFT … -CBoI"
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+credited to your A/?c\s*x+(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+        isCredit: true,
+      ),
+      // Central Bank debit twin
+      _SmsPattern(
+        RegExp(
+          r'(?:INR|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+debited from your A/?c\s*x+(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+      ),
+      // IPPB debit: "Debit Rs.50.00 from A/C X4321 for UPI to merchant@oksbi"
+      _SmsPattern(
+        RegExp(
+          r'Debit\s+Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?).{0,48}?A/?C\s*X+(\d{4})\b',
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        accountGroup: 2,
+      ),
+      // IPPB credit: "You have received a payment of Rs.200.00 from SAMPLE PAYER thru IPPB"
+      _SmsPattern(
+        RegExp(
+          r"received a payment of\s+Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)\s+from\s+([A-Za-z0-9 .&'_-]+?)\s+thru\s+IPPB",
+          caseSensitive: false,
+        ),
+        amountGroup: 1,
+        merchantGroup: 2,
+        isCredit: true,
+      ),
+      // Karnataka Bank: "Your Account x001234x has been DEBITED for Rs.6368/-"
+      _SmsPattern(
+        RegExp(
+          r'Your Account\s+x0*(\d{4})x?\s+has been DEBITED for Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+      ),
+      // Karnataka Bank: "Your a/c XX1234 is credited by Rs.6600.00"
+      _SmsPattern(
+        RegExp(
+          r'Your a/c\s*(?:XX|xx)?(\d{4})\s+is credited by Rs\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+          caseSensitive: false,
+        ),
+        accountGroup: 1,
+        amountGroup: 2,
+        isCredit: true,
       ),
       // IDFC interest: "Monthly interest of INR.4.00 earned on your Savings A/c XX0070 has been credited"
       _SmsPattern(

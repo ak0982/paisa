@@ -17,20 +17,29 @@ object SmsNativeFilter {
         "HDFC", "HDFCBK", "SBI", "SBIN", "SBICRD", "SBICGV", "ICICI", "ICICIO",
         "ICICIT", "AXIS", "KOTAK", "KOTAKB", "PAYTM", "PHONEPE",
         "GPAY", "GOOGLEPAY", "GOOGLE", "BHIM", "YESBNK", "YESBANK", "INDUS",
-        "PNB", "CANARA", "BARODA", "FEDERAL", "IDFC", "IDFCFB", "UPI", "NEFT",
+        "PNB", "CANARA", "CANBNK", "BARODA", "BOBSMS", "BOBTXN", "BOBCRD",
+        "UNIONB", "BOIIND", "BOIBNK", "INDBNK",
+        "BDNSMS", "BNDNBK", "IDBIBK", "AUBANK", "AUBSMS", "EQUTAS", "EQUITA",
+        "IPBMSG", "MYIPPB", "SIBSMS", "SIBBANK", "CENTBK", "KBLBNK", "KTKBANK",
+        "KARBANK",
+        "FEDERAL", "IDFC", "IDFCFB", "UPI", "NEFT",
         "IMPS", "LENDEN", "HSBCIN", "HSBC", "SLCEIT", "SLCBNK", "SLICE"
     )
 
     private val bodyBankHints = listOf(
         "hdfc", "sbi", "icici", "axis bank", "axis", "kotak", "paytm",
         "phonepe", "google pay", "gpay", "yes bank", "indusind", "pnb",
-        "canara", "bank of baroda", "idfc", "hsbc", "slice"
+        "canara", "canarabank", "bank of baroda", "union bank", "bank of india",
+        "indian bank", "bandhan", "idbi", "au bank", "equitas",
+        "south indian bank", "central bank", "karnataka bank", "ippb",
+        "idfc", "hsbc", "slice"
     )
 
     private val bodyTxnHints = listOf(
         "debited", "credited", "spent", "paid", "received", "withdrawn",
         "deposited", "upi", "neft", "imps", "rtgs", "a/c", "acct", "account",
-        "bal ", "balance", "rs.", "rs ", "inr ", "₹", "credit card", "emi",
+        "bal ", "balance", "avl bal", "avl lmt", "dr.", "cr.",
+        "rs.", "rs ", "inr ", "₹", "credit card", "emi",
         "loan a/c", "card ending", "sent from"
     )
 

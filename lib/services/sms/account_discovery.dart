@@ -73,6 +73,30 @@ class AccountDiscovery {
       ),
       bankFromMatch: _bankFromCreditCardPrefix,
     ),
+    // IndusInd: "spent on IndusInd Card XX4821 … Avl Lmt" (card, not savings)
+    _CardPattern(
+      RegExp(
+        r'IndusInd\s+Card\s+(?:XX|xx)?(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: (_, __, ___) => 'IndusInd',
+    ),
+    // BOBCARD: "is spent on your BOBCARD ending 1234"
+    _CardPattern(
+      RegExp(
+        r'BOBCARD\s+ending\s+(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: (_, __, ___) => 'Bank of Baroda',
+    ),
+    // AU Bank Credit Card: "spent at … on AU Bank Credit Card x1234"
+    _CardPattern(
+      RegExp(
+        r'AU Bank Credit Card\s+x+(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: (_, __, ___) => 'AU Bank',
+    ),
     // Live Axis spend: "Axis Bank Card no. XX8341" (no "Credit" in SMS)
     _CardPattern(
       RegExp(
@@ -347,6 +371,126 @@ class AccountDiscovery {
       kind: AccountKind.savings,
       last4FromLongMask: true,
     ),
+    // Canara: "Acct XXX5510 Dr.|Cr. INR …"
+    _CardPattern(
+      RegExp(
+        r'Acct\s+X+(\d{4,})\s+(?:Dr|Cr)\.?\s+(?:INR|Rs\.?|₹)',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromCanaraAcct,
+      kind: AccountKind.savings,
+      last4FromLongMask: true,
+    ),
+    // Union Bank: "A/c *7788 Debited|Credited for Rs:"
+    _CardPattern(
+      RegExp(
+        r'A/?c\s*\*?(\d{4})\s+(?:Debited|Credited)\s+for\s+Rs:?',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromUnionOrSender,
+      kind: AccountKind.savings,
+    ),
+    // Bank of India: "debited A/cXX5468 and credited to"
+    _CardPattern(
+      RegExp(
+        r'debited\s+A/?c\s*(?:XX|xx)?(\d{4})\s+and credited to',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromBoiOrSender,
+      kind: AccountKind.savings,
+    ),
+    // Bank of India: "Credited in your Ac XX5468"
+    _CardPattern(
+      RegExp(
+        r'Credited in your Ac\s*(?:XX|xx)?(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromBoiOrSender,
+      kind: AccountKind.savings,
+    ),
+    // Bank of Baroda: "Dr.|Cr. from|to A/c XX7788"
+    _CardPattern(
+      RegExp(
+        r'(?:Dr|Cr)\.?\s+(?:from|to)\s+A/?c\s*(?:XX|xx|\*+)?(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromBobOrSender,
+      kind: AccountKind.savings,
+    ),
+    // Bandhan: "debited from|deposited to A/c XXXXXXXXXX1234"
+    _CardPattern(
+      RegExp(
+        r'(?:debited from|deposited to)\s+A/?c\s*X+(\d{4,})',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromBandhanOrSender,
+      kind: AccountKind.savings,
+      last4FromLongMask: true,
+    ),
+    // AU Bank: "Debited|Dr|Cr … A/c X7013"
+    _CardPattern(
+      RegExp(
+        r'(?:Debited|Dr\.?|Cr\.?)\s+(?:INR|Rs\.?)?.{0,40}?A/?c\s*X?(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromAuOrSender,
+      kind: AccountKind.savings,
+    ),
+    // Equitas: "from|to Equitas A/c 1234"
+    _CardPattern(
+      RegExp(
+        r'Equitas A/?c\s*(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: (_, __, ___) => 'Equitas',
+      kind: AccountKind.savings,
+    ),
+    // IDBI: "IDBI Bank Acct XX1234"
+    _CardPattern(
+      RegExp(
+        r'IDBI Bank Acct\s*(?:XX|xx)?(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: (_, __, ___) => 'IDBI',
+      kind: AccountKind.savings,
+    ),
+    // South Indian Bank: "Your A/c X7377 is credited" / "UPI debit … A/c X7477"
+    _CardPattern(
+      RegExp(
+        r'(?:Your\s+)?A/?c\s*X+(\d{4})\b.{0,40}?(?:credited with|DEBIT:|UPI)',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromSibOrSender,
+      kind: AccountKind.savings,
+    ),
+    // Central Bank: "credited to your A/c xxxxxx1234"
+    _CardPattern(
+      RegExp(
+        r'(?:credited to|debited from)\s+your\s+A/?c\s*x+(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromCentralOrSender,
+      kind: AccountKind.savings,
+      last4FromLongMask: true,
+    ),
+    // IPPB: "A/C X4321" — require slash so "Card x1234" is not stolen.
+    _CardPattern(
+      RegExp(
+        r'A/C\s*X+(\d{4})\b',
+        caseSensitive: false,
+      ),
+      bankFromMatch: _bankFromIppbOrSender,
+      kind: AccountKind.savings,
+    ),
+    // Karnataka Bank: "Your Account x001234x has been DEBITED"
+    _CardPattern(
+      RegExp(
+        r'Your Account\s+x0*(\d{4})x?\s+has been DEBITED',
+        caseSensitive: false,
+      ),
+      bankFromMatch: (_, __, ___) => 'Karnataka Bank',
+      kind: AccountKind.savings,
+    ),
   ];
 
   static final _loanPatterns = <_CardPattern>[
@@ -499,7 +643,13 @@ class AccountDiscovery {
       isDebit: isDebit,
       forceKind: AccountKind.savings,
     );
-    if (savings != null) return savings;
+    // Prefer credit-card discovery when the SMS clearly names a card product,
+    // so savings-shaped A/c masks do not swallow "AU Bank Credit Card x1234".
+    final looksLikeCard = RegExp(
+      r'credit\s*card|bobcard|indusind\s+card|avl\s+lmt',
+      caseSensitive: false,
+    ).hasMatch(normalized);
+    if (savings != null && !looksLikeCard) return savings;
 
     final cc = _matchPatterns(
       patterns: _creditCardPatterns,
@@ -512,6 +662,7 @@ class AccountDiscovery {
       forceKind: AccountKind.creditCard,
     );
     if (cc != null) return cc;
+    if (savings != null) return savings;
 
     return _matchPatterns(
       patterns: _loanPatterns,
@@ -686,6 +837,139 @@ class AccountDiscovery {
     return null;
   }
 
+  static String? _bankFromCanaraAcct(
+    String sender,
+    String body,
+    RegExpMatch match,
+  ) {
+    final haystack = '${sender.toUpperCase()} ${body.toLowerCase()}';
+    if (haystack.contains('CANBNK') ||
+        haystack.contains('CANARA') ||
+        haystack.contains('canarabank') ||
+        haystack.contains('canara bank')) {
+      return 'Canara';
+    }
+    return _bankFromSenderOrBody(sender, body, match);
+  }
+
+  static String? _bankFromUnionOrSender(
+    String sender,
+    String body,
+    RegExpMatch match,
+  ) {
+    final haystack = '${sender.toUpperCase()} ${body.toLowerCase()}';
+    if (haystack.contains('UNIONB') || haystack.contains('union bank')) {
+      return 'Union Bank';
+    }
+    return _bankFromSenderOrBody(sender, body, match);
+  }
+
+  static String? _bankFromBoiOrSender(
+    String sender,
+    String body,
+    RegExpMatch match,
+  ) {
+    final haystack = '${sender.toUpperCase()} ${body.toLowerCase()}';
+    if (haystack.contains('BOIIND') ||
+        haystack.contains('BOIBNK') ||
+        haystack.contains('bank of india') ||
+        RegExp(r'\s-boi\s*$').hasMatch(body.toLowerCase().trim())) {
+      return 'Bank of India';
+    }
+    return _bankFromSenderOrBody(sender, body, match);
+  }
+
+  static String? _bankFromBobOrSender(
+    String sender,
+    String body,
+    RegExpMatch match,
+  ) {
+    final haystack = '${sender.toUpperCase()} ${body.toLowerCase()}';
+    if (haystack.contains('BOBSMS') ||
+        haystack.contains('BOBTXN') ||
+        haystack.contains('BOBCRD') ||
+        haystack.contains('BARODA') ||
+        haystack.contains('bobcard') ||
+        haystack.contains('bank of baroda')) {
+      return 'Bank of Baroda';
+    }
+    return _bankFromSenderOrBody(sender, body, match);
+  }
+
+  static String? _bankFromBandhanOrSender(
+    String sender,
+    String body,
+    RegExpMatch match,
+  ) {
+    final haystack = '${sender.toUpperCase()} ${body.toLowerCase()}';
+    if (haystack.contains('BDNSMS') ||
+        haystack.contains('BNDNBK') ||
+        haystack.contains('BANDHAN') ||
+        haystack.contains('bandhan')) {
+      return 'Bandhan';
+    }
+    return _bankFromSenderOrBody(sender, body, match);
+  }
+
+  static String? _bankFromAuOrSender(
+    String sender,
+    String body,
+    RegExpMatch match,
+  ) {
+    final haystack = '${sender.toUpperCase()} ${body.toLowerCase()}';
+    if (haystack.contains('AUBANK') ||
+        haystack.contains('AUBSMS') ||
+        haystack.contains('au bank')) {
+      return 'AU Bank';
+    }
+    return _bankFromSenderOrBody(sender, body, match);
+  }
+
+  static String? _bankFromSibOrSender(
+    String sender,
+    String body,
+    RegExpMatch match,
+  ) {
+    final haystack = '${sender.toUpperCase()} ${body.toLowerCase()}';
+    if (haystack.contains('SIBSMS') ||
+        haystack.contains('SIBBANK') ||
+        haystack.contains('south indian bank')) {
+      return 'South Indian Bank';
+    }
+    return _bankFromSenderOrBody(sender, body, match);
+  }
+
+  static String? _bankFromCentralOrSender(
+    String sender,
+    String body,
+    RegExpMatch match,
+  ) {
+    final haystack = '${sender.toUpperCase()} ${body.toLowerCase()}';
+    if (haystack.contains('CENTBK') ||
+        haystack.contains('CBOI') ||
+        haystack.contains('central bank') ||
+        RegExp(r'-cboi\s*$').hasMatch(body.toLowerCase().trim())) {
+      return 'Central Bank';
+    }
+    return _bankFromSenderOrBody(sender, body, match);
+  }
+
+  static String? _bankFromIppbOrSender(
+    String sender,
+    String body,
+    RegExpMatch match,
+  ) {
+    final haystack = '${sender.toUpperCase()} ${body.toLowerCase()}';
+    if (haystack.contains('IPBMSG') ||
+        haystack.contains('MYIPPB') ||
+        haystack.contains('IPPB') ||
+        haystack.contains('ippb') ||
+        haystack.contains('thru ippb')) {
+      return 'IPPB';
+    }
+    return null;
+  }
+
   static String? _bankFromAccountDebitSms(
     String sender,
     String body,
@@ -694,11 +978,50 @@ class AccountDiscovery {
     final upper = sender.toUpperCase();
     if (upper.contains('KOTAK')) return 'Kotak';
     if (upper.contains('HDFC')) return 'HDFC';
+    // SIBSMS before SBI (header substring collision).
+    if (upper.contains('SIBSMS') || upper.contains('SIBBANK')) {
+      return 'South Indian Bank';
+    }
     if (upper.contains('SBI') || upper.contains('SBIN')) return 'SBI';
     if (upper.contains('ICICI')) return 'ICICI';
     if (upper.contains('AXIS')) return 'Axis';
     if (upper.contains('IDFC')) return 'IDFC';
     if (upper.contains('PNB')) return 'PNB';
+    if (upper.contains('CANBNK') || upper.contains('CANARA')) return 'Canara';
+    if (upper.contains('BOBSMS') ||
+        upper.contains('BOBTXN') ||
+        upper.contains('BOBCRD') ||
+        upper.contains('BARODA')) {
+      return 'Bank of Baroda';
+    }
+    if (upper.contains('UNIONB')) return 'Union Bank';
+    if (upper.contains('BOIIND') || upper.contains('BOIBNK')) {
+      return 'Bank of India';
+    }
+    // IndusInd before Indian Bank (INDBNK).
+    if (upper.contains('INDUSB') || upper.contains('INDUS')) return 'IndusInd';
+    if (upper.contains('INDBNK')) return 'Indian Bank';
+    if (upper.contains('BDNSMS') ||
+        upper.contains('BNDNBK') ||
+        upper.contains('BANDHAN')) {
+      return 'Bandhan';
+    }
+    if (upper.contains('IDBIBK') || upper.contains('IDBI')) return 'IDBI';
+    if (upper.contains('AUBANK') || upper.contains('AUBSMS')) return 'AU Bank';
+    if (upper.contains('EQUTAS') ||
+        upper.contains('EQUITA') ||
+        upper.contains('EQUITAS')) {
+      return 'Equitas';
+    }
+    if (upper.contains('IPBMSG') || upper.contains('MYIPPB')) return 'IPPB';
+    if (upper.contains('CENTBK') || upper.contains('CBOI')) {
+      return 'Central Bank';
+    }
+    if (upper.contains('KBLBNK') ||
+        upper.contains('KTKBANK') ||
+        upper.contains('KARBANK')) {
+      return 'Karnataka Bank';
+    }
     if (upper.contains('FED') || upper.contains('MYJPTR')) return 'Federal';
     if (upper.contains('HSBC')) return 'HSBC';
     if (upper.contains('SLCEIT') ||
@@ -737,12 +1060,92 @@ class AccountDiscovery {
     if (haystack.contains('YES') || haystack.contains('yes bank')) {
       return 'Yes Bank';
     }
-    if (haystack.contains('INDUS') || haystack.contains('indusind')) {
+    // IndusInd (INDUSB) before Indian Bank (INDBNK).
+    if (haystack.contains('INDUSB') ||
+        haystack.contains('INDUS') ||
+        haystack.contains('indusind')) {
       return 'IndusInd';
     }
-    if (haystack.contains('PNB') || haystack.contains('pnb') ||
+    // South Indian before bare "indian bank".
+    if (haystack.contains('SIBSMS') ||
+        haystack.contains('SIBBANK') ||
+        haystack.contains('south indian bank')) {
+      return 'South Indian Bank';
+    }
+    if (haystack.contains('INDBNK') || haystack.contains('indian bank')) {
+      return 'Indian Bank';
+    }
+    if (haystack.contains('PNB') ||
+        haystack.contains('pnb') ||
         haystack.contains('punjab national')) {
       return 'PNB';
+    }
+    if (haystack.contains('CANBNK') ||
+        haystack.contains('CANARA') ||
+        haystack.contains('canarabank') ||
+        haystack.contains('canara')) {
+      return 'Canara';
+    }
+    if (haystack.contains('BOBSMS') ||
+        haystack.contains('BOBTXN') ||
+        haystack.contains('BOBCRD') ||
+        haystack.contains('BARODA') ||
+        haystack.contains('bobcard') ||
+        haystack.contains('bank of baroda')) {
+      return 'Bank of Baroda';
+    }
+    if (haystack.contains('UNIONB') || haystack.contains('union bank')) {
+      return 'Union Bank';
+    }
+    if (haystack.contains('BOIIND') ||
+        haystack.contains('BOIBNK') ||
+        haystack.contains('bank of india') ||
+        RegExp(r'\s-boi\s*$').hasMatch(body.toLowerCase().trim())) {
+      return 'Bank of India';
+    }
+    if (haystack.contains('BDNSMS') ||
+        haystack.contains('BNDNBK') ||
+        haystack.contains('BANDHAN') ||
+        haystack.contains('bandhan')) {
+      return 'Bandhan';
+    }
+    if (haystack.contains('IDBIBK') ||
+        haystack.contains('IDBI') ||
+        haystack.contains('idbi bank')) {
+      return 'IDBI';
+    }
+    if (haystack.contains('AUBANK') ||
+        haystack.contains('AUBSMS') ||
+        haystack.contains('au bank')) {
+      return 'AU Bank';
+    }
+    if (haystack.contains('EQUTAS') ||
+        haystack.contains('EQUITA') ||
+        haystack.contains('equitas')) {
+      return 'Equitas';
+    }
+    if (haystack.contains('SIBSMS') ||
+        haystack.contains('SIBBANK') ||
+        haystack.contains('south indian bank')) {
+      return 'South Indian Bank';
+    }
+    if (haystack.contains('CENTBK') ||
+        haystack.contains('CBOI') ||
+        haystack.contains('central bank') ||
+        RegExp(r'-cboi\s*$').hasMatch(body.toLowerCase().trim())) {
+      return 'Central Bank';
+    }
+    if (haystack.contains('IPBMSG') ||
+        haystack.contains('MYIPPB') ||
+        haystack.contains('ippb') ||
+        haystack.contains('thru ippb')) {
+      return 'IPPB';
+    }
+    if (haystack.contains('KBLBNK') ||
+        haystack.contains('KTKBANK') ||
+        haystack.contains('KARBANK') ||
+        haystack.contains('karnataka bank')) {
+      return 'Karnataka Bank';
     }
     // Federal Bank, incl. its neobanks Fi (FedFiB) and Jupiter (MYJPTR) which
     // ride on Federal Bank savings accounts.

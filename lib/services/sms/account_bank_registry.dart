@@ -159,6 +159,39 @@ class AccountBankRegistry {
     if (RegExp(r'\bkotak bank\b').hasMatch(lower)) return 'Kotak';
     if (RegExp(r'\bstate bank\b').hasMatch(lower)) return 'SBI';
     if (RegExp(r'\bhsbc\b').hasMatch(lower)) return 'HSBC';
+    if (lower.contains('canarabank') || lower.contains('canara bank')) {
+      return 'Canara';
+    }
+    if (lower.contains('bank of baroda') || lower.contains('bobcard')) {
+      return 'Bank of Baroda';
+    }
+    if (lower.contains('union bank')) return 'Union Bank';
+    if (lower.contains('bank of india') ||
+        RegExp(r'\s-boi\s*$').hasMatch(trimmed)) {
+      return 'Bank of India';
+    }
+    // South Indian before bare "indian bank" (substring collision).
+    if (lower.contains('south indian bank')) return 'South Indian Bank';
+    if (lower.contains('indian bank')) return 'Indian Bank';
+    if (lower.contains('indusind')) return 'IndusInd';
+    if (lower.contains('bandhan bank') || lower.contains('bandhan')) {
+      return 'Bandhan';
+    }
+    if (lower.contains('idbi bank') || RegExp(r'\bidbi\b').hasMatch(lower)) {
+      return 'IDBI';
+    }
+    if (lower.contains('au bank')) return 'AU Bank';
+    if (lower.contains('equitas')) return 'Equitas';
+    if (lower.contains('central bank') ||
+        RegExp(r'-cboi\s*$').hasMatch(trimmed)) {
+      return 'Central Bank';
+    }
+    if (lower.contains('karnataka bank')) return 'Karnataka Bank';
+    if (lower.contains('india post payments') ||
+        RegExp(r'\bippb\b').hasMatch(lower) ||
+        lower.contains('thru ippb')) {
+      return 'IPPB';
+    }
 
     return null;
   }
@@ -173,6 +206,10 @@ class AccountBankRegistry {
   static String? _bankFromSender(String sender) {
     final s = sender.toUpperCase();
     if (s.contains('HDFC')) return 'HDFC';
+    // SIBSMS before SBI (header substring collision).
+    if (s.contains('SIBSMS') || s.contains('SIBBANK')) {
+      return 'South Indian Bank';
+    }
     if (s.contains('SBI') || s.contains('SBIN')) return 'SBI';
     if (s.contains('ICICI')) return 'ICICI';
     if (s.contains('AXIS')) return 'Axis';
@@ -184,6 +221,46 @@ class AccountBankRegistry {
     if (s.contains('HSBC')) return 'HSBC';
     if (s.contains('SLCEIT') || s.contains('SLCBNK') || s.contains('SLICE')) {
       return 'Slice';
+    }
+    // IndusInd before Indian Bank.
+    if (s.contains('INDUSB') || s.contains('INDUS')) return 'IndusInd';
+    if (s.contains('INDBNK')) return 'Indian Bank';
+    if (s.contains('PNB')) return 'PNB';
+    if (s.contains('CANBNK') || s.contains('CANARA')) return 'Canara';
+    if (s.contains('BOBSMS') ||
+        s.contains('BOBTXN') ||
+        s.contains('BOBCRD') ||
+        s.contains('BARODA')) {
+      return 'Bank of Baroda';
+    }
+    if (s.contains('UNIONB')) return 'Union Bank';
+    if (s.contains('BOIIND') || s.contains('BOIBNK')) return 'Bank of India';
+    if (s.contains('BDNSMS') ||
+        s.contains('BNDNBK') ||
+        s.contains('BANDHAN')) {
+      return 'Bandhan';
+    }
+    if (s.contains('IDBIBK') || s.contains('IDBIBANK') || s.contains('IDBI')) {
+      return 'IDBI';
+    }
+    if (s.contains('AUBANK') || s.contains('AUBSMS') || s.contains('AUSFB')) {
+      return 'AU Bank';
+    }
+    if (s.contains('EQUTAS') ||
+        s.contains('EQUITA') ||
+        s.contains('EQUITS') ||
+        s.contains('EQUITAS')) {
+      return 'Equitas';
+    }
+    if (s.contains('IPBMSG') || s.contains('MYIPPB') || s.contains('IPPB')) {
+      return 'IPPB';
+    }
+    if (s.contains('CENTBK') || s.contains('CBOI')) return 'Central Bank';
+    if (s.contains('KBLBNK') ||
+        s.contains('KTKBANK') ||
+        s.contains('KARBANK') ||
+        s.contains('KARNATAKABANK')) {
+      return 'Karnataka Bank';
     }
     if (s.contains('LENDEN')) return 'LenDenClub';
     return null;

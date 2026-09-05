@@ -127,7 +127,15 @@ const int categorizerVersion = 5;
 // (HDFC Spent+Bal+BLOCK DC kept; ALERT "spent via Debit Card" sibling dropped).
 // SmartPay "Bill Paid:" receipts stay unparsed. Forces a full rescan so
 // already-stored twin rows are rebuilt without the duplicate.
-const int transactionSchemaVersion = 35;
+// Bumped 35 -> 36: Tier-1 India bank SMS — DLT headers CANBNK/BOBSMS/BOBTXN/
+// BOBCRD/UNIONB/BOIIND/INDBNK/INDUSB; Canara Dr/Cr, BOB savings Dr/Cr,
+// Union Debited for Rs:, BOI UPI/NEFT, Indian Bank Sent/debited, PNB UPI/IMPS
+// deepen, IndusInd Card Avl Lmt + savings. Forces a rescan so previously
+// ignored Tier-1 alerts become transactions/accounts.
+// Bumped 36 -> 37: Tier-2 India banks — Bandhan/IDBI/AU/Equitas/IPPB/
+// South Indian/Central/Karnataka DLT headers + body patterns (PennyWise
+// public SMS shapes only; original Dart). Forces a rescan.
+const int transactionSchemaVersion = 37;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -2,7 +2,7 @@
 
 **My Paisa** is a Flutter personal‑finance app that turns your Android SMS inbox into a complete picture of your money. It reads bank and UPI alert messages **on‑device**, automatically parses them into transactions, discovers your bank accounts, credit cards and loans, classifies each one, and surfaces spending insights, budgets and reports. Bank SMS stay automatic; you can also **mint** a simple cash transaction (date + amount + type) when something never hit the inbox.
 
-It is purpose‑built for **Indian banks and payment providers** (HDFC, SBI, ICICI, Axis, Kotak, IDFC, PNB, Federal/Fi/Jupiter, Yes Bank, IndusInd, BOB, HSBC, Slice, and the major wallets/UPI apps).
+It is purpose‑built for **Indian banks and payment providers** (HDFC, SBI, ICICI, Axis, Kotak, IDFC, PNB, Federal/Fi/Jupiter, Yes Bank, IndusInd, Canara, BOB, Union Bank, Bank of India, Indian Bank, Bandhan, IDBI, AU Bank, Equitas, South Indian Bank, Central Bank, Karnataka Bank, IPPB, HSBC, Slice, and the major wallets/UPI apps).
 
 > Personal-finance app for Android, ready for distribution. No SMS content, account masks, or other personal data is committed to this repository. All SMS parsing happens locally on the device.
 
@@ -178,7 +178,7 @@ If a stored stamp is lower **and** onboarding is complete, `FinanceStore` runs `
 
 Bump `transactionSchemaVersion` (with a changelog comment in `main.dart`) when parsing, enrichment, discovery, or classification changes. **Do not bump** for UI/perf-only work (lazy tabs, memoized account buckets, pairing index, throttled scan progress).
 
-Current schema **35** includes (among earlier ISSUE-1…14 / HSBC / Slice work): You-account drilldown + bank-alias canonicalize; ownership rematch; loan association; multi-loan “no funding-bank guess”; Kotak NACH `from|to`; product↔funding EMI links without double-counting; UPI dest last-4 → unique loan; R2 NACH beneficiary-only remap + fold/linker/discovery-merge fixes; SBI UPI comma amounts + PNB optional `of`; live-inbox parse gaps (HDFC On/From card, ICICI cashback/CMS, SBI e-mandate/reversals, Kotak CC, PNB charges, IDFC interest); leftover HDFC debit-card BBPS kind + ICICI CC→savings refund; **same-source Spent vs ALERT debit-card twins collapse**. Full table: [`AGENTS.md`](AGENTS.md).
+Current schema **37** includes (among earlier ISSUE-1…14 / HSBC / Slice / Tier-1 work): You-account drilldown + bank-alias canonicalize; ownership rematch; loan association; multi-loan “no funding-bank guess”; Kotak NACH `from|to`; product↔funding EMI links without double-counting; UPI dest last-4 → unique loan; R2 NACH beneficiary-only remap + fold/linker/discovery-merge fixes; SBI UPI comma amounts + PNB optional `of`; live-inbox parse gaps; leftover HDFC debit-card BBPS kind + ICICI CC→savings refund; same-source Spent vs ALERT debit-card twins collapse; **Tier-1 India banks** (Canara/`CANBNK`, BOB/`BOBSMS`, Union, BOI, Indian Bank, PNB/IndusInd deepen); **Tier-2** (Bandhan/`BDNSMS`, IDBI/`IDBIBK`, AU/`AUBANK`, Equitas/`EQUTAS`, IPPB/`IPBMSG`, South Indian/`SIBSMS`, Central/`CENTBK`, Karnataka/`KBLBNK`). Full table: [`AGENTS.md`](AGENTS.md).
 
 ---
 
@@ -196,18 +196,29 @@ The supported set is derived directly from the sender/body resolvers and regexes
 | Axis | Sender + body resolvers |
 | Kotak | Dedicated UPI/NEFT/NACH patterns |
 | IDFC (IDFC FIRST) | Incl. `IDFCFB` sender |
-| PNB (Punjab National Bank) | Long-mask savings + loan patterns |
+| PNB (Punjab National Bank) | Long-mask savings + loan + UPI/IMPS deepen (`PNBSMS`) |
 | Federal | Incl. neobanks **Fi** (`FEDFIB`) and **Jupiter** (`MYJPTR`) that ride on Federal Bank savings accounts |
 | Yes Bank | Bank + card patterns (`YESBNK`) |
-| IndusInd | Sender + body resolvers |
-| Canara | Sender detection |
-| Bank of Baroda | Sender detection (bank); see BOBCARD below for its card |
+| IndusInd | Savings + **IndusInd Card** / Avl Lmt (`INDUSB`) |
+| Canara | Compact `Dr.`/`Cr.` + UPI (`CANBNK`) |
+| Bank of Baroda | Savings Dr/Cr (`BOBSMS`/`BOBTXN`) + BOBCARD (`BOBCRD`) |
+| Union Bank | `Debited for Rs:` / credited (`UNIONB`) |
+| Bank of India | UPI debit + NEFTINWARD credit (`BOIIND`) |
+| Indian Bank | Sent/debited/credited (`INDBNK`; distinct from IndusInd) |
+| Bandhan | UPI debit/deposit (`BDNSMS` / `BNDNBK`) |
+| IDBI | Acct debited for / credited with (`IDBIBK`) |
+| AU Bank | Savings Debited/Dr/Cr + AU Bank Credit Card (`AUBANK`) |
+| Equitas | UPI debit/credit via Equitas A/c (`EQUTAS`) |
+| South Indian Bank | IMPS/UPI debit/credit (`SIBSMS`; before SBI substring) |
+| Central Bank | NEFT credited to A/c … `-CBoI` (`CENTBK`) |
+| Karnataka Bank | Account DEBITED for / credited by (`KBLBNK`) |
+| IPPB | Debit Rs / received a payment thru IPPB (`IPBMSG` / `MYIPPB`) |
 | HSBC | Savings + debit-card + CC (`HSBCIN` / `HSBC*`) |
 | Slice SFB | UPI / IMPS / AutoPay / CC (`SLCEIT` / `SLCBNK`); failed-refunded UPI ignored |
 
 ### Credit-card issuers
 
-Recognised in credit-card regexes / enrichment: **SBI, ICICI, Axis, HDFC, Kotak, IDFC (FIRST), Yes Bank, IndusInd, BOB (BOBCARD), HSBC, Slice**. Card schemes detected in text: **Visa, Mastercard, RuPay, Amex, Maestro, Diners**.
+Recognised in credit-card regexes / enrichment: **SBI, ICICI, Axis, HDFC, Kotak, IDFC (FIRST), Yes Bank, IndusInd (Card + Avl Lmt), BOB (BOBCARD), AU Bank, HSBC, Slice**. Card schemes detected in text: **Visa, Mastercard, RuPay, Amex, Maestro, Diners**.
 
 ### Neobanks
 
@@ -250,7 +261,7 @@ For display, memoized `bankAccounts()` / `_ledgerAccountBuckets()` group by cano
 - **Sender-first bank resolution.** Bank is resolved from the sender ID first, then the body, with `AccountBankRegistry` learning bank‑per‑mask across the inbox to correct misleading senders (e.g. ICICI relaying credits into another bank's account, LenDenClub settlements).
 - **Promo / scam filtering.** `SmsParser` + `BankPromoFilters` drop marketing ("pre‑approved", "apply now", "SmartEMI", "YONO offer", …) and obfuscated scams ("L0AN", "Appr0ve", fake wallet credits), while a completed‑transaction signal overrides the promo filter so real alerts with offer‑like wording still parse.
 - **Two-pass isolate scan.** Pass 1 collects candidates, learns bank ownership, and runs account discovery; pass 2 parses candidates in a **background isolate** (`sms_parse_isolate.dart`) so the UI stays responsive on large inboxes, with checkpointing for resumability.
-- **Schema versioning.** `transactionSchemaVersion` **35** / `categorizerVersion` **5** in `main.dart` force a full wipe‑and‑rebuild when **parse/classify** logic changes (see above). Perf/UI changes do not bump the schema.
+- **Schema versioning.** `transactionSchemaVersion` **37** / `categorizerVersion` **5** in `main.dart` force a full wipe‑and‑rebuild when **parse/classify** logic changes (see above). Perf/UI changes do not bump the schema.
 - **Shared sorting/formatting.** All lists sort and group through `transaction_sort.dart`. All INR uses `formatInr` (`decimalDigits: 2`). Stats share badges use `formatSharePercent`.
 - **Home lists vs KPIs.** Lists still show **every** cash movement (`countsTowardCashflowSummary`). Headline spend/income use `countsTowardSpend` / `countsTowardIncome` plus transfer pairing, so CCBP / self-transfers do not inflate the hero numbers.
 - **Launch performance.** Lazy keep-alive tabs; memoized You-account buckets; O(n) product-pairing index; non-blocking `init()` after first frame; throttled scan-progress listenable.
@@ -325,7 +336,7 @@ Key test areas include:
 - **You accounts / loans / ownership** — `account_integration_matrix_test.dart` (~3000 cases), `loan_account_association_test.dart`, `account_ownership_test.dart`, `account_transactions_test.dart`, `product_payment_linker_test.dart`, `ledger_bucket_cache_test.dart`.
 - **Account-kind classification** — `account_kind_classification_test.dart`, `audit_credit_cards_test.dart`, `audit_loans_test.dart`, `audit_summary_test.dart`.
 - **Savings coverage** — `savings_coverage_diagnostic_test.dart`, `account_discovery_test.dart`, `account_bank_registry_test.dart`.
-- **SMS parsing & pipeline** — `sms_parser_test.dart`, `sms_scan_pipeline_test.dart`, `sms_parse_isolate_test.dart`, `sms_keyword_lists_test.dart`, `transaction_enrichment_test.dart`, `merchant_categorizer_test.dart`, `transaction_validity_test.dart`, `same_source_alert_twins_test.dart` (schema 35).
+- **SMS parsing & pipeline** — `sms_parser_test.dart`, `sms_scan_pipeline_test.dart`, `sms_parse_isolate_test.dart`, `sms_keyword_lists_test.dart`, `transaction_enrichment_test.dart`, `merchant_categorizer_test.dart`, `transaction_validity_test.dart`, `same_source_alert_twins_test.dart` (schema 35), `tier1_bank_sms_support_test.dart` (schema 36), `tier2_bank_sms_support_test.dart` (schema 37).
 - **Day Strip / Pulse / coins** — `day_strip_test.dart`, `day_strip_widget_test.dart`, `insights_coin_widget_test.dart`, `reports_custom_range_test.dart`.
 - **Coin Flip / Mint Slab** — `sms_coin_slab_test.dart`, `sms_coin_slab_corners_test.dart` (injectable loader; no device required).
 - **Formatters / launch** — `formatters_test.dart` (INR paise + share %), `launch_scan_test.dart` (non-blocking init).
