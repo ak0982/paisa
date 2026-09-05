@@ -361,7 +361,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     ),
                     const SizedBox(height: 10),
                     _FabSpeedItem(
-                      label: 'Add move',
+                      label: 'Add transaction',
                       icon: Icons.add_rounded,
                       accent: true,
                       onTap: () => _handleMint(context),

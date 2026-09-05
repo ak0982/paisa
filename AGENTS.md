@@ -1,4 +1,4 @@
-# AGENTS.md — AI project context & handoff for Paisa
+# AGENTS.md — AI project context & handoff for My Paisa
 
 > This file is the **AI-focused companion** to `README.md`. The README documents the app for
 > humans; this document exists so that **any AI coding agent can understand the project
@@ -13,12 +13,12 @@
 
 ## 1. Project overview
 
-**Paisa** is a **Flutter** personal-finance app for **Android** that turns the phone's **SMS
+**My Paisa** is a **Flutter** personal-finance app for **Android** that turns the phone's **SMS
 inbox** into a complete, automatic picture of the user's money. It reads bank / UPI alert SMS
 **on-device**, parses them into transactions, discovers bank accounts / credit cards / loans,
 classifies each account, and surfaces spend/income summaries, budgets, insights and reports —
 **with zero manual entry** for bank SMS — plus an optional **manual mint** for
-cash / off-SMS moves (`source: manual`, bank Cash; never creates a You account).
+cash / off-SMS transactions (`source: manual`, bank Cash; never creates a You account).
 
 - **Domain:** Indian banks and payment providers (HDFC, SBI, ICICI, Axis, Kotak, IDFC, PNB,
   Federal + its neobanks Fi/Jupiter, Yes Bank, IndusInd, BOB, HSBC, plus major wallets/UPI apps).
@@ -26,11 +26,12 @@ cash / off-SMS moves (`source: manual`, bank Cash; never creates a You account).
   movement (including transfers). **Cashflow KPIs** (spend / income / savings rate) intentionally
   **exclude internal movement** (self-transfers, CCBP legs) — see ISSUE-4 in §5.2. Tracking in
   lists ≠ inflating the headline numbers. Manual mints are first-class rows sorted by chosen date.
-- **Manual mint exception:** Moves FAB + Day Strip empty-day CTA → Date / Amount / Type → auto
+- **Manual mint exception:** Transactions FAB + Day Strip empty-day CTA → Date / Amount / Type → auto
   message → Save. Ids are `manual_<hex>` with `smsId: null`. Full SMS rescan **preserves**
   `source IN (manual, paste)`; logout / Clear local data still wipe them.
-- **Status:** **private / personal project**, AI-built. Repo is private
-  (`github.com/ak0982/paisa`). No SMS content, account masks, or personal data is committed.
+- **Status:** AI-built personal-finance app prepared for Play distribution. Repo is
+  private (`github.com/ak0982/paisa`). No SMS content, account masks, or personal
+  data is committed.
 - **No backend.** Everything (SMS scan, parse, classify, storage) runs locally on the device.
   Storage is on-device SQLite via `sqflite` (**plaintext** — biometric lock / SQLCipher are
   deliberately deferred; see ISSUE-15 in §6). OS-level export paths are shut off: cloud backup
@@ -52,8 +53,12 @@ flutter test test/foo_test.dart # run a single suite
 flutter analyze                 # static analysis / lints (flutter_lints)
 flutter run                     # run on a connected Android device / emulator
 flutter build apk --release     # release APK
+flutter build appbundle --release  # Play Store AAB → build/app/outputs/bundle/release/app-release.aab
 dart run flutter_launcher_icons # regenerate launcher icons from assets/icon/app_icon.png
 ```
+Play prep: `docs/store/` (listing copy, Data safety draft, SMS declaration notes) +
+`docs/privacy_policy.md` (host before review; URL in `lib/constants/legal.dart`).
+Android pins: `compileSdk`/`targetSdk` **35**, `minSdk` **21**; `minifyEnabled false`.
 Some diagnostic scripts under `tool/` are standalone Dart programs run with `dart run tool/<name>.dart`; most read the SMS dump from `~/Downloads/my_sms.txt` (see §6/§7).
 
 ### Device / development constraints (IMPORTANT — respect these)
@@ -82,7 +87,7 @@ The user develops against **physical Android devices**. When operating on them:
 | Area | What lives there |
 | --- | --- |
 | `lib/main.dart` | App bootstrap, provider wiring, **schema-version gate** (`transactionSchemaVersion` **35** / `categorizerVersion` **5**). `store.init()` + launch scan run **after first frame** (ISSUE-7, fully done). |
-| `lib/screens/` | Bottom-nav tabs: HOME (`dashboard_screen.dart` + **Day Strip teaser**), MOVES (`transactions_screen.dart`), BUDGET (`budgets_screen.dart`), STATS (`insights_screen.dart` **ledger coin** + `reports_screen.dart`), YOU (`profile_screen.dart`). Day browse: `day_strip_screen.dart` (**Paisa Coin** circular day/range ledger). Drill-downs: `category_transactions_screen.dart`, `filtered_transactions_screen.dart` (incl. You-account lists). Onboarding + settings (privacy / help only — no notification toggles). `main_shell.dart` uses **lazy keep-alive** tabs. |
+| `lib/screens/` | Bottom-nav tabs: HOME (`dashboard_screen.dart` + **Day Strip teaser**), TRANSACTIONS (`transactions_screen.dart`), BUDGET (`budgets_screen.dart`), STATS (`insights_screen.dart` **ledger coin** + `reports_screen.dart`), YOU (`profile_screen.dart`). Day browse: `day_strip_screen.dart` (**Paisa Coin** circular day/range ledger). Drill-downs: `category_transactions_screen.dart`, `filtered_transactions_screen.dart` (incl. You-account lists). Onboarding + settings (privacy / help only — no notification toggles). `main_shell.dart` uses **lazy keep-alive** tabs. |
 | `lib/widgets/` | `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `paisa_bottom_nav.dart`, `category_spend_chip.dart` (Home chips + Stats/Reports sticker grid / rim arc / TOP·mid·LOW badges), `paisa_coin.dart` (shared struck-disc chrome for Day Strip + Stats), `day_strip_teaser.dart` (Home DAY entry), `pulse_calendar_sheet.dart` (**Pulse Calendar** day/range picker), `sms_coin_slab.dart` (**Coin Flip / Mint Slab** transaction detail — see §4.10), buttons/progress bars, `bank_logo.dart`. |
 | `lib/providers/finance_store.dart` | Core store: txns + discoveries, analytics, `bankAccounts()` / `_ledgerAccountBuckets()` (**memoized**), `_AccountKindEvidence` keyed by `bank\|mask`, You rematch + loan association, user budget limits, launch-scan, **throttled** `scanProgressListenable`. |
 | `lib/providers/app_settings.dart` | Preferences (profile, merchant-masking, hidden accounts). **No notification toggles** (removed ISSUE-6). |
@@ -98,6 +103,8 @@ The user develops against **physical Android devices**. When operating on them:
 | `.github/workflows/flutter_ci.yml` | CI: `flutter analyze` + `flutter test` on push/PR to `main` (ISSUE-16). |
 | `test/fixtures/synthetic_sms_corpus.txt` | Synthetic SMS fixtures (no personal data) so gate coverage runs without the private dump. |
 | `docs/india_bank_sms_research.md` | RBI bank inventory, SMS taxonomy, public template notes, and parser expansion roadmap (research only). |
+| `docs/privacy_policy.md` + `docs/store/` | Play privacy policy source + listing / Data safety / SMS declaration drafts. |
+| `lib/constants/legal.dart` | Configurable privacy-policy URL (must be hosted before Play review). |
 | `tool/` | Standalone diagnostic scripts (audits, simulations) run against the SMS dump. **SMS analysis loop:** `import_sms_dump.dart` → `reparse_sms_analysis.dart` → `report_sms_gaps.dart` writes `~/Downloads/paisa_sms_analysis.db` + redacted `paisa_sms_gap_report.md` (both gitignored). |
 | `test/` | ~500 focused tests + ~3000-case account matrix (see §7). |
 | `code_review_by_fable_claude.md` | Fable/Claude round-1 review that drove ISSUES 1–16 (historical evidence + proposed fixes). |
@@ -359,7 +366,7 @@ Tests: `day_strip_test.dart`, `day_strip_widget_test.dart`, `insights_coin_widge
 
 ### 4.9 Performance (no schema bump)
 These keep large inboxes responsive. **Do not bump `transactionSchemaVersion` for them.**
-- **Lazy keep-alive tabs** (`_LazyKeepAliveTabs` in `main_shell.dart`): each of HOME / MOVES /
+- **Lazy keep-alive tabs** (`_LazyKeepAliveTabs` in `main_shell.dart`): each of HOME / TRANSACTIONS /
   BUDGET / STATS / YOU is built on first visit and kept offstage (`Offstage` + `TickerMode`).
   Index-only `setState` must not rebuild other tabs.
 - **Memoized** `bankAccounts()` and `_ledgerAccountBuckets()`; invalidate on txn/discovery/
@@ -370,11 +377,11 @@ These keep large inboxes responsive. **Do not bump `transactionSchemaVersion` fo
   `store.init()` then `runLaunchScan()`). ISSUE-7 is complete — do not re-await init/rescan
   before `runApp`.
 - **Throttled scan progress** (`scanProgressListenable`, 200ms, force on done): progress UI
-  must not rebuild You/Moves/Stats data.
+  must not rebuild You/Transactions/Stats data.
 
 ### 4.10 Transaction detail: Coin Flip / Mint Slab (`sms_coin_slab.dart`)
 
-Tapping a transaction anywhere (Paisa Coin day list, MOVES, Reports, You /
+Tapping a transaction anywhere (Paisa Coin day list, TRANSACTIONS, Reports, You /
 category drilldowns, Home recents) opens `showTransactionCoinSlab` — a struck
 coin that **flips** inside a mint slab instead of a Material field sheet.
 
@@ -510,7 +517,7 @@ zero string interpolation — every `where:` uses `whereArgs`, the one `rawInser
 placeholders, and the `execute` calls are static DDL; there is **no in-app export/share path**
 (no `share_plus`, no file writes outside the DB) so the DB only leaves via the OS paths SEC-1
 closed; and the only exported component is the launcher activity with a MAIN/LAUNCHER filter —
-no deep links, no `url_launcher`, no custom scheme. `INTERNET` stays debug/profile-only.
+no deep links, no `url_launcher` (privacy URL opens via security-channel `ACTION_VIEW` so release stays without `INTERNET`), no custom scheme. `INTERNET` stays debug/profile-only.
 
 ---
 

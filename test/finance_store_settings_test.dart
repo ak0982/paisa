@@ -255,6 +255,9 @@ void main() {
 
     test('U61e Home includes transfers in spend totals', () {
       final now = DateTime.now();
+      final incomeAt = now.day > 1
+          ? DateTime(now.year, now.month, now.day - 1, 18)
+          : DateTime(now.year, now.month, now.day, 8);
       final store = FinanceStore();
       store.seedTransactions([
         dummyTxn(
@@ -271,8 +274,7 @@ void main() {
           amount: 2700,
           isCredit: true,
           category: SpendCategory.income,
-          timestamp: DateTime(now.year, now.month, now.day, 18)
-              .subtract(const Duration(days: 1)),
+          timestamp: incomeAt,
         ),
         dummyTxn(
           id: 'past',

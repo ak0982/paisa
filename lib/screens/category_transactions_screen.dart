@@ -16,6 +16,7 @@ class CategoryTransactionsScreen extends StatelessWidget {
     required this.category,
     this.range,
     this.periodLabel,
+    this.alignWithSpendKpi = false,
   });
 
   final SpendCategory category;
@@ -26,12 +27,17 @@ class CategoryTransactionsScreen extends StatelessWidget {
   /// Subtitle under the category name. Defaults to Insights period label.
   final String? periodLabel;
 
+  /// When true (Budget tab), list + total use the same spend filter as envelope
+  /// Spent (`countsTowardSpend` + self-transfer pairing).
+  final bool alignWithSpendKpi;
+
   @override
   Widget build(BuildContext context) {
     return FilteredTransactionsScreen.category(
       category: category,
       range: range,
       periodLabel: periodLabel,
+      alignWithSpendKpi: alignWithSpendKpi,
     );
   }
 }

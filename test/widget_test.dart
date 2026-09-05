@@ -6,7 +6,7 @@ void main() {
     await tester.pumpWidget(const PaisaApp(showMain: false));
     await tester.pumpAndSettle();
 
-    expect(find.text('Paisa'), findsOneWidget);
+    expect(find.text('My Paisa'), findsOneWidget);
     expect(find.text('GET STARTED →'), findsOneWidget);
   });
 }

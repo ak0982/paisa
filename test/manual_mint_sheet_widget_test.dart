@@ -125,26 +125,26 @@ void main() {
       });
     }
 
-    testWidgets('empty-day CTA copy MINT A MOVE renders', (tester) async {
+    testWidgets('empty-day CTA copy MINT A TRANSACTION renders', (tester) async {
       await tester.pumpWidget(
         buildTestApp(
           settings: settings,
-          child: const Text('MINT A MOVE'),
+          child: const Text('MINT A TRANSACTION'),
         ),
       );
       await tester.pump();
-      expect(find.text('MINT A MOVE'), findsOneWidget);
+      expect(find.text('MINT A TRANSACTION'), findsOneWidget);
     });
 
-    testWidgets('Moves FAB copy Add move renders', (tester) async {
+    testWidgets('Transactions FAB copy Add transaction renders', (tester) async {
       await tester.pumpWidget(
         buildTestApp(
           settings: settings,
-          child: const Text('Add move'),
+          child: const Text('Add transaction'),
         ),
       );
       await tester.pump();
-      expect(find.text('Add move'), findsOneWidget);
+      expect(find.text('Add transaction'), findsOneWidget);
     });
 
     testWidgets('Manual badge copy renders', (tester) async {

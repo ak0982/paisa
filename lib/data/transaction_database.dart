@@ -20,7 +20,7 @@ class TransactionDatabase {
 
   final String? _dbPathOverride;
   Database? _db;
-  static const _dbVersion = 5;
+  static const _dbVersion = 6;
 
   Future<Database> get database async {
     if (_db != null) return _db!;
@@ -39,6 +39,7 @@ class TransactionDatabase {
         await _createScanStateTable(db);
         await _createDiscoveredAccountsTable(db);
         await _createCategoryBudgetsTable(db);
+        await _createCategoryBudgetsYearlyTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -54,6 +55,9 @@ class TransactionDatabase {
         }
         if (oldVersion < 5) {
           await _createCategoryBudgetsTable(db);
+        }
+        if (oldVersion < 6) {
+          await _createCategoryBudgetsYearlyTable(db);
         }
       },
     );
@@ -124,10 +128,30 @@ class TransactionDatabase {
     ''');
   }
 
+  Future<void> _createCategoryBudgetsYearlyTable(Database db) async {
+    // Independent yearly envelope plans — not derived from monthly limits.
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS category_budgets_yearly (
+        category TEXT PRIMARY KEY,
+        limit_amount REAL NOT NULL
+      )
+    ''');
+  }
+
   /// Returns the user-set monthly limit per category (category name -> amount).
   Future<Map<String, double>> getCategoryBudgets() async {
     final db = await database;
     final rows = await db.query('category_budgets');
+    return {
+      for (final row in rows)
+        row['category'] as String: (row['limit_amount'] as num).toDouble(),
+    };
+  }
+
+  /// Returns the user-set yearly limit per category (category name -> amount).
+  Future<Map<String, double>> getCategoryBudgetsYearly() async {
+    final db = await database;
+    final rows = await db.query('category_budgets_yearly');
     return {
       for (final row in rows)
         row['category'] as String: (row['limit_amount'] as num).toDouble(),
@@ -143,6 +167,15 @@ class TransactionDatabase {
     );
   }
 
+  Future<void> setCategoryBudgetYearly(String category, double limit) async {
+    final db = await database;
+    await db.insert(
+      'category_budgets_yearly',
+      {'category': category, 'limit_amount': limit},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
   Future<void> deleteCategoryBudget(String category) async {
     final db = await database;
     await db.delete(
@@ -152,9 +185,23 @@ class TransactionDatabase {
     );
   }
 
+  Future<void> deleteCategoryBudgetYearly(String category) async {
+    final db = await database;
+    await db.delete(
+      'category_budgets_yearly',
+      where: 'category = ?',
+      whereArgs: [category],
+    );
+  }
+
   Future<void> clearCategoryBudgets() async {
     final db = await database;
     await db.delete('category_budgets');
+  }
+
+  Future<void> clearCategoryBudgetsYearly() async {
+    final db = await database;
+    await db.delete('category_budgets_yearly');
   }
 
   Future<void> upsert(models.Transaction tx) async {

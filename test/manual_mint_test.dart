@@ -121,7 +121,7 @@ void main() {
       expect(rows.single.smsId, isNull);
     });
 
-    test('appears under chosen day on day strip / moves ordering', () async {
+    test('appears under chosen day on day strip / transactions ordering', () async {
       final db = freshDb();
 
       final smsEarlier = models.Transaction(

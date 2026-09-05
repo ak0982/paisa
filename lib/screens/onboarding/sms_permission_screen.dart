@@ -85,7 +85,7 @@ class SmsPermissionScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Paisa reads your bank alert messages to find and categorise transactions automatically.',
+                'My Paisa reads your bank alert messages to find and categorise transactions automatically.',
                 textAlign: TextAlign.center,
                 style: PaisaTheme.manrope(
                   size: 13.5,

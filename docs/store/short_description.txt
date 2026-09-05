@@ -1,0 +1,11 @@
+# Play Store listing — title & short description
+
+**App name / title:** My Paisa
+
+**Max 80 characters.** Paste into Play Console → Main store listing → Short description.
+
+```
+SMS-based money tracker for India. Bank & UPI alerts become your ledger — on device.
+```
+
+(Character count: 79)

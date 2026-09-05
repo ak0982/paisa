@@ -1,7 +1,9 @@
 package com.paisa.paisa_app
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.ContentResolver
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -116,9 +118,10 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-        // Screenshot / recents protection toggle (SEC-2). Method-channel calls
-        // arrive on the platform main thread, so the window flag can be
-        // changed inline.
+        // Screenshot / recents protection toggle (SEC-2) + open privacy policy
+        // in the system browser (no INTERNET permission on Paisa — ACTION_VIEW
+        // hands the URL to the default browser). Method-channel calls arrive on
+        // the platform main thread.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, securityChannelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -130,6 +133,21 @@ class MainActivity : FlutterActivity() {
                             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                         }
                         result.success(enabled)
+                    }
+                    "openExternalUrl" -> {
+                        val url = call.argument<String>("url")
+                        if (url.isNullOrBlank()) {
+                            result.error("BAD_ARGS", "url required", null)
+                            return@setMethodCallHandler
+                        }
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            result.success(true)
+                        } catch (e: ActivityNotFoundException) {
+                            result.error("OPEN_FAILED", e.message, null)
+                        } catch (e: Exception) {
+                            result.error("OPEN_FAILED", e.message, null)
+                        }
                     }
                     else -> result.notImplemented()
                 }

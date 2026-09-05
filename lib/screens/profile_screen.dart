@@ -9,6 +9,7 @@ import '../services/sms/account_discovery.dart';
 import '../services/sms/sms_reader_service.dart';
 import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
+import '../utils/app_version.dart';
 import '../utils/formatters.dart';
 import '../widgets/bank_logo.dart';
 import '../widgets/paisa_nav_chevron.dart';
@@ -103,7 +104,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           style: PaisaTheme.sora(size: 17, weight: FontWeight.w700),
         ),
         content: Text(
-          'This clears all local transactions — including moves you minted — and returns you to the welcome screen. Your SMS inbox is not modified.',
+          'This clears all local transactions — including transactions you minted — and returns you to the welcome screen. Your SMS inbox is not modified.',
           style: PaisaTheme.manrope(size: 13.5, color: PaisaColors.muted),
         ),
         actions: [
@@ -463,15 +464,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 16),
               Center(
-                child: Text(
-                  store.lastSyncedAt != null
-                      ? 'Last synced ${store.lastSyncedAt}'
-                      : 'Paisa · version 1.0.0',
-                  style: PaisaTheme.manrope(
-                    size: 11.5,
-                    color: PaisaColors.muted,
-                  ),
-                ),
+                child: store.lastSyncedAt != null
+                    ? Text(
+                        'Last synced ${store.lastSyncedAt}',
+                        style: PaisaTheme.manrope(
+                          size: 11.5,
+                          color: PaisaColors.muted,
+                        ),
+                      )
+                    : const AppVersionLabel(),
               ),
             ],
           ),

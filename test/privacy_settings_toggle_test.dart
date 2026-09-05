@@ -116,7 +116,7 @@ void main() {
       expect(find.text('Block screenshots'), findsOneWidget);
       expect(
         find.text(
-          'Hide Paisa from screenshots, screen recording and the recent-apps '
+          'Hide My Paisa from screenshots, screen recording and the recent-apps '
           'preview.',
         ),
         findsOneWidget,
@@ -426,6 +426,7 @@ void main() {
         find.text('Your data is never sold or shared with anyone.'),
         findsOneWidget,
       );
+      expect(find.text('Privacy policy'), findsOneWidget);
     });
 
     testWidgets('a revoked SMS permission is called out, not hidden',
@@ -453,7 +454,7 @@ void main() {
 
       expect(find.text('Active'), findsOneWidget);
       expect(
-        find.text('Granted — Paisa can read bank alert SMS on this device.'),
+        find.text('Granted — My Paisa can read bank alert SMS on this device.'),
         findsOneWidget,
       );
     });

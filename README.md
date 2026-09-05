@@ -1,10 +1,10 @@
-# Paisa
+# My Paisa
 
-**Paisa** is a Flutter personal‑finance app that turns your Android SMS inbox into a complete picture of your money. It reads bank and UPI alert messages **on‑device**, automatically parses them into transactions, discovers your bank accounts, credit cards and loans, classifies each one, and surfaces spending insights, budgets and reports. Bank SMS stay automatic; you can also **mint** a simple cash move (date + amount + type) when something never hit the inbox.
+**My Paisa** is a Flutter personal‑finance app that turns your Android SMS inbox into a complete picture of your money. It reads bank and UPI alert messages **on‑device**, automatically parses them into transactions, discovers your bank accounts, credit cards and loans, classifies each one, and surfaces spending insights, budgets and reports. Bank SMS stay automatic; you can also **mint** a simple cash transaction (date + amount + type) when something never hit the inbox.
 
 It is purpose‑built for **Indian banks and payment providers** (HDFC, SBI, ICICI, Axis, Kotak, IDFC, PNB, Federal/Fi/Jupiter, Yes Bank, IndusInd, BOB, HSBC, Slice, and the major wallets/UPI apps).
 
-> **Private / personal project.** This is a personal-use application. No SMS content, account masks, or other personal data is committed to this repository. All SMS parsing happens locally on the device.
+> Personal-finance app for Android, ready for distribution. No SMS content, account masks, or other personal data is committed to this repository. All SMS parsing happens locally on the device.
 
 > **AI agents:** see [`AGENTS.md`](AGENTS.md) for an AI-oriented project context & handoff (architecture, history of what's been tried, known issues, conventions).
 
@@ -35,7 +35,7 @@ It is purpose‑built for **Indian banks and payment providers** (HDFC, SBI, ICI
 - **Dashboard (Home)** — greeting, current‑month spend/income (KPIs exclude internal movement), **tappable** category chips → this month’s category list, **Day Strip teaser** (DAY OUT · IN → Paisa Coin day ledger), Today / This‑month rows.
 - **Day Strip (Paisa Coin)** — single day or range as a circular struck-coin ledger (OUT/IN gauge, stamped rows). Opens from Home teaser, Pulse Calendar, or Stats peak-day.
 - **Pulse Calendar** — month grid with spend-intensity cells; day or range mode. Used by Day Strip and **Reports → Custom** (replaces the Material range picker).
-- **Moves** — searchable, category‑filtered, date‑grouped transaction list with sorting.
+- **Transactions** — searchable, category‑filtered, date‑grouped transaction list with sorting.
 - **Budgets** — **user‑editable** per‑category limits (seeded once from history, then owned by the user; progress can exceed 100%). Not a circular `spent × 1.3` formula.
 - **Stats** — **ledger coin** hero (shared `paisa_coin` chrome), spending charts, Home‑style category **stickers** (rim arc + TOP/mid/LOW % badges), top merchants, daily average, highest‑spend day, food‑spend trend.
 - **Reports** — date‑range reports (presets + **Custom via Pulse Calendar**) with the same sticker grid and category / merchant / income drill‑downs.
@@ -50,7 +50,7 @@ It is purpose‑built for **Indian banks and payment providers** (HDFC, SBI, ICI
 
 ## Architecture
 
-Paisa uses a **layered architecture** with clear separation between the SMS ingestion pipeline, state management, data models, and UI.
+My Paisa uses a **layered architecture** with clear separation between the SMS ingestion pipeline, state management, data models, and UI.
 
 - **State management:** [`provider`](https://pub.dev/packages/provider) with `ChangeNotifier`. The app is wrapped in a `MultiProvider` (see `main.dart`) exposing `FinanceStore` (all finance data + derived analytics) and `AppSettings`. Screens read state via `Consumer`/`context.watch`/`context.read` and rebuild reactively when the store calls `notifyListeners()`.
 - **On-device only:** the SMS pipeline, parsing, classification, and database all run locally on the phone. There is no backend or network sync.
@@ -85,7 +85,7 @@ flowchart TD
     F --> I
 
     I --> J["FinanceStore (ChangeNotifier)<br/>bank|mask voting, You rematch,<br/>product↔funding links, reports"]
-    J --> K["UI screens<br/>HOME (+ Day Strip teaser) · Day Strip / Paisa Coin<br/>MOVES · BUDGET · STATS (ledger coin)<br/>Reports (Custom → Pulse Calendar) · YOU<br/>Coin Flip / Mint Slab on txn tap"]
+    J --> K["UI screens<br/>HOME (+ Day Strip teaser) · Day Strip / Paisa Coin<br/>TRANSACTIONS · BUDGET · STATS (ledger coin)<br/>Reports (Custom → Pulse Calendar) · YOU<br/>Coin Flip / Mint Slab on txn tap"]
 ```
 
 ### Layer-by-layer
@@ -94,10 +94,10 @@ flowchart TD
 
 | Screen | Purpose |
 | --- | --- |
-| `main_shell.dart` | Bottom-nav shell: **HOME / MOVES / BUDGET / STATS / YOU**. Tabs are **lazy keep-alive** (built on first visit, kept offstage). Launch scan runs after first frame, not here. |
+| `main_shell.dart` | Bottom-nav shell: **HOME / TRANSACTIONS / BUDGET / STATS / YOU**. Tabs are **lazy keep-alive** (built on first visit, kept offstage). Launch scan runs after first frame, not here. |
 | `dashboard_screen.dart` | Home: greeting, current-month spend/income, **tappable** category chips, **Day Strip teaser**, Today / This-month previews. |
 | `day_strip_screen.dart` | **Paisa Coin** day/range ledger (circular OUT/IN coin + stamped rows). Pulse Calendar entry; row tap → Coin Flip. |
-| `transactions_screen.dart` | Moves: full list with search, category filters, date grouping and sort. Row tap → Coin Flip. |
+| `transactions_screen.dart` | Transactions: full list with search, category filters, date grouping and sort. Row tap → Coin Flip. |
 | `budgets_screen.dart` | User-editable per-category budget limits with progress bars (can exceed 100%). |
 | `insights_screen.dart` | Stats: **ledger coin** hero + charts + Home-style category sticker grid (rim arc, TOP/mid/LOW %). |
 | `reports_screen.dart` | Date-range reports (presets + **Custom → Pulse Calendar**) with the same sticker grid and drill-downs. |
@@ -114,7 +114,7 @@ flowchart TD
 
 #### `lib/widgets/` — reusable widgets
 
-`paisa_bottom_nav.dart` (HOME / MOVES / BUDGET / STATS / YOU), `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `category_spend_chip.dart` (Home chips + Stats/Reports `CategorySpendStickerGrid` with rim arc and TOP/mid/LOW badges), `paisa_coin.dart` (shared struck-disc chrome for Day Strip + Stats ledger coin), `day_strip_teaser.dart` (Home DAY entry), `pulse_calendar_sheet.dart` (Pulse Calendar day/range picker), `sms_coin_slab.dart` (Coin Flip / Mint Slab transaction detail), `paisa_progress_bar.dart`, `gradient_button.dart`, `bank_logo.dart`, and `settings_detail_scaffold.dart`.
+`paisa_bottom_nav.dart` (HOME / TRANSACTIONS / BUDGET / STATS / YOU), `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `category_spend_chip.dart` (Home chips + Stats/Reports `CategorySpendStickerGrid` with rim arc and TOP/mid/LOW badges), `paisa_coin.dart` (shared struck-disc chrome for Day Strip + Stats ledger coin), `day_strip_teaser.dart` (Home DAY entry), `pulse_calendar_sheet.dart` (Pulse Calendar day/range picker), `sms_coin_slab.dart` (Coin Flip / Mint Slab transaction detail), `paisa_progress_bar.dart`, `gradient_button.dart`, `bank_logo.dart`, and `settings_detail_scaffold.dart`.
 
 #### `lib/providers/` — state management
 
@@ -284,6 +284,17 @@ flutter build apk --release
 # output: build/app/outputs/flutter-apk/app-release.apk
 ```
 
+### Build a Play Store App Bundle (AAB)
+
+Requires `android/key.properties` + the release keystore (gitignored). SDKs are pinned in `android/app/build.gradle` (`compileSdk`/`targetSdk` **35**, `minSdk` **21**). R8 minify stays **off** (SEC-6).
+
+```bash
+flutter build appbundle --release
+# output: build/app/outputs/bundle/release/app-release.aab
+```
+
+Play listing drafts, SMS declaration notes, Data safety checklist, and privacy hosting steps live under [`docs/store/`](docs/store/). Host [`docs/privacy_policy.md`](docs/privacy_policy.md) before submission (see [`docs/store/HOST_PRIVACY_POLICY.md`](docs/store/HOST_PRIVACY_POLICY.md)); the in-app URL is `LegalUrls.privacyPolicyUrl` in `lib/constants/legal.dart`.
+
 ### App icon
 
 The launcher icon is generated with [`flutter_launcher_icons`](https://pub.dev/packages/flutter_launcher_icons) from `assets/icon/app_icon.png` (adaptive icon background `#0E9E6E`):
@@ -366,7 +377,7 @@ paisa_app/
 │   │   ├── sms_parse_isolate.dart      # off-thread parsing
 │   │   └── parsed_sms_transaction.dart
 │   ├── screens/
-│   │   ├── main_shell.dart             # lazy keep-alive HOME/MOVES/BUDGET/STATS/YOU
+│   │   ├── main_shell.dart             # lazy keep-alive HOME/TRANSACTIONS/BUDGET/STATS/YOU
 │   │   ├── dashboard_screen.dart       # Home + Day Strip teaser
 │   │   ├── day_strip_screen.dart       # Paisa Coin day/range ledger
 │   │   ├── transactions_screen.dart

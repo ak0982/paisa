@@ -86,7 +86,7 @@ typedef OriginalSmsLoader = Future<OriginalSmsLookup> Function(String smsId);
       ),
     OriginalSmsStatus.notFound => (
         title: 'Alert no longer in the inbox',
-        body: 'The original message was deleted from this phone. Paisa keeps '
+        body: 'The original message was deleted from this phone. My Paisa keeps '
             'only the parsed transaction — never the text.',
       ),
     OriginalSmsStatus.noPermission => (

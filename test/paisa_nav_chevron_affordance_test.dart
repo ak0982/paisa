@@ -680,9 +680,9 @@ void main() {
     });
   });
 
-  // ── Moves / GroupedTransactionList ───────────────────────────────────────
+  // ── Transactions / GroupedTransactionList ───────────────────────────────────────
 
-  group('GroupedTransactionList (Moves) chevrons', () {
+  group('GroupedTransactionList (Transactions) chevrons', () {
     testWidgets('rows show nav chevron', (tester) async {
       await pumpChild(
         tester,
@@ -867,7 +867,8 @@ void main() {
       expect(tappableRowHasChevron(tester, 'Food'), isTrue);
     });
 
-    testWidgets('budget row Semantics is Edit … budget button', (tester) async {
+    testWidgets('budget row Semantics includes Edit … budget button',
+        (tester) async {
       final now = DateTime.now();
       final store = FinanceStore()
         ..seedTransactions([
@@ -885,6 +886,10 @@ void main() {
 
       expect(
         semanticsButtonWhoseLabel((l) => l == 'Edit Shopping budget'),
+        findsOneWidget,
+      );
+      expect(
+        semanticsButtonWhoseLabel((l) => l == 'Shopping transactions'),
         findsOneWidget,
       );
     });
@@ -915,16 +920,24 @@ void main() {
 
       expect(tappableRowHasChevron(tester, 'Food'), isTrue);
       expect(tappableRowHasChevron(tester, 'Shopping'), isTrue);
-      expect(chevrons(), findsNWidgets(2));
+      // Full envelope list always shows every budgetable category.
+      expect(
+        chevrons(),
+        findsNWidgets(FinanceStore.budgetableCategories.length),
+      );
     });
 
-    testWidgets('empty budgets show no chevrons', (tester) async {
+    testWidgets('empty spend still shows envelope chevrons', (tester) async {
       await pumpChild(
         tester,
         const BudgetsScreen(),
         store: FinanceStore(),
       );
-      expect(chevrons(), findsNothing);
+      expect(
+        chevrons(),
+        findsNWidgets(FinanceStore.budgetableCategories.length),
+      );
+      expect(find.text('Set plan'), findsWidgets);
     });
   });
 
@@ -950,7 +963,7 @@ void main() {
             isCredit: false,
             category: SpendCategory.food,
             merchant: 'ReportSwiggy',
-            timestamp: DateTime(now.year, now.month, 6, 12),
+            timestamp: dummyElapsedMonth(day: 6, hour: 12),
           ),
         ]);
       await pumpChild(tester, const ReportsScreen(), store: store);
@@ -979,7 +992,7 @@ void main() {
             isCredit: true,
             category: SpendCategory.income,
             merchant: 'Acme Payroll',
-            timestamp: DateTime(now.year, now.month, 2, 10),
+            timestamp: dummyElapsedMonth(day: 2, hour: 10),
           ),
           tx(
             id: 'food',
@@ -987,7 +1000,7 @@ void main() {
             isCredit: false,
             category: SpendCategory.food,
             merchant: 'Cafe',
-            timestamp: DateTime(now.year, now.month, 3, 10),
+            timestamp: dummyElapsedMonth(day: 3, hour: 10),
           ),
         ]);
 

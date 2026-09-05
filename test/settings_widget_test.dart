@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:paisa_app/models/category_info.dart';
@@ -19,6 +20,13 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    PackageInfo.setMockInitialValues(
+      appName: 'My Paisa',
+      packageName: 'com.paisa.paisa_app',
+      version: '1.0.1',
+      buildNumber: '2020',
+      buildSignature: '',
+    );
     settings = await AppSettings.load();
   });
 
@@ -69,7 +77,7 @@ void main() {
       await tester.tap(find.text('Help & Support'));
       await tester.pumpAndSettle();
 
-      expect(find.text('How does Paisa detect transactions?'), findsOneWidget);
+      expect(find.text('How does My Paisa detect transactions?'), findsOneWidget);
       expect(find.byType(HelpSupportScreen), findsOneWidget);
     });
 
@@ -118,6 +126,7 @@ void main() {
 
       expect(find.text('Mask merchant names'), findsOneWidget);
       expect(find.text('Clear local data'), findsOneWidget);
+      expect(find.text('Privacy policy'), findsOneWidget);
     });
 
     testWidgets('U26 Privacy mask toggle updates settings', (tester) async {
@@ -150,19 +159,24 @@ void main() {
       expect(find.text('Why is SMS permission required?'), findsOneWidget);
       expect(find.text('How do I refresh my data?'), findsOneWidget);
       expect(find.text('Are personal chats read?'), findsOneWidget);
+      expect(
+        find.textContaining('we do not claim we never read SMS'),
+        findsOneWidget,
+      );
       expect(find.text('support@paisa.app'), findsOneWidget);
+      expect(find.text('Privacy policy'), findsOneWidget);
     });
 
     testWidgets('U29 Help screen shows version footer', (tester) async {
       await pump(tester, const HelpSupportScreen());
 
       await tester.scrollUntilVisible(
-        find.text('Paisa · version 1.0.0'),
+        find.text('My Paisa · version 1.0.1'),
         120,
         scrollable: find.byType(Scrollable),
       );
 
-      expect(find.text('Paisa · version 1.0.0'), findsOneWidget);
+      expect(find.text('My Paisa · version 1.0.1'), findsOneWidget);
     });
 
     testWidgets('U30 TransactionRow shows full merchant by default',

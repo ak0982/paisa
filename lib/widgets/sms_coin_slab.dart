@@ -148,7 +148,7 @@ class _TransactionCoinSlabState extends State<TransactionCoinSlab>
           style: PaisaTheme.sora(size: 17, weight: FontWeight.w700),
         ),
         content: Text(
-          'Remove this manually added move from Paisa. This cannot be undone.',
+          'Remove this manually added move from My Paisa. This cannot be undone.',
           style: PaisaTheme.manrope(size: 13.5, color: PaisaColors.muted),
         ),
         actions: [

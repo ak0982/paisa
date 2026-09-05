@@ -617,12 +617,22 @@ void main() {
     });
 
     test('S63 Single-day range boundary', () {
-      final day = dummyNowMonth(day: 7);
-      final report = store.buildReport(
-        DateTime(day.year, day.month, day.day),
-        DateTime(day.year, day.month, day.day, 23, 59, 59),
-      );
-      expect(report.transactionCount, 2); // Ola + Zomato
+      final day = dummyElapsedMonth(day: 7);
+      final start = DateTime(day.year, day.month, day.day);
+      final end = DateTime(day.year, day.month, day.day, 23, 59, 59);
+      final report = store.buildReport(start, end);
+      final onDay = store.transactions
+          .where(
+            (t) =>
+                t.timestamp.year == day.year &&
+                t.timestamp.month == day.month &&
+                t.timestamp.day == day.day,
+          )
+          .length;
+      // buildReport must include every txn on that local calendar day.
+      expect(report.transactionCount, onDay);
+      // Ola + Zomato are fixture-anchored to day 7 (clamped when today < 7).
+      expect(onDay, greaterThanOrEqualTo(2));
     });
 
     test('S64 Bank accounts deduplicated', () {
@@ -631,9 +641,12 @@ void main() {
       expect(masks.length, store.bankAccounts().length);
     });
 
-    test('S65 Budgets auto-generated from spending', () {
-      expect(store.budgets, isNotEmpty);
-      expect(store.budgets.first.spent, greaterThan(0));
+    test('S65 Budgets list all plan categories with spend', () {
+      expect(
+        store.budgets.length,
+        FinanceStore.budgetableCategories.length,
+      );
+      expect(store.budgets.any((b) => b.spent > 0), isTrue);
     });
   });
 

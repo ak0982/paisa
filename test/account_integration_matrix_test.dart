@@ -2520,7 +2520,7 @@ List<_Case> _liveInboxCornerMatrix() {
 }
 
 /// UI / display / aggregation: formatInr 2dp, You stickers, drilldown vs
-/// Moves, category chip %, CCBP not folded into CC, remaining live-inbox
+/// Transactions, category chip %, CCBP not folded into CC, remaining live-inbox
 /// templates. These lock what every screen *shows*, not only what the parser
 /// extracts.
 List<_Case> _displayAggregationMatrix() {

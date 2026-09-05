@@ -30,7 +30,9 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace "com.paisa.paisa_app"
-    compileSdk flutter.compileSdkVersion
+    // Play requires targetSdk 35+ for new apps/updates (2025+). Pin above the
+    // Flutter 3.19 defaults (compile 34 / target 33 / min 19) so submission stays valid.
+    compileSdk 35
     ndkVersion "25.1.8937393"
 
     compileOptions {
@@ -51,8 +53,9 @@ android {
         applicationId "com.paisa.paisa_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
-        minSdkVersion flutter.minSdkVersion
-        targetSdkVersion flutter.targetSdkVersion
+        // minSdk 21 matches flutter_launcher_icons and current Flutter plugin floors.
+        minSdkVersion 21
+        targetSdkVersion 35
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
     }

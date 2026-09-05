@@ -77,7 +77,7 @@ void main() {
 
     testWidgets('JUMP applies inclusive custom range and updates KPIs',
         (tester) async {
-      final day = dummyNowMonth(day: 5, hour: 13, minute: 20);
+      final day = dummyElapsedMonth(day: 5, hour: 13, minute: 20);
       final store = FinanceStore()
         ..seedTransactions([
           dummyTxn(
@@ -104,15 +104,15 @@ void main() {
       await tester.tap(find.text('Custom'));
       await tester.pumpAndSettle();
 
-      // Range mode is preselected; switch to Day and pick the 5th.
+      // Range mode is preselected; switch to Day and pick the txn day.
       await tester.tap(find.text('DAY'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('5').first);
+      await tester.tap(find.text('${day.day}').first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('JUMP'));
       await tester.pumpAndSettle();
 
-      final label = DateFormat('d MMM yyyy').format(DateTime(day.year, day.month, 5));
+      final label = DateFormat('d MMM yyyy').format(day);
       expect(find.textContaining(label), findsWidgets);
       expect(find.text('Swiggy'), findsWidgets);
       expect(find.text('Jio Recharge'), findsNothing);

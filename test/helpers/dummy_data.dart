@@ -64,6 +64,33 @@ DateTime dummyNowMonth({
   );
 }
 
+/// Like [dummyNowMonth] but clamps [day] to today when [monthsAgo] is 0.
+///
+/// Reports / Budget "This month" presets end at EOD today (not month-end), so
+/// fixtures used for those screens must not land on future calendar days.
+DateTime dummyElapsedMonth({
+  int monthsAgo = 0,
+  int day = 1,
+  int hour = 12,
+  int minute = 0,
+}) {
+  final now = DateTime.now();
+  final first = DateTime(now.year, now.month - monthsAgo, 1);
+  final lastDay = DateTime(first.year, first.month + 1, 0).day;
+  final cap = monthsAgo == 0 ? now.day : lastDay;
+  final d = day.clamp(1, lastDay).clamp(1, cap);
+  return DateTime(first.year, first.month, d, hour, minute);
+}
+
+/// Inclusive Reports/Budget "This month" window — mirrors [FinanceStore.reportsThisMonthRange].
+(DateTime start, DateTime end) reportsMonthBounds() {
+  final now = DateTime.now();
+  return (
+    DateTime(now.year, now.month, 1),
+    DateTime(now.year, now.month, now.day, 23, 59, 59, 999),
+  );
+}
+
 /// Inclusive start / end of the calendar month [monthsAgo] before now.
 (DateTime start, DateTime end) dummyMonthBounds({int monthsAgo = 0}) {
   final start = dummyNowMonth(monthsAgo: monthsAgo, day: 1);
@@ -83,7 +110,7 @@ List<Transaction> dummyTransactionHistory() {
       amount: 486,
       isCredit: false,
       category: SpendCategory.food,
-      timestamp: dummyNowMonth(day: 5, hour: 13, minute: 20),
+      timestamp: dummyElapsedMonth(day: 5, hour: 13, minute: 20),
     ),
     dummyTxn(
       id: '2',
@@ -93,7 +120,7 @@ List<Transaction> dummyTransactionHistory() {
       category: SpendCategory.shopping,
       bank: 'SBI',
       maskedAccount: '••••8890',
-      timestamp: dummyNowMonth(day: 6, hour: 10),
+      timestamp: dummyElapsedMonth(day: 6, hour: 10),
     ),
     dummyTxn(
       id: '3',
@@ -101,7 +128,7 @@ List<Transaction> dummyTransactionHistory() {
       amount: 68000,
       isCredit: true,
       category: SpendCategory.income,
-      timestamp: dummyNowMonth(day: 1, hour: 9),
+      timestamp: dummyElapsedMonth(day: 1, hour: 9),
     ),
     dummyTxn(
       id: '4',
@@ -110,7 +137,7 @@ List<Transaction> dummyTransactionHistory() {
       isCredit: false,
       category: SpendCategory.emi,
       accountKind: AccountKind.loan,
-      timestamp: dummyNowMonth(day: 3, hour: 8),
+      timestamp: dummyElapsedMonth(day: 3, hour: 8),
     ),
     dummyTxn(
       id: '5',
@@ -120,7 +147,7 @@ List<Transaction> dummyTransactionHistory() {
       category: SpendCategory.travel,
       bank: 'Axis',
       maskedAccount: '••••2015',
-      timestamp: dummyNowMonth(day: 7, hour: 18, minute: 30),
+      timestamp: dummyElapsedMonth(day: 7, hour: 18, minute: 30),
     ),
     dummyTxn(
       id: '6',
@@ -198,7 +225,7 @@ List<Transaction> dummyTransactionHistory() {
       amount: 650,
       isCredit: false,
       category: SpendCategory.food,
-      timestamp: dummyNowMonth(day: 7, hour: 20),
+      timestamp: dummyElapsedMonth(day: 7, hour: 20),
     ),
   ];
 }

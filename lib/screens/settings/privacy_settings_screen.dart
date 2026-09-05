@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
+import '../../constants/legal.dart';
 import '../../providers/app_settings.dart';
 import '../../providers/finance_store.dart';
+import '../../services/external_link.dart';
 import '../../services/screen_security.dart';
 import '../../theme/paisa_colors.dart';
 import '../../theme/paisa_theme.dart';
@@ -38,7 +41,7 @@ class PrivacySettingsScreen extends StatelessWidget {
                   SettingsToggleRow(
                     title: 'Block screenshots',
                     subtitle:
-                        'Hide Paisa from screenshots, screen recording and the recent-apps preview.',
+                        'Hide My Paisa from screenshots, screen recording and the recent-apps preview.',
                     value: settings.blockScreenshots,
                     onChanged: (value) async {
                       await settings.setBlockScreenshots(value);
@@ -65,7 +68,7 @@ class PrivacySettingsScreen extends StatelessWidget {
                               const SizedBox(height: 3),
                               Text(
                                 smsGranted
-                                    ? 'Granted — Paisa can read bank alert SMS on this device.'
+                                    ? 'Granted — My Paisa can read bank alert SMS on this device.'
                                     : 'Not granted — transactions cannot be auto-detected.',
                                 style: PaisaTheme.manrope(
                                   size: 12,
@@ -120,9 +123,29 @@ class PrivacySettingsScreen extends StatelessWidget {
                   SettingsActionRow(
                     title: 'Clear local data',
                     subtitle:
-                        'Delete all transactions (including minted moves) and scan history from this device. Your SMS inbox is not modified.',
+                        'Delete all transactions (including minted transactions) and scan history from this device. Your SMS inbox is not modified.',
                     destructive: true,
                     onTap: () => _confirmClearData(context, store),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Legal',
+                style: PaisaTheme.sora(size: 14, weight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              SettingsCard(
+                children: [
+                  SettingsActionRow(
+                    title: 'Privacy policy',
+                    subtitle: 'Open the hosted privacy policy in your browser',
+                    onTap: () => _openPrivacyPolicy(context),
+                    trailing: const Icon(
+                      Icons.open_in_new_rounded,
+                      size: 18,
+                      color: PaisaColors.primary,
+                    ),
                   ),
                 ],
               ),
@@ -130,6 +153,22 @@ class PrivacySettingsScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _openPrivacyPolicy(BuildContext context) async {
+    final opened = await const ExternalLink().open(LegalUrls.privacyPolicyUrl);
+    if (!context.mounted) return;
+    if (opened) return;
+    await Clipboard.setData(
+      const ClipboardData(text: LegalUrls.privacyPolicyUrl),
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Privacy policy URL copied — open it in a browser'),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -145,7 +184,7 @@ class PrivacySettingsScreen extends StatelessWidget {
           style: PaisaTheme.sora(size: 17, weight: FontWeight.w700),
         ),
         content: Text(
-          'This removes all transactions — including moves you minted — and scan history from Paisa. Your SMS messages will not be deleted.',
+          'This removes all transactions — including transactions you minted — and scan history from My Paisa. Your SMS messages will not be deleted.',
           style: PaisaTheme.manrope(size: 13.5, color: PaisaColors.muted),
         ),
         actions: [

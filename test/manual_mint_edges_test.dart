@@ -59,7 +59,7 @@ void main() {
     );
   }
 
-  // Mirrors Moves screen flow predicates (private enum in transactions_screen).
+  // Mirrors Transactions screen flow predicates (private enum in transactions_screen).
   bool matchesIn(models.Transaction t) =>
       t.isCredit && t.accountKind == AccountKind.savings;
   bool matchesOut(models.Transaction t) =>
@@ -589,7 +589,7 @@ void main() {
     });
   });
 
-  group('Moves filters + search', () {
+  group('Transactions filters + search', () {
     late FinanceStore store;
     late models.Transaction cashOut;
     late models.Transaction cashIn;
@@ -666,7 +666,7 @@ void main() {
         isCredit: false,
         now: DateTime(2026, 8, 27),
       );
-      // Same heuristic as Moves: EMI debit counts as loan filter.
+      // Same heuristic as Transactions: EMI debit counts as loan filter.
       expect(isLoan(emi), isTrue);
     });
 

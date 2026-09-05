@@ -216,7 +216,9 @@ void main() {
 
       expect(find.text('Where money went'), findsOneWidget);
 
-      await tester.tap(find.text('FOOD'));
+      final foodChip = find.text('FOOD');
+      await tester.ensureVisible(foodChip.first);
+      await tester.tap(foodChip.first);
       await tester.pumpAndSettle();
 
       expect(find.byType(CategoryTransactionsScreen), findsOneWidget);
@@ -238,7 +240,9 @@ void main() {
 
       expect(find.text('Where money came from'), findsOneWidget);
 
-      await tester.tap(find.text('Salary'));
+      final salaryRow = find.text('Salary');
+      await tester.ensureVisible(salaryRow.first);
+      await tester.tap(salaryRow.first);
       await tester.pumpAndSettle();
 
       expect(find.byType(FilteredTransactionsScreen), findsOneWidget);

@@ -50,7 +50,7 @@ class WelcomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 22),
                   Text(
-                    'Paisa',
+                    'My Paisa',
                     style: PaisaTheme.sora(
                       size: 30,
                       weight: FontWeight.w800,

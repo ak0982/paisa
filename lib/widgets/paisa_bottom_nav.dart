@@ -14,7 +14,7 @@ class PaisaBottomNav extends StatelessWidget {
 
   static const _labels = [
     'HOME',
-    'MOVES',
+    'TRANSACTIONS',
     'BUDGET',
     'STATS',
     'YOU',
@@ -68,15 +68,19 @@ class PaisaBottomNav extends StatelessWidget {
                           ),
                         ),
                       const SizedBox(height: 5),
-                      Text(
-                        _labels[i],
-                        style: PaisaTheme.manrope(
-                          size: 9.5,
-                          weight: FontWeight.w700,
-                          color: active
-                              ? PaisaColors.primary
-                              : PaisaColors.navInactive,
-                          letterSpacing: 0.4,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          _labels[i],
+                          maxLines: 1,
+                          style: PaisaTheme.manrope(
+                            size: 9.5,
+                            weight: FontWeight.w700,
+                            color: active
+                                ? PaisaColors.primary
+                                : PaisaColors.navInactive,
+                            letterSpacing: 0.4,
+                          ),
                         ),
                       ),
                     ],

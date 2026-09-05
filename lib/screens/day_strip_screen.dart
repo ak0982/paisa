@@ -887,7 +887,7 @@ class _EmptyDay extends StatelessWidget {
                 shadow: true,
                 shadowOffset: 4,
                 child: Text(
-                  'MINT A MOVE',
+                  'MINT A TRANSACTION',
                   textAlign: TextAlign.center,
                   style: PaisaTheme.label(
                     size: 12,

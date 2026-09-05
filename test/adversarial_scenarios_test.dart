@@ -34,7 +34,8 @@ import 'helpers/dummy_data.dart';
 /// These are intentionally hostile: they encode how an Indian user can break
 /// spend/income, accounts, budgets, and filters — not just happy paths.
 void main() {
-  final month = DateTime(DateTime.now().year, DateTime.now().month, 12, 14);
+  final now = DateTime.now();
+  final month = DateTime(now.year, now.month, now.day, 14);
 
   models.Transaction tx({
     required String id,
@@ -633,7 +634,7 @@ void main() {
           merchant: 'Zomato',
           bank: 'HDFC',
           mask: '••••4321',
-          offset: const Duration(days: 1),
+          offset: const Duration(hours: 2),
         ),
       ]);
       await store.setCategoryBudgetLimit(SpendCategory.food, 3000);
@@ -756,7 +757,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    testWidgets('bottom nav exposes HOME/MOVES/BUDGET/STATS/YOU', (tester) async {
+    testWidgets('bottom nav exposes HOME/TRANSACTIONS/BUDGET/STATS/YOU', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: PaisaTheme.dark(),
@@ -770,7 +771,7 @@ void main() {
       );
       await tester.pump();
 
-      for (final label in ['HOME', 'MOVES', 'BUDGET', 'STATS', 'YOU']) {
+      for (final label in ['HOME', 'TRANSACTIONS', 'BUDGET', 'STATS', 'YOU']) {
         expect(find.text(label), findsOneWidget);
       }
     });

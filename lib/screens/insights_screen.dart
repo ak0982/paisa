@@ -260,7 +260,7 @@ class _LedgerCoinHero extends StatelessWidget {
           PaisaCoinFace(
             outShare: paisaCoinOutShare(spent, income),
             hasFlow: spent + income > 0,
-            topLegend: moves > 0 ? '$moves MOVES' : '',
+            topLegend: moves > 0 ? '$moves TRANSACTIONS' : '',
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [

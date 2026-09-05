@@ -42,13 +42,33 @@ class FilteredTransactionsScreen extends StatefulWidget {
   }) : assert(match != null || resolve != null);
 
   /// Debit transactions in [category] (Insights or report range).
+  ///
+  /// When [alignWithSpendKpi] is true and [range] is set, uses the same spend
+  /// filter as Budget envelopes (`_spendTxns` / `countsTowardSpend`).
   factory FilteredTransactionsScreen.category({
     Key? key,
     required SpendCategory category,
     DateTimeRange? range,
     String? periodLabel,
+    bool alignWithSpendKpi = false,
   }) {
     final info = CategoryInfo.forCategory(category);
+    if (alignWithSpendKpi && range != null) {
+      return FilteredTransactionsScreen(
+        key: key,
+        title: info.label,
+        emoji: info.emoji,
+        tintBg: info.tintBg,
+        totalLabel: 'Total spent',
+        countSingular: 'purchase',
+        countPlural: 'purchases',
+        emptyTitle: 'No ${info.label.toLowerCase()} spending',
+        emptySubtitleTemplate: 'Nothing in this category for {period}.',
+        range: range,
+        periodLabel: periodLabel,
+        resolve: (store) => store.budgetSpendTransactions(category, range),
+      );
+    }
     return FilteredTransactionsScreen(
       key: key,
       title: info.label,

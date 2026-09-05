@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Color, DateTimeRange;
 import 'package:flutter/services.dart' show PlatformException;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/bank_account.dart';
 import '../models/budget.dart';
@@ -55,7 +56,7 @@ class FinanceStore extends ChangeNotifier {
   Future<ScanResult>? _activeSync;
   Future<void>? _initFuture;
 
-  /// Progress-only ticks (throttled). Does not rebuild You/Moves/Stats data.
+  /// Progress-only ticks (throttled). Does not rebuild You/Transactions/Stats data.
   final _scanProgressTick = ChangeNotifier();
 
   int? _lastProgressNotifyMs;
@@ -94,10 +95,12 @@ class FinanceStore extends ChangeNotifier {
     _transactions = await _db.getAll();
     _discoveredAccounts = await _db.getDiscoveredAccounts();
     _userBudgetLimits = _parseBudgetLimits(await _db.getCategoryBudgets());
+    _userYearlyBudgetLimits =
+        _parseBudgetLimits(await _db.getCategoryBudgetsYearly());
+    await _loadBudgetPeriodPref();
     _invalidateLedgerCache();
-    // Seed fixed limits for active categories that don't have one yet, so the
-    // Budgets tab is usable before the next SMS sync (ISSUE-5).
-    await ensureDefaultBudgetsSeeded();
+    // Plans default to ₹0 until the user sets them. Existing seeded/user
+    // limits already loaded from `category_budgets` are kept as-is.
     _loading = false;
     notifyListeners();
   }
@@ -138,10 +141,61 @@ class FinanceStore extends ChangeNotifier {
     _scanProgressTick.notifyListeners();
   }
 
+  /// Spend categories in Budget envelopes — same debit spend pool as Reports KPIs
+  /// (`buildReport` / `_spendTxns`). Excludes [SpendCategory.income] (credits).
+  static const budgetableCategories = <SpendCategory>[
+    SpendCategory.food,
+    SpendCategory.travel,
+    SpendCategory.shopping,
+    SpendCategory.bills,
+    SpendCategory.entertainment,
+    SpendCategory.health,
+    SpendCategory.emi,
+    SpendCategory.atm,
+    SpendCategory.other,
+    SpendCategory.transfer,
+  ];
+
+  static const _budgetPeriodKey = 'budget_period';
+
+  /// Active envelope window on the Budget tab (Monthly vs Yearly).
+  BudgetPeriod _budgetPeriod = BudgetPeriod.monthly;
+
+  BudgetPeriod get budgetPeriod => _budgetPeriod;
+
+  Future<void> _loadBudgetPeriodPref() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_budgetPeriodKey);
+      if (raw == BudgetPeriod.yearly.name) {
+        _budgetPeriod = BudgetPeriod.yearly;
+      } else {
+        _budgetPeriod = BudgetPeriod.monthly;
+      }
+    } catch (_) {
+      _budgetPeriod = BudgetPeriod.monthly;
+    }
+  }
+
+  /// Switches Budget tab between monthly and yearly envelopes; remembers choice.
+  Future<void> setBudgetPeriod(BudgetPeriod period) async {
+    if (_budgetPeriod == period) return;
+    _budgetPeriod = period;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_budgetPeriodKey, period.name);
+    } catch (_) {}
+  }
+
   /// User-set monthly spend limits per category (ISSUE-5). A category present
-  /// here is the user's explicit intent; absent categories fall back to
-  /// [suggestedBudgetLimit]. Persisted in the `category_budgets` table.
+  /// here is stored plan intent (including ₹0). Absent categories default to
+  /// plan ₹0 until the user sets one. Persisted in `category_budgets`.
   Map<SpendCategory, double> _userBudgetLimits = {};
+
+  /// User-set yearly spend limits — independent of [_userBudgetLimits].
+  /// Persisted in `category_budgets_yearly`.
+  Map<SpendCategory, double> _userYearlyBudgetLimits = {};
 
   Map<SpendCategory, double> _parseBudgetLimits(Map<String, double> raw) {
     final result = <SpendCategory, double>{};
@@ -156,27 +210,98 @@ class FinanceStore extends ChangeNotifier {
     return result;
   }
 
-  /// Persisted monthly limit for [category], or null if none stored yet.
-  double? userBudgetLimit(SpendCategory category) =>
-      _userBudgetLimits[category];
+  Map<SpendCategory, double> _limitsFor(BudgetPeriod period) =>
+      period == BudgetPeriod.yearly
+          ? _userYearlyBudgetLimits
+          : _userBudgetLimits;
 
-  /// Saves an explicit monthly limit for [category] (ISSUE-5).
+  /// Persisted limit for [category] in [period] (defaults to active tab period).
+  double? userBudgetLimit(
+    SpendCategory category, {
+    BudgetPeriod? period,
+  }) =>
+      _limitsFor(period ?? _budgetPeriod)[category];
+
+  /// Saves an explicit plan for [category] in [period] (defaults to active tab).
+  /// ₹0 is allowed and persists. Monthly and yearly rows are independent.
   Future<void> setCategoryBudgetLimit(
     SpendCategory category,
-    double limit,
-  ) async {
-    final clamped = limit < 100 ? 100.0 : limit;
-    await _db.setCategoryBudget(category.name, clamped);
-    _userBudgetLimits[category] = clamped;
+    double limit, {
+    BudgetPeriod? period,
+  }) async {
+    final clamped = limit < 0 ? 0.0 : limit;
+    final p = period ?? _budgetPeriod;
+    if (p == BudgetPeriod.yearly) {
+      await _db.setCategoryBudgetYearly(category.name, clamped);
+      _userYearlyBudgetLimits[category] = clamped;
+    } else {
+      await _db.setCategoryBudget(category.name, clamped);
+      _userBudgetLimits[category] = clamped;
+    }
     notifyListeners();
   }
 
-  /// Drops the stored limit so the next [ensureDefaultBudgetsSeeded] /
-  /// [budgets] pass can re-suggest from history.
-  Future<void> clearCategoryBudgetLimit(SpendCategory category) async {
-    await _db.deleteCategoryBudget(category.name);
-    _userBudgetLimits.remove(category);
+  /// Drops the stored plan for [period] so envelopes show limit 0 until set.
+  Future<void> clearCategoryBudgetLimit(
+    SpendCategory category, {
+    BudgetPeriod? period,
+  }) async {
+    final p = period ?? _budgetPeriod;
+    if (p == BudgetPeriod.yearly) {
+      await _db.deleteCategoryBudgetYearly(category.name);
+      _userYearlyBudgetLimits.remove(category);
+    } else {
+      await _db.deleteCategoryBudget(category.name);
+      _userBudgetLimits.remove(category);
+    }
     notifyListeners();
+  }
+
+  /// Clears every stored plan for [period] (defaults to the active tab).
+  Future<void> clearAllBudgetLimits({BudgetPeriod? period}) async {
+    final p = period ?? _budgetPeriod;
+    if (p == BudgetPeriod.yearly) {
+      await _db.clearCategoryBudgetsYearly();
+      _userYearlyBudgetLimits = {};
+    } else {
+      await _db.clearCategoryBudgets();
+      _userBudgetLimits = {};
+    }
+    notifyListeners();
+  }
+
+  /// True when any yearly envelope already has a stored plan (including ₹0).
+  bool get hasAnyYearlyBudgetPlan => _userYearlyBudgetLimits.isNotEmpty;
+
+  /// Copies each monthly plan ×12 into yearly. When [overwrite] is false and
+  /// a yearly row already exists, that category is left unchanged.
+  ///
+  /// Returns how many yearly rows were written.
+  Future<int> copyMonthlyPlansToYearly({bool overwrite = true}) async {
+    var written = 0;
+    for (final entry in _userBudgetLimits.entries) {
+      if (!overwrite && _userYearlyBudgetLimits.containsKey(entry.key)) {
+        continue;
+      }
+      final yearly = entry.value * 12;
+      await _db.setCategoryBudgetYearly(entry.key.name, yearly);
+      _userYearlyBudgetLimits[entry.key] = yearly;
+      written++;
+    }
+    if (written > 0) notifyListeners();
+    return written;
+  }
+
+  /// Spend-KPI transactions for [category] in [range] — same filter as envelope
+  /// Spent (`_spendTxns` / `countsTowardSpend` + self-transfer pairing).
+  List<Transaction> budgetSpendTransactions(
+    SpendCategory category,
+    DateTimeRange range,
+  ) {
+    final items = transactionsInRange(range.start, range.end);
+    return _spendTxns(items)
+        .where((t) => t.category == category)
+        .toList(growable: false);
   }
 
   /// Round to the nearest ₹100, floored at ₹1,000.
@@ -185,13 +310,24 @@ class FinanceStore extends ChangeNotifier {
     return rounded < 1000 ? 1000.0 : rounded;
   }
 
-  /// Suggested monthly limit for [category] from prior months' spend.
-  ///
-  /// Uses the median of the last up-to-3 *complete* months × 1.1 so the
-  /// suggestion does not grow with the current month's own spend (the circular
-  /// bug in ISSUE-5). Falls back to current-month spend × 1.1 only when there
-  /// is no history yet — callers should seed that once so it stays fixed.
-  double suggestedBudgetLimit(SpendCategory category) {
+  /// Suggested plan for [category] from history (monthly median × 1.1, or
+  /// prior-year spend × 1.1 / 12× monthly suggestion for yearly).
+  double suggestedBudgetLimit(
+    SpendCategory category, {
+    BudgetPeriod? period,
+  }) {
+    final p = period ?? _budgetPeriod;
+    if (p == BudgetPeriod.yearly) {
+      final lastYear = DateTime.now().year - 1;
+      final prior = _categorySpendInYear(category, lastYear);
+      if (prior > 0) return roundBudgetLimit(prior * 11 / 10);
+      final monthlyHint = suggestedBudgetLimit(
+        category,
+        period: BudgetPeriod.monthly,
+      );
+      return roundBudgetLimit(monthlyHint * 12);
+    }
+
     final history = <double>[];
     final anchor = currentMonth;
     for (var i = 1; i <= 3; i++) {
@@ -217,6 +353,13 @@ class FinanceStore extends ChangeNotifier {
       (t) => t.timestamp.year == month.year && t.timestamp.month == month.month,
     );
     return _spendTxns(inMonth.toList())
+        .where((t) => t.category == category)
+        .fold(0.0, (sum, t) => sum + t.amount);
+  }
+
+  double _categorySpendInYear(SpendCategory category, int year) {
+    final inYear = _transactions.where((t) => t.timestamp.year == year);
+    return _spendTxns(inYear.toList())
         .where((t) => t.category == category)
         .fold(0.0, (sum, t) => sum + t.amount);
   }
@@ -249,6 +392,9 @@ class FinanceStore extends ChangeNotifier {
     return out;
   }
 
+  /// Optionally seeds suggested limits for categories with spend history that
+  /// lack a stored plan. Not called on init/sync — plans default to ₹0 until
+  /// the user sets them. Kept for tests / one-off migration.
   Future<void> ensureDefaultBudgetsSeeded() async {
     final categories = {
       ...categorySpending.keys,
@@ -263,7 +409,8 @@ class FinanceStore extends ChangeNotifier {
           category == SpendCategory.transfer) {
         continue;
       }
-      final suggestion = suggestedBudgetLimit(category);
+      final suggestion =
+          suggestedBudgetLimit(category, period: BudgetPeriod.monthly);
       await _db.setCategoryBudget(category.name, suggestion);
       _userBudgetLimits[category] = suggestion;
       changed = true;
@@ -283,6 +430,24 @@ class FinanceStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Seeds an in-memory plan for widget tests without opening SQLite
+  /// (platform/FFI open can hang under [TestWidgetsFlutterBinding]).
+  @visibleForTesting
+  void seedCategoryBudgetLimit(
+    SpendCategory category,
+    double limit, {
+    BudgetPeriod? period,
+  }) {
+    final clamped = limit < 0 ? 0.0 : limit;
+    final p = period ?? _budgetPeriod;
+    if (p == BudgetPeriod.yearly) {
+      _userYearlyBudgetLimits[category] = clamped;
+    } else {
+      _userBudgetLimits[category] = clamped;
+    }
+    notifyListeners();
+  }
+
   /// Seeds in-memory discovered accounts for unit tests / diagnostics only.
   @visibleForTesting
   void seedDiscoveredAccounts(List<DiscoveredAccount> items) {
@@ -296,9 +461,11 @@ class FinanceStore extends ChangeNotifier {
     await _db.clearAll();
     await _db.resetScanState();
     await _db.clearCategoryBudgets();
+    await _db.clearCategoryBudgetsYearly();
     _transactions = [];
     _discoveredAccounts = [];
     _userBudgetLimits = {};
+    _userYearlyBudgetLimits = {};
     _lastSyncedAt = null;
     _scanProgress = null;
     _error = null;
@@ -693,9 +860,8 @@ class FinanceStore extends ChangeNotifier {
       _transactions = await _db.getAll();
       _invalidateLedgerCache();
       _lastSyncedAt = DateTime.now();
-      // ISSUE-5: persist fixed category limits (from history) so they no longer
-      // track the current month's spend. Existing user-set rows are left alone.
-      await ensureDefaultBudgetsSeeded();
+      // Plans stay at stored limits (or ₹0). Do not auto-seed suggestions —
+      // the Budget tab is a user plan surface.
       _loading = false;
       _scanProgress = null;
       _scanProgressTick.notifyListeners();
@@ -1499,6 +1665,61 @@ class FinanceStore extends ChangeNotifier {
     return map;
   }
 
+  /// Calendar-year cashflow transactions (same home filter as monthly).
+  List<Transaction> get currentYearTransactions {
+    final year = DateTime.now().year;
+    return _transactions
+        .where((t) => t.timestamp.year == year && countsOnHome(t))
+        .toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  }
+
+  /// Year-to-date spend per category (current calendar year).
+  Map<SpendCategory, double> get yearlyCategorySpending {
+    final map = <SpendCategory, double>{};
+    for (final t in _spendTxns(currentYearTransactions)) {
+      map[t.category] = (map[t.category] ?? 0) + t.amount;
+    }
+    return map;
+  }
+
+  /// Inclusive end-of-local-day — matches Reports `_endOfDay`.
+  static DateTime _endOfDay(DateTime d) =>
+      DateTime(d.year, d.month, d.day, 23, 59, 59, 999);
+
+  /// Reports preset "This month": 1st of month → end of today.
+  DateTimeRange get reportsThisMonthRange {
+    final now = DateTime.now();
+    return DateTimeRange(
+      start: DateTime(now.year, now.month, 1),
+      end: _endOfDay(now),
+    );
+  }
+
+  /// Reports preset "This year": Jan 1 → end of today.
+  DateTimeRange get reportsThisYearRange {
+    final now = DateTime.now();
+    return DateTimeRange(
+      start: DateTime(now.year, 1, 1),
+      end: _endOfDay(now),
+    );
+  }
+
+  /// Date window for Budget spent / drill-down — mirrors Reports presets.
+  DateTimeRange budgetReportRangeFor(BudgetPeriod period) =>
+      period == BudgetPeriod.yearly
+          ? reportsThisYearRange
+          : reportsThisMonthRange;
+
+  /// Spend report for the Budget period (same math as Reports This month/year).
+  RangeReport budgetReportFor(BudgetPeriod period) {
+    final range = budgetReportRangeFor(period);
+    return buildReport(range.start, range.end);
+  }
+
+  Map<SpendCategory, double> categorySpendingFor(BudgetPeriod period) =>
+      budgetReportFor(period).categorySpending;
+
   Set<SpendCategory> get usedCategories =>
       currentMonthTransactions.map((t) => t.category).toSet();
 
@@ -1553,35 +1774,50 @@ class FinanceStore extends ChangeNotifier {
     return current - prev;
   }
 
-  List<Budget> get budgets {
-    final spending = categorySpending;
-    final categories = <SpendCategory>{
-      ...spending.keys.where(
-        (c) => c != SpendCategory.income && c != SpendCategory.transfer,
-      ),
-      ..._userBudgetLimits.keys,
-    };
-    if (categories.isEmpty) return [];
+  /// Spend plans for every budgetable category in the active Budget period.
+  List<Budget> get budgets => budgetsFor(_budgetPeriod);
 
-    return categories.map((category) {
+  /// Monthly or yearly envelopes — always the full budgetable set (plan 0 ok).
+  List<Budget> budgetsFor(BudgetPeriod period) {
+    final spending = categorySpendingFor(period);
+    final limits = _limitsFor(period);
+    final list = budgetableCategories.map((category) {
       final spent = spending[category] ?? 0.0;
-      final stored = _userBudgetLimits[category];
-      final limit = stored ?? suggestedBudgetLimit(category);
+      final stored = limits[category];
       return Budget(
         category: category,
         spent: spent,
-        limit: limit,
+        limit: stored ?? 0.0,
         isUserSet: stored != null,
       );
-    }).toList()
-      ..sort((a, b) => b.spent.compareTo(a.spent));
+    }).toList();
+
+    // Active rows (spend or a stored plan) first by spent desc, then unset.
+    int rank(Budget b) {
+      if (b.spent > 0 || b.hasStoredPlan || b.limit > 0) return 0;
+      return 1;
+    }
+
+    list.sort((a, b) {
+      final byRank = rank(a).compareTo(rank(b));
+      if (byRank != 0) return byRank;
+      final bySpent = b.spent.compareTo(a.spent);
+      if (bySpent != 0) return bySpent;
+      return a.info.label.compareTo(b.info.label);
+    });
+    return list;
   }
 
   double get totalBudget =>
       budgets.fold(0.0, (sum, b) => sum + b.limit);
 
-  double get budgetSpent =>
-      budgets.fold(0.0, (sum, b) => sum + b.spent);
+  double get budgetSpent => budgetSpentFor(_budgetPeriod);
+
+  double totalBudgetFor(BudgetPeriod period) =>
+      budgetsFor(period).fold(0.0, (sum, b) => sum + b.limit);
+
+  double budgetSpentFor(BudgetPeriod period) =>
+      budgetReportFor(period).spent;
 
   static const _realBanks = {
     'HDFC',
@@ -2225,6 +2461,42 @@ class FinanceStore extends ChangeNotifier {
     return '${months[month.month - 1]} ${month.year}';
   }
 
+  String get currentYearLabel => '${DateTime.now().year}';
+
+  /// Hero / list subtitle for the active Budget period.
+  String get budgetPeriodLabel => _budgetPeriod == BudgetPeriod.yearly
+      ? currentYearLabel
+      : currentMonthLabel;
+
+  /// Inclusive date range for category drill-down from the Budget tab.
+  DateTimeRange get budgetPeriodRange => budgetReportRangeFor(_budgetPeriod);
+
+  /// Days remaining in the active Budget calendar window.
+  int get budgetDaysLeft {
+    final now = DateTime.now();
+    if (_budgetPeriod == BudgetPeriod.yearly) {
+      final end = DateTime(now.year, 12, 31);
+      return end.difference(DateTime(now.year, now.month, now.day)).inDays;
+    }
+    final lastDay = DateTime(now.year, now.month + 1, 0).day;
+    return lastDay - now.day;
+  }
+
+  /// Daily rupees left to stay on plan for the active period (null when N/A).
+  ///
+  /// Only when there is remaining headroom under a positive total plan and at
+  /// least one day left. Prefer monthly pacing on the Budget hero.
+  double? get budgetDailyPaceLeft {
+    final planned = totalBudget;
+    final spent = budgetSpent;
+    if (planned <= 0) return null;
+    if (Budget.isOverAggregate(planned: planned, spent: spent)) return null;
+    final left = (planned - spent).clamp(0.0, double.infinity);
+    final days = budgetDaysLeft;
+    if (days <= 0 || left <= 0) return null;
+    return left / days;
+  }
+
   String get shortMonthLabel {
     final month = currentMonth;
     const months = [
@@ -2239,6 +2511,14 @@ class FinanceStore extends ChangeNotifier {
     final month = currentMonth;
     final start = DateTime(month.year, month.month, 1);
     final end = DateTime(month.year, month.month + 1, 0, 23, 59, 59);
+    return DateTimeRange(start: start, end: end);
+  }
+
+  /// Inclusive date range for the current calendar year.
+  DateTimeRange get currentYearRange {
+    final year = DateTime.now().year;
+    final start = DateTime(year, 1, 1);
+    final end = DateTime(year, 12, 31, 23, 59, 59);
     return DateTimeRange(start: start, end: end);
   }
 }

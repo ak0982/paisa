@@ -523,7 +523,7 @@ class _EmptyHint extends StatelessWidget {
     } else if (denied) {
       headline = 'SMS access is off';
       subtitle =
-          'Paisa needs SMS access to read bank alerts. Enable it in Settings, then tap Scan.';
+          'My Paisa needs SMS access to read bank alerts. Enable it in Settings, then tap Scan.';
     } else if (store.error != null) {
       headline = store.error!;
       subtitle = 'Tap below to try scanning again.';

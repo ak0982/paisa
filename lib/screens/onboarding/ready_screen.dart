@@ -147,7 +147,7 @@ class _ReadyScreenState extends State<ReadyScreen> {
                   const SizedBox(width: 12),
                   _StatTile(
                     value: _scanning ? '…' : '${_result?.totalCount ?? 0}',
-                    label: 'moves',
+                    label: 'transactions',
                   ),
                   const SizedBox(width: 12),
                   _StatTile(

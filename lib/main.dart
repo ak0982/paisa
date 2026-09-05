@@ -207,7 +207,7 @@ class PaisaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Paisa',
+      title: 'My Paisa',
       debugShowCheckedModeBanner: false,
       theme: PaisaTheme.dark(),
       themeMode: ThemeMode.dark,

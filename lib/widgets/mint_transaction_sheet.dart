@@ -12,7 +12,7 @@ import 'neo_surface.dart';
 import 'paisa_coin.dart';
 import 'pulse_calendar_sheet.dart';
 
-/// Opens the Neo-Vault mint sheet to add a manual cash move.
+/// Opens the Neo-Vault mint sheet to add a manual cash transaction.
 ///
 /// [initialDay] seeds the date (Day Strip empty-day CTA passes the selected
 /// day). Returns the new transaction id on save, or null if dismissed.
@@ -203,7 +203,7 @@ class _MintTransactionSheetState extends State<MintTransactionSheet> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          'Mint a move',
+                          'Mint a transaction',
                           style: PaisaTheme.sora(
                             size: 18,
                             weight: FontWeight.w800,
