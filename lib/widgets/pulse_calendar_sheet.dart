@@ -276,13 +276,18 @@ class _PulseCalendarSheetState extends State<PulseCalendarSheet> {
                       letterSpacing: 0.6,
                     ),
                   ),
-                  const Spacer(),
-                  Text(
-                    _selectionLabel,
-                    style: PaisaTheme.manrope(
-                      size: 12,
-                      weight: FontWeight.w700,
-                      color: PaisaColors.mutedCaption,
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      _selectionLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: PaisaTheme.manrope(
+                        size: 12,
+                        weight: FontWeight.w700,
+                        color: PaisaColors.mutedCaption,
+                      ),
                     ),
                   ),
                 ],

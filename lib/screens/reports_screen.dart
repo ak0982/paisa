@@ -29,18 +29,36 @@ enum _RangePreset {
 }
 
 class ReportsScreen extends StatefulWidget {
-  const ReportsScreen({super.key});
+  const ReportsScreen({super.key, this.initialRange});
+
+  /// When set, opens Reports on that inclusive calendar range (Custom preset).
+  final DateTimeRange? initialRange;
 
   @override
   State<ReportsScreen> createState() => _ReportsScreenState();
 }
 
 class _ReportsScreenState extends State<ReportsScreen> {
-  _RangePreset _preset = _RangePreset.thisMonth;
+  late _RangePreset _preset;
   DateTimeRange? _customRange;
   TransactionSort _txnSort = TransactionSort.defaultSort;
 
   static final _dayFmt = DateFormat('d MMM yyyy');
+
+  @override
+  void initState() {
+    super.initState();
+    final seed = widget.initialRange;
+    if (seed != null) {
+      _customRange = DateTimeRange(
+        start: DateTime(seed.start.year, seed.start.month, seed.start.day),
+        end: DateTime(seed.end.year, seed.end.month, seed.end.day),
+      );
+      _preset = _RangePreset.custom;
+    } else {
+      _preset = _RangePreset.thisMonth;
+    }
+  }
 
   DateTimeRange _resolveRange() {
     final now = DateTime.now();

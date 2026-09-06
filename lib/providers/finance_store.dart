@@ -19,6 +19,9 @@ import '../services/sms/sms_reader_service.dart';
 import '../services/sms/transaction_enrichment.dart';
 import '../theme/paisa_colors.dart';
 
+/// Period chips on Stats Spend Spiral (rolling windows + custom range).
+enum StatsSpiralPeriod { oneMonth, sixMonths, oneYear, allTime, custom }
+
 class ScanResult {
   const ScanResult({
     required this.newCount,
@@ -1128,13 +1131,23 @@ class FinanceStore extends ChangeNotifier {
         .map((e) => (e.key, e.value))
         .toList();
 
-    final byDay = <String, double>{};
+    final byDay = <DateTime, double>{};
     for (final t in debits) {
-      final key = '${t.timestamp.year}-${t.timestamp.month}-${t.timestamp.day}';
+      final key = DateTime(
+        t.timestamp.year,
+        t.timestamp.month,
+        t.timestamp.day,
+      );
       byDay[key] = (byDay[key] ?? 0) + t.amount;
     }
-    final highestDaySpend =
-        byDay.isEmpty ? 0.0 : byDay.values.reduce((a, b) => a > b ? a : b);
+    DateTime? highestDay;
+    var highestDaySpend = 0.0;
+    for (final e in byDay.entries) {
+      if (e.value > highestDaySpend) {
+        highestDaySpend = e.value;
+        highestDay = e.key;
+      }
+    }
 
     final report = RangeReport(
       start: start,
@@ -1142,11 +1155,13 @@ class FinanceStore extends ChangeNotifier {
       spent: spent,
       income: income,
       transactionCount: items.length,
+      spendCount: debits.length,
       categorySpending: sortedCategories,
       topMerchants: topMerchants,
       incomeSources: incomeSources,
       dailyAverage: 0,
       highestDaySpend: highestDaySpend,
+      highestDay: highestDay,
       topCategory:
           sortedCategories.isEmpty ? null : sortedCategories.keys.first,
     );
@@ -1157,11 +1172,13 @@ class FinanceStore extends ChangeNotifier {
       spent: report.spent,
       income: report.income,
       transactionCount: report.transactionCount,
+      spendCount: report.spendCount,
       categorySpending: report.categorySpending,
       topMerchants: report.topMerchants,
       incomeSources: report.incomeSources,
       dailyAverage: spent / report.dayCount,
       highestDaySpend: report.highestDaySpend,
+      highestDay: report.highestDay,
       topCategory: report.topCategory,
     );
   }
@@ -1259,6 +1276,150 @@ class FinanceStore extends ChangeNotifier {
       final label = count == 1 ? '1 transaction' : '$count transactions';
       return (e.key, label, e.value.$2);
     }).toList();
+  }
+
+  /// Last [count] calendar months of OUT spend, oldest → newest.
+  ///
+  /// Each entry is `(monthStart, spend)` where [monthStart] is the 1st of that
+  /// month. Months with zero spend are included so charts can show gaps.
+  List<(DateTime month, double spend)> insightsMonthlySpendSeries({
+    int count = 6,
+  }) {
+    final n = count.clamp(1, 36);
+    final now = DateTime.now();
+    final current = DateTime(now.year, now.month);
+    final out = <(DateTime, double)>[];
+    for (var i = n - 1; i >= 0; i--) {
+      final month = DateTime(current.year, current.month - i);
+      out.add((month, _monthSpending(month.year, month.month)));
+    }
+    return out;
+  }
+
+  /// Inclusive local-day window for Stats spiral period chips.
+  ///
+  /// Rolling windows end at end-of-today. [custom] is required when
+  /// [period] is [StatsSpiralPeriod.custom]; otherwise falls back to 1M.
+  DateTimeRange statsSpiralRange(
+    StatsSpiralPeriod period, {
+    DateTimeRange? custom,
+    DateTime? clock,
+  }) {
+    final now = clock ?? DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    switch (period) {
+      case StatsSpiralPeriod.oneMonth:
+        return DateTimeRange(
+          start: DateTime(today.year, today.month - 1, today.day),
+          end: _endOfDay(today),
+        );
+      case StatsSpiralPeriod.sixMonths:
+        return DateTimeRange(
+          start: DateTime(today.year, today.month - 6, today.day),
+          end: _endOfDay(today),
+        );
+      case StatsSpiralPeriod.oneYear:
+        return DateTimeRange(
+          start: DateTime(today.year - 1, today.month, today.day),
+          end: _endOfDay(today),
+        );
+      case StatsSpiralPeriod.allTime:
+        final earliest = earliestTransactionDate;
+        return DateTimeRange(
+          start: earliest != null
+              ? DateTime(earliest.year, earliest.month, earliest.day)
+              : DateTime(today.year, today.month, 1),
+          end: _endOfDay(today),
+        );
+      case StatsSpiralPeriod.custom:
+        final range = custom ??
+            DateTimeRange(
+              start: DateTime(today.year, today.month - 1, today.day),
+              end: today,
+            );
+        return DateTimeRange(
+          start: DateTime(
+            range.start.year,
+            range.start.month,
+            range.start.day,
+          ),
+          end: _endOfDay(range.end),
+        );
+    }
+  }
+
+  /// Bucketed OUT spend for [start]–[end] (inclusive), oldest → newest.
+  ///
+  /// Bucketing adapts to span length so the spiral stays readable:
+  /// ≤62 days → daily, ≤400 days → weekly, else monthly.
+  List<(DateTime bucketStart, double spend)> spendSeriesInRange(
+    DateTime start,
+    DateTime end,
+  ) {
+    var s = DateTime(start.year, start.month, start.day);
+    var e = DateTime(end.year, end.month, end.day);
+    if (e.isBefore(s)) {
+      final swap = s;
+      s = e;
+      e = swap;
+    }
+    final daySpan = e.difference(s).inDays + 1;
+    if (daySpan <= 62) {
+      return _dailySpendSeries(s, e);
+    }
+    if (daySpan <= 400) {
+      return _weeklySpendSeries(s, e);
+    }
+    return _monthlySpendSeries(s, e);
+  }
+
+  List<(DateTime, double)> _dailySpendSeries(DateTime s, DateTime e) {
+    final out = <(DateTime, double)>[];
+    for (var d = s; !d.isAfter(e); d = d.add(const Duration(days: 1))) {
+      out.add((d, daySpend(d)));
+    }
+    return out;
+  }
+
+  List<(DateTime, double)> _weeklySpendSeries(DateTime s, DateTime e) {
+    final out = <(DateTime, double)>[];
+    var cursor = s;
+    while (!cursor.isAfter(e)) {
+      final weekEnd = cursor.add(const Duration(days: 6));
+      final clipEnd = weekEnd.isAfter(e) ? e : weekEnd;
+      var sum = 0.0;
+      for (var d = cursor;
+          !d.isAfter(clipEnd);
+          d = d.add(const Duration(days: 1))) {
+        sum += daySpend(d);
+      }
+      out.add((cursor, sum));
+      cursor = clipEnd.add(const Duration(days: 1));
+    }
+    return out;
+  }
+
+  List<(DateTime, double)> _monthlySpendSeries(DateTime s, DateTime e) {
+    final out = <(DateTime, double)>[];
+    var cursor = DateTime(s.year, s.month, 1);
+    final lastMonth = DateTime(e.year, e.month, 1);
+    while (!cursor.isAfter(lastMonth)) {
+      final monthStart = cursor.year == s.year && cursor.month == s.month
+          ? s
+          : cursor;
+      final monthLast = DateTime(cursor.year, cursor.month + 1, 0);
+      final monthEnd =
+          monthLast.isAfter(e) ? e : monthLast;
+      var sum = 0.0;
+      for (var d = monthStart;
+          !d.isAfter(monthEnd);
+          d = d.add(const Duration(days: 1))) {
+        sum += daySpend(d);
+      }
+      out.add((cursor, sum));
+      cursor = DateTime(cursor.year, cursor.month + 1, 1);
+    }
+    return out;
   }
 
   double get insightsDailyAverage {

@@ -8,11 +8,13 @@ class RangeReport {
     required this.spent,
     required this.income,
     required this.transactionCount,
+    required this.spendCount,
     required this.categorySpending,
     required this.topMerchants,
     required this.incomeSources,
     required this.dailyAverage,
     required this.highestDaySpend,
+    required this.highestDay,
     required this.topCategory,
   });
 
@@ -21,6 +23,9 @@ class RangeReport {
   final double spent;
   final double income;
   final int transactionCount;
+
+  /// Debit spend movements in range (same pool as [spent]).
+  final int spendCount;
 
   /// Spend per category, sorted high → low by the store.
   final Map<SpendCategory, double> categorySpending;
@@ -33,6 +38,9 @@ class RangeReport {
 
   final double dailyAverage;
   final double highestDaySpend;
+
+  /// Calendar day behind [highestDaySpend], or null when no spend.
+  final DateTime? highestDay;
   final SpendCategory? topCategory;
 
   double get saved => (income - spent).clamp(0, double.infinity);

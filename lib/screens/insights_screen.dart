@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../models/category_info.dart';
@@ -10,33 +12,124 @@ import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
 import '../widgets/paisa_coin.dart';
 import '../widgets/paisa_nav_chevron.dart';
+import '../widgets/pulse_calendar_sheet.dart';
+import '../widgets/pulse_ribbon_chart.dart';
 import 'category_transactions_screen.dart';
 import 'day_strip_screen.dart';
 import 'reports_screen.dart';
 
-/// Paisa Ledger Coin — the whole spending history struck as one coin.
+/// Stats = period overview. One filter drives graph, coin, share, and merchants.
 ///
-/// Same family as the day Paisa Coin: milled rim, a split gauge where SPENT is
-/// white and IN is lime, a recessed field carrying the exact spend total, and
-/// legends struck along the rim. Below the hero, one job per section — three
-/// coin legends (daily average, peak day, net), then category and merchant
-/// rows each stamped with their own miniature coin token.
-class InsightsScreen extends StatelessWidget {
+/// Layout: period chips → Pulse Ribbon → period Ledger Coin → category share →
+/// top merchants → Open Reports (same range).
+class InsightsScreen extends StatefulWidget {
   const InsightsScreen({super.key});
+
+  @override
+  State<InsightsScreen> createState() => _InsightsScreenState();
+}
+
+class _InsightsScreenState extends State<InsightsScreen> {
+  StatsSpiralPeriod _spiralPeriod = StatsSpiralPeriod.oneMonth;
+  DateTimeRange? _customRange;
+
+  static final _dayFmt = DateFormat('d MMM yyyy');
+
+  static const _chips = <(StatsSpiralPeriod, String, Key)>[
+    (StatsSpiralPeriod.oneMonth, '1M', Key('spiral_filter_1m')),
+    (StatsSpiralPeriod.sixMonths, '6M', Key('spiral_filter_6m')),
+    (StatsSpiralPeriod.oneYear, '1Y', Key('spiral_filter_1y')),
+    (StatsSpiralPeriod.allTime, 'ALL', Key('spiral_filter_all')),
+    (StatsSpiralPeriod.custom, 'CUSTOM', Key('spiral_filter_custom')),
+  ];
+
+  Future<void> _pickCustomRange() async {
+    final now = DateTime.now();
+    final seed = _customRange ??
+        DateTimeRange(
+          start: DateTime(now.year, now.month - 1, now.day),
+          end: DateTime(now.year, now.month, now.day),
+        );
+    final picked = await showPulseCalendarSheet(
+      context,
+      initialStart: seed.start,
+      initialEnd: seed.end,
+      initialMode: PulseCalendarMode.range,
+    );
+    if (!mounted || picked == null) return;
+    setState(() {
+      _customRange = DateTimeRange(
+        start: picked.startDay,
+        end: picked.endDay,
+      );
+      _spiralPeriod = StatsSpiralPeriod.custom;
+    });
+  }
+
+  void _selectPeriod(StatsSpiralPeriod period) {
+    if (period == StatsSpiralPeriod.custom) {
+      _pickCustomRange();
+      return;
+    }
+    HapticFeedback.selectionClick();
+    setState(() => _spiralPeriod = period);
+  }
+
+  void _openReports(DateTimeRange range) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ReportsScreen(initialRange: range),
+      ),
+    );
+  }
+
+  String _periodCoinLabel(DateTimeRange range) {
+    switch (_spiralPeriod) {
+      case StatsSpiralPeriod.oneMonth:
+        return '1 Month';
+      case StatsSpiralPeriod.sixMonths:
+        return '6 Months';
+      case StatsSpiralPeriod.oneYear:
+        return '1 Year';
+      case StatsSpiralPeriod.allTime:
+        return 'All time';
+      case StatsSpiralPeriod.custom:
+        final start =
+            DateTime(range.start.year, range.start.month, range.start.day);
+        final end = DateTime(range.end.year, range.end.month, range.end.day);
+        return '${_dayFmt.format(start)} – ${_dayFmt.format(end)}';
+    }
+  }
+
+  String _rangeCaption(DateTimeRange range) {
+    final start =
+        DateTime(range.start.year, range.start.month, range.start.day);
+    final end = DateTime(range.end.year, range.end.month, range.end.day);
+    return '${_dayFmt.format(start)} – ${_dayFmt.format(end)}';
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<FinanceStore>(
       builder: (context, store, _) {
-        final spending = store.insightsCategorySpending;
-        final sorted = spending.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
-        final spent = store.insightsSpent;
-        final income = store.insightsIncome;
-        final foodDelta = store.insightsFoodDelta();
-        final merchants = store.insightsTopMerchants;
+        final spiralRange = store.statsSpiralRange(
+          _spiralPeriod,
+          custom: _customRange,
+        );
+        final spiralSeries = store.spendSeriesInRange(
+          spiralRange.start,
+          spiralRange.end,
+        );
+        final report = store.buildReport(spiralRange.start, spiralRange.end);
+
+        final spending = report.categorySpending;
+        final sorted = spending.entries.toList();
+        final spent = report.spent;
+        final income = report.income;
+        final merchants = report.topMerchants.take(5).toList();
         final hasTransactions = store.transactions.isNotEmpty;
-        final showEmpty = !store.isLoading && (!hasTransactions || spent <= 0);
+        final showEmpty = !store.isLoading && !hasTransactions;
+        final periodLabel = _periodCoinLabel(spiralRange);
 
         return RefreshIndicator(
           color: PaisaColors.primary,
@@ -52,41 +145,33 @@ class InsightsScreen extends StatelessWidget {
                     const PaisaCoinWordmark(suffix: 'STATS'),
                     const Spacer(),
                     _ReportsButton(
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const ReportsScreen(),
-                        ),
-                      ),
+                      onTap: () => _openReports(spiralRange),
                     ),
                   ],
                 ),
-                if (store.isViewingHistoricalMonth) ...[
-                  const SizedBox(height: 14),
-                  _StruckNote(
-                    accent: PaisaColors.primary,
-                    child: Text(
-                      'Dashboard shows ${store.currentMonthLabel}. Insights below cover ${store.insightsPeriodLabel.toLowerCase()}.',
-                      style: PaisaTheme.manrope(
-                        size: 12,
-                        weight: FontWeight.w600,
-                        color: PaisaColors.mutedCaption,
+                const SizedBox(height: 14),
+                Wrap(
+                  key: const Key('spiral_filters'),
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final chip in _chips)
+                      _PeriodFilterChip(
+                        key: chip.$3,
+                        label: chip.$2,
+                        selected: _spiralPeriod == chip.$1,
+                        onTap: () => _selectPeriod(chip.$1),
                       ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                _LedgerCoinHero(
-                  periodLabel: store.insightsPeriodLabel,
-                  spent: spent,
-                  income: income,
-                  moves: store.insightsSpendCount,
+                  ],
                 ),
-                const SizedBox(height: 22),
-                _CoinLegendRail(
-                  dailyAverage: store.insightsDailyAverage,
-                  peakDaySpend: store.insightsHighestDaySpend,
-                  peakDay: store.insightsHighestDay,
-                  net: store.insightsNet,
+                const SizedBox(height: 8),
+                Text(
+                  _rangeCaption(spiralRange),
+                  style: PaisaTheme.manrope(
+                    size: 11,
+                    weight: FontWeight.w600,
+                    color: PaisaColors.muted,
+                  ),
                 ),
                 if (store.isLoading) ...[
                   const SizedBox(height: 28),
@@ -97,99 +182,71 @@ class InsightsScreen extends StatelessWidget {
                     ),
                   ),
                 ] else if (showEmpty) ...[
+                  const SizedBox(height: 16),
+                  _LedgerCoinHero(
+                    periodLabel: periodLabel,
+                    spent: 0,
+                    income: 0,
+                    moves: 0,
+                  ),
                   const SizedBox(height: 8),
                   _InsightsEmptyHint(store: store),
-                ],
-                if (sorted.isNotEmpty) ...[
-                  const SizedBox(height: 26),
-                  _SectionHeading(
-                    label: 'BY CATEGORY',
-                    trailing: sorted.length == 1
-                        ? '1 CATEGORY'
-                        : '${sorted.length} CATEGORIES',
+                ] else ...[
+                  const SizedBox(height: 18),
+                  _SpendChartSection(
+                    range: spiralRange,
+                    series: spiralSeries,
                   ),
-                  for (var i = 0; i < sorted.length; i++)
-                    _LedgerRow(
-                      index: i,
-                      isLast: i == sorted.length - 1,
-                      token: _categoryToken(
-                        sorted[i].key,
-                        spent > 0 ? sorted[i].value / spent : 0,
-                      ),
-                      title: CategoryInfo.forCategory(sorted[i].key).label,
-                      subtitle: _shareCaption(
-                        spent > 0 ? sorted[i].value / spent : 0,
-                      ),
-                      amount: sorted[i].value,
-                      topStamp: i == 0 && sorted.length > 1,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => CategoryTransactionsScreen(
-                            category: sorted[i].key,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-                if (foodDelta != null && foodDelta != 0) ...[
-                  const SizedBox(height: 20),
-                  _StruckNote(
-                    accent: foodDelta > 0
-                        ? PaisaColors.warning
-                        : PaisaColors.primary,
-                    child: Text.rich(
-                      TextSpan(
-                        style: PaisaTheme.manrope(
-                          size: 12.5,
-                          color: PaisaColors.mutedCaption,
-                        ),
-                        children: [
-                          TextSpan(
-                            text: foodDelta > 0
-                                ? 'You spent ${formatInr(foodDelta)} more'
-                                : 'You spent ${formatInr(foodDelta.abs())} less',
-                            style: const TextStyle(
-                              color: PaisaColors.ink,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          TextSpan(
-                            text:
-                                ' on Food in the last 90 days vs the prior 90 days.',
-                            style: TextStyle(
-                              color: foodDelta > 0
-                                  ? PaisaColors.warning
-                                  : PaisaColors.primary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  const SizedBox(height: 22),
+                  _LedgerCoinHero(
+                    periodLabel: periodLabel,
+                    spent: spent,
+                    income: income,
+                    moves: report.spendCount,
                   ),
-                ],
-                if (merchants.isNotEmpty) ...[
-                  const SizedBox(height: 26),
-                  const _SectionHeading(label: 'TOP MERCHANTS'),
-                  for (var i = 0; i < merchants.length; i++)
-                    _LedgerRow(
-                      index: i,
-                      isLast: i == merchants.length - 1,
-                      token: PaisaCoinToken(
-                        color: i == 0
-                            ? PaisaColors.primary
-                            : PaisaColors.mutedCaption,
-                        fill: merchants.first.$3 > 0
-                            ? (merchants[i].$3 / merchants.first.$3)
-                                .clamp(0.06, 1.0)
-                            : 0,
-                        glyph: '${i + 1}',
-                        glyphSize: 12,
-                      ),
-                      title: merchants[i].$1,
-                      subtitle: merchants[i].$2,
-                      amount: merchants[i].$3,
+                  const SizedBox(height: 22),
+                  _CoinLegendRail(
+                    dailyAverage: report.dailyAverage,
+                    peakDaySpend: report.highestDaySpend,
+                    peakDay: report.highestDay,
+                    net: report.net,
+                  ),
+                  if (sorted.isNotEmpty && spent > 0) ...[
+                    const SizedBox(height: 22),
+                    _CategoryCompositionBar(
+                      entries: sorted,
+                      totalSpent: spent,
+                      range: spiralRange,
+                      periodLabel: periodLabel,
                     ),
+                  ],
+                  if (merchants.isNotEmpty) ...[
+                    const SizedBox(height: 26),
+                    const _SectionHeading(label: 'TOP MERCHANTS'),
+                    for (var i = 0; i < merchants.length; i++)
+                      _LedgerRow(
+                        index: i,
+                        isLast: i == merchants.length - 1,
+                        token: PaisaCoinToken(
+                          color: i == 0
+                              ? PaisaColors.primary
+                              : PaisaColors.mutedCaption,
+                          fill: merchants.first.$3 > 0
+                              ? (merchants[i].$3 / merchants.first.$3)
+                                  .clamp(0.06, 1.0)
+                              : 0,
+                          glyph: '${i + 1}',
+                          glyphSize: 12,
+                        ),
+                        title: merchants[i].$1,
+                        subtitle: merchants[i].$2,
+                        amount: merchants[i].$3,
+                      ),
+                    const SizedBox(height: 14),
+                    _OpenReportsLink(
+                      onTap: () => _openReports(spiralRange),
+                    ),
+                  ],
                 ],
               ],
             ),
@@ -198,20 +255,125 @@ class InsightsScreen extends StatelessWidget {
       },
     );
   }
+}
 
-  static PaisaCoinToken _categoryToken(SpendCategory category, double share) {
-    final info = CategoryInfo.forCategory(category);
-    return PaisaCoinToken(
-      color: info.iconColor,
-      fill: share.clamp(0.06, 1.0),
-      glyph: info.emoji,
-      glyphSize: 14,
-    );
+// ── Pulse Ribbon (X = time, Y = spend) ──────────────────────────────────────
+
+class _SpendChartSection extends StatelessWidget {
+  const _SpendChartSection({
+    required this.range,
+    required this.series,
+  });
+
+  final DateTimeRange range;
+  final List<(DateTime, double)> series;
+
+  /// Infer bucket span from consecutive series starts (daily / weekly / monthly).
+  DateTime? _bucketEnd(DateTime start) {
+    if (series.length < 2) {
+      return DateTime(start.year, start.month, start.day);
+    }
+    final i = series.indexWhere((e) => e.$1 == start);
+    if (i < 0) return DateTime(start.year, start.month, start.day);
+    if (i < series.length - 1) {
+      final next = series[i + 1].$1;
+      return DateTime(next.year, next.month, next.day)
+          .subtract(const Duration(days: 1));
+    }
+    final prevGap = series[i].$1.difference(series[i - 1].$1).inDays;
+    final end = start.add(Duration(days: math.max(prevGap, 1) - 1));
+    final rangeEnd = DateTime(range.end.year, range.end.month, range.end.day);
+    return end.isAfter(rangeEnd) ? rangeEnd : end;
   }
 
-  static String _shareCaption(double share) {
-    final pct = formatSharePercent(share);
-    return pct.isEmpty ? 'of the ledger' : '$pct of the ledger';
+  void _openBucket(BuildContext context, DateTime bucketStart, double spend) {
+    if (spend <= 0) return;
+    final day = DateTime(bucketStart.year, bucketStart.month, bucketStart.day);
+    final end = _bucketEnd(day);
+    if (end == null ||
+        (end.year == day.year && end.month == day.month && end.day == day.day)) {
+      DayStripScreen.open(context, day: day);
+    } else {
+      DayStripScreen.open(context, day: day, end: end);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PaisaCoinRise(
+      duration: const Duration(milliseconds: 560),
+      offsetY: 10,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _SectionHeading(
+            label: 'SPEND',
+            trailing: 'PULSE RIBBON',
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'X = time · Y = spend · ribbon thickness pulses with the range above',
+            style: PaisaTheme.manrope(
+              size: 11.5,
+              weight: FontWeight.w600,
+              color: PaisaColors.mutedCaption,
+            ),
+          ),
+          const SizedBox(height: 16),
+          PulseRibbonChart(
+            series: series,
+            onBucketTap: (start, spend) => _openBucket(context, start, spend),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PeriodFilterChip extends StatelessWidget {
+  const _PeriodFilterChip({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: 'Period filter $label',
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: selected ? PaisaColors.primary : PaisaColors.cardElevated,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected
+                  ? PaisaColors.inkOnAccent
+                  : PaisaColors.border,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Text(
+            label,
+            style: PaisaTheme.label(
+              size: 11,
+              color: selected ? PaisaColors.inkOnAccent : PaisaColors.mutedCaption,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -504,6 +666,119 @@ class _CoinLegend extends StatelessWidget {
   }
 }
 
+// ── Category share composition bar ──────────────────────────────────────────
+
+/// Compact horizontal share strip under the coin — replaces the long category
+/// ledger so Stats stays one composition, not a second Reports list.
+class _CategoryCompositionBar extends StatelessWidget {
+  const _CategoryCompositionBar({
+    required this.entries,
+    required this.totalSpent,
+    required this.range,
+    required this.periodLabel,
+  });
+
+  final List<MapEntry<SpendCategory, double>> entries;
+  final double totalSpent;
+  final DateTimeRange range;
+  final String periodLabel;
+
+  void _openCategory(BuildContext context, SpendCategory category) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CategoryTransactionsScreen(
+          category: category,
+          range: range,
+          periodLabel: periodLabel,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final top = entries.take(6).toList();
+    return PaisaCoinRise(
+      duration: const Duration(milliseconds: 480),
+      offsetY: 8,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _SectionHeading(label: 'SHARE'),
+          const SizedBox(height: 8),
+          Semantics(
+            label: 'Category share of ledger spend',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: SizedBox(
+                height: 12,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < top.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 2),
+                      Expanded(
+                        flex: math.max(1, (top[i].value / totalSpent * 1000).round()),
+                        child: GestureDetector(
+                          onTap: () => _openCategory(context, top[i].key),
+                          child: ColoredBox(
+                            color: CategoryInfo.forCategory(top[i].key).iconColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            children: [
+              for (final e in top.take(4))
+                GestureDetector(
+                  onTap: () => _openCategory(context, e.key),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: CategoryInfo.forCategory(e.key).iconColor,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        CategoryInfo.forCategory(e.key).label,
+                        style: PaisaTheme.manrope(
+                          size: 11,
+                          weight: FontWeight.w700,
+                          color: PaisaColors.ink,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        formatSharePercent(e.value / totalSpent),
+                        style: PaisaTheme.manrope(
+                          size: 11,
+                          weight: FontWeight.w600,
+                          color: PaisaColors.mutedCaption,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Stamped ledger rows ─────────────────────────────────────────────────────
 
 class _SectionHeading extends StatelessWidget {
@@ -544,7 +819,6 @@ class _SectionHeading extends StatelessWidget {
 }
 
 /// A coin-stamped ledger row: miniature coin token, title + caption, amount.
-/// Same row language as the Paisa Coin day list.
 class _LedgerRow extends StatelessWidget {
   const _LedgerRow({
     required this.token,
@@ -553,7 +827,6 @@ class _LedgerRow extends StatelessWidget {
     required this.amount,
     required this.index,
     required this.isLast,
-    this.topStamp = false,
     this.onTap,
   });
 
@@ -563,12 +836,10 @@ class _LedgerRow extends StatelessWidget {
   final double amount;
   final int index;
   final bool isLast;
-  final bool topStamp;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    // Staggered stamp-in, capped so long lists never crawl.
     final delayMs = math.min(index * 32, 192);
 
     final row = Container(
@@ -590,10 +861,6 @@ class _LedgerRow extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    if (topStamp) ...[
-                      const _TopStamp(),
-                      const SizedBox(width: 7),
-                    ],
                     Expanded(
                       child: Text(
                         title,
@@ -661,30 +928,6 @@ class _LedgerRow extends StatelessWidget {
   }
 }
 
-class _TopStamp extends StatelessWidget {
-  const _TopStamp();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-      decoration: BoxDecoration(
-        color: PaisaColors.primary,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        'TOP',
-        style: PaisaTheme.sora(
-          size: 8,
-          weight: FontWeight.w800,
-          color: PaisaColors.inkOnAccent,
-          letterSpacing: 0.7,
-        ),
-      ),
-    );
-  }
-}
-
 // ── Chrome + notes + empty ──────────────────────────────────────────────────
 
 class _ReportsButton extends StatelessWidget {
@@ -733,21 +976,40 @@ class _ReportsButton extends StatelessWidget {
   }
 }
 
-/// Hairline note with a struck accent bar — no card, no chrome clutter.
-class _StruckNote extends StatelessWidget {
-  const _StruckNote({required this.accent, required this.child});
+class _OpenReportsLink extends StatelessWidget {
+  const _OpenReportsLink({required this.onTap});
 
-  final Color accent;
-  final Widget child;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
-      decoration: BoxDecoration(
-        border: Border(left: BorderSide(color: accent, width: 2.5)),
+    return Semantics(
+      button: true,
+      label: 'Open Reports',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'OPEN REPORTS',
+                style: PaisaTheme.label(
+                  size: 11,
+                  color: PaisaColors.primary,
+                  letterSpacing: 1.8,
+                ),
+              ),
+              const PaisaNavChevron(
+                size: 18,
+                color: PaisaColors.primary,
+              ),
+            ],
+          ),
+        ),
       ),
-      child: child,
     );
   }
 }

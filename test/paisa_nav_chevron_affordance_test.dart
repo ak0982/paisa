@@ -339,8 +339,8 @@ void main() {
 
   // ── Insights / Stats ─────────────────────────────────────────────────────
 
-  group('Insights Stats BY CATEGORY vs TOP MERCHANTS', () {
-    testWidgets('category rows show chevrons; merchants do not', (tester) async {
+  group('Insights Stats share + merchants chrome', () {
+    testWidgets('share labels are tappable; merchants are not', (tester) async {
       final now = DateTime.now();
       final store = FinanceStore()
         ..seedTransactions([
@@ -364,15 +364,22 @@ void main() {
 
       await pumpChild(tester, const InsightsScreen(), store: store);
 
-      expect(find.text('BY CATEGORY'), findsOneWidget);
+      expect(find.text('SHARE'), findsOneWidget);
+      expect(find.text('BY CATEGORY'), findsNothing);
+      expect(find.text('SPEND'), findsOneWidget);
+      expect(find.text('PULSE RIBBON'), findsOneWidget);
+      expect(find.text('MINT LEDGER'), findsNothing);
+      expect(find.text('SPEND SPIRAL'), findsNothing);
+      expect(find.text('MINT RHYTHM'), findsNothing);
+      expect(find.text('THIS MONTH PULSE'), findsNothing);
       expect(find.text('TOP MERCHANTS'), findsOneWidget);
-      expect(tappableRowHasChevron(tester, 'Food'), isTrue);
-      expect(tappableRowHasChevron(tester, 'Shopping'), isTrue);
+      expect(find.text('OPEN REPORTS'), findsOneWidget);
+      // Merchants stay non-tappable without a chevron.
       expect(staticRowLacksChevron(tester, 'Swiggy'), isTrue);
       expect(staticRowLacksChevron(tester, 'Blinkit'), isTrue);
     });
 
-    testWidgets('single category still shows one row chevron', (tester) async {
+    testWidgets('single category still appears in share legend', (tester) async {
       final now = DateTime.now();
       final store = FinanceStore()
         ..seedTransactions([
@@ -389,11 +396,10 @@ void main() {
       await pumpChild(tester, const InsightsScreen(), store: store);
 
       expect(find.text('Bills'), findsOneWidget);
-      expect(tappableRowHasChevron(tester, 'Bills'), isTrue);
       expect(staticRowLacksChevron(tester, 'Airtel'), isTrue);
     });
 
-    testWidgets('multiple categories each get a chevron', (tester) async {
+    testWidgets('multiple categories appear in share legend', (tester) async {
       final now = DateTime.now();
       final store = FinanceStore()
         ..seedTransactions([
@@ -414,44 +420,26 @@ void main() {
 
       await pumpChild(tester, const InsightsScreen(), store: store);
 
-      expect(tappableRowHasChevron(tester, 'Food'), isTrue);
-      expect(tappableRowHasChevron(tester, 'Travel'), isTrue);
-      expect(tappableRowHasChevron(tester, 'Shopping'), isTrue);
+      expect(find.text('Food'), findsOneWidget);
+      expect(find.text('Travel'), findsOneWidget);
+      expect(find.text('Shopping'), findsOneWidget);
     });
 
-    testWidgets('empty ledger has no category chevrons', (tester) async {
+    testWidgets('empty ledger has no share / merchant chrome', (tester) async {
       await pumpChild(tester, const InsightsScreen(), store: FinanceStore());
 
-      expect(find.text('BY CATEGORY'), findsNothing);
+      expect(find.text('SHARE'), findsNothing);
       expect(find.text('TOP MERCHANTS'), findsNothing);
-      // REPORTS chrome may still show a chevron; no category rows.
+      expect(find.text('SPEND'), findsNothing);
+      expect(find.text('PULSE RIBBON'), findsNothing);
+      expect(find.text('MINT LEDGER'), findsNothing);
+      expect(find.text('SPEND SPIRAL'), findsNothing);
+      expect(find.text('MINT RHYTHM'), findsNothing);
       expect(find.text('No transactions yet'), findsOneWidget);
       expect(tappableRowHasChevron(tester, 'Food'), isFalse);
     });
 
-    testWidgets('category row Semantics is a button', (tester) async {
-      final now = DateTime.now();
-      final store = FinanceStore()
-        ..seedTransactions([
-          tx(
-            id: 'food',
-            amount: 50,
-            isCredit: false,
-            category: SpendCategory.food,
-            merchant: 'Cafe',
-            timestamp: now.subtract(const Duration(days: 1)),
-          ),
-        ]);
-
-      await pumpChild(tester, const InsightsScreen(), store: store);
-
-      expect(
-        semanticsButtonWhoseLabel((l) => l.startsWith('Food,')),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('tapping category row opens detail', (tester) async {
+    testWidgets('tapping share category opens detail', (tester) async {
       final now = DateTime.now();
       final store = FinanceStore()
         ..seedTransactions([
@@ -523,7 +511,7 @@ void main() {
       expect(tappableRowHasChevron(tester, 'REPORTS'), isTrue);
     });
 
-    testWidgets('merchant-only income does not create category chevrons',
+    testWidgets('merchant-only income does not create share legend',
         (tester) async {
       final now = DateTime.now();
       final store = FinanceStore()
@@ -540,7 +528,7 @@ void main() {
 
       await pumpChild(tester, const InsightsScreen(), store: store);
 
-      expect(find.text('BY CATEGORY'), findsNothing);
+      expect(find.text('SHARE'), findsNothing);
       expect(find.text('Salary'), findsNothing);
     });
   });
