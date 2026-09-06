@@ -203,42 +203,47 @@ void main() {
     });
   });
 
-  group('Reports drill-down', () {
-    testWidgets('tapping Where money went row opens filtered list',
-        (tester) async {
-      // Large surface so category rows are hit-testable without overflow.
+  group('Reports Period Folio drill-down', () {
+    Future<void> openBreakdown(WidgetTester tester) async {
+      await tester.tap(
+        find.byKey(const ValueKey<String>('folio-tab-BREAKDOWN')),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('tapping category row opens filtered list', (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 1600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
       final store = FinanceStore()..seedTransactions(dummyTransactionHistory());
 
       await pump(tester, const ReportsScreen(), store: store);
+      await openBreakdown(tester);
 
-      expect(find.text('Where money went'), findsOneWidget);
+      expect(find.text('CATEGORIES'), findsOneWidget);
 
-      final foodChip = find.text('FOOD');
-      await tester.ensureVisible(foodChip.first);
-      await tester.tap(foodChip.first);
+      final foodRow = find.text('Food');
+      await tester.ensureVisible(foodRow.first);
+      await tester.tap(foodRow.first);
       await tester.pumpAndSettle();
 
       expect(find.byType(CategoryTransactionsScreen), findsOneWidget);
       expect(find.text('This month'), findsWidgets);
       expect(find.text('Swiggy'), findsOneWidget);
       expect(find.text('Zomato'), findsOneWidget);
-      // June bills should not appear in This month food drill-down
       expect(find.text('Jio Recharge'), findsNothing);
     });
 
-    testWidgets('tapping Where money came from opens income credits',
-        (tester) async {
+    testWidgets('tapping income source opens income credits', (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 1600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
       final store = FinanceStore()..seedTransactions(dummyTransactionHistory());
 
       await pump(tester, const ReportsScreen(), store: store);
+      await openBreakdown(tester);
 
-      expect(find.text('Where money came from'), findsOneWidget);
+      expect(find.text('INCOME SOURCES'), findsOneWidget);
 
       final salaryRow = find.text('Salary');
       await tester.ensureVisible(salaryRow.first);
@@ -249,22 +254,21 @@ void main() {
       expect(find.text('Total received'), findsOneWidget);
       expect(find.text('This month'), findsWidgets);
       expect(find.text('1 credit'), findsOneWidget);
-      // Debits must not appear in income drill-down
       expect(find.text('Amazon'), findsNothing);
       expect(find.text('Swiggy'), findsNothing);
     });
 
-    testWidgets('tapping Top merchants opens merchant debits', (tester) async {
+    testWidgets('tapping merchant opens merchant debits', (tester) async {
       await tester.binding.setSurfaceSize(const Size(800, 1600));
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
       final store = FinanceStore()..seedTransactions(dummyTransactionHistory());
 
       await pump(tester, const ReportsScreen(), store: store);
+      await openBreakdown(tester);
 
-      expect(find.text('Top merchants'), findsOneWidget);
+      expect(find.text('MERCHANTS'), findsOneWidget);
 
-      // Amazon is a current-month debit in the dummy set; tap the merchant name.
       await tester.ensureVisible(find.text('Amazon').first);
       await tester.tap(find.text('Amazon').first);
       await tester.pumpAndSettle();

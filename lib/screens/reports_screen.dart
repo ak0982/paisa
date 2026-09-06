@@ -10,28 +10,34 @@ import '../providers/finance_store.dart';
 import '../theme/paisa_colors.dart';
 import '../theme/paisa_theme.dart';
 import '../utils/formatters.dart';
-import '../widgets/category_spend_chip.dart';
 import '../widgets/grouped_transaction_list.dart';
+import '../widgets/paisa_coin.dart';
 import '../widgets/paisa_nav_chevron.dart';
+import '../widgets/paisa_progress_bar.dart';
 import '../widgets/pulse_calendar_sheet.dart';
 import '../widgets/transaction_sort_control.dart';
 import 'category_transactions_screen.dart';
+import 'day_strip_screen.dart';
 import 'filtered_transactions_screen.dart';
 
 enum _RangePreset {
   thisMonth,
   lastMonth,
   last3Months,
-  thisYear,
-  lastYear,
-  allTime,
   custom,
 }
 
+enum _FolioTab { summary, breakdown, ledger }
+
+/// Ledger list direction filter — same All / Out / In voice as Day Strip.
+enum _LedgerFlowFilter { all, out, inn }
+
+/// Period Folio — range chips + sticky Summary / Breakdown / Ledger tabs.
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key, this.initialRange});
 
-  /// When set, opens Reports on that inclusive calendar range (Custom preset).
+  /// When set, opens Reports on that inclusive calendar range (Custom preset)
+  /// and defaults to the Ledger tab.
   final DateTimeRange? initialRange;
 
   @override
@@ -40,8 +46,10 @@ class ReportsScreen extends StatefulWidget {
 
 class _ReportsScreenState extends State<ReportsScreen> {
   late _RangePreset _preset;
+  late _FolioTab _tab;
   DateTimeRange? _customRange;
   TransactionSort _txnSort = TransactionSort.defaultSort;
+  _LedgerFlowFilter _txnFlow = _LedgerFlowFilter.all;
 
   static final _dayFmt = DateFormat('d MMM yyyy');
 
@@ -55,8 +63,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
         end: DateTime(seed.end.year, seed.end.month, seed.end.day),
       );
       _preset = _RangePreset.custom;
+      _tab = _FolioTab.ledger;
     } else {
       _preset = _RangePreset.thisMonth;
+      _tab = _FolioTab.summary;
     }
   }
 
@@ -78,24 +88,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
       case _RangePreset.last3Months:
         return DateTimeRange(
           start: DateTime(now.year, now.month - 2, 1),
-          end: _endOfDay(now),
-        );
-      case _RangePreset.thisYear:
-        return DateTimeRange(
-          start: DateTime(now.year, 1, 1),
-          end: _endOfDay(now),
-        );
-      case _RangePreset.lastYear:
-        return DateTimeRange(
-          start: DateTime(now.year - 1, 1, 1),
-          end: _endOfDay(DateTime(now.year - 1, 12, 31)),
-        );
-      case _RangePreset.allTime:
-        final earliest = context.read<FinanceStore>().earliestTransactionDate;
-        return DateTimeRange(
-          start: earliest != null
-              ? DateTime(earliest.year, earliest.month, earliest.day)
-              : DateTime(now.year, now.month, 1),
           end: _endOfDay(now),
         );
       case _RangePreset.custom:
@@ -129,13 +121,56 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
     if (!mounted || picked == null) return;
     setState(() {
-      // Store local calendar days; [_resolveRange] expands end to inclusive EOD.
       _customRange = DateTimeRange(
         start: picked.startDay,
         end: picked.endDay,
       );
       _preset = _RangePreset.custom;
     });
+  }
+
+  String _periodLabelForRange(DateTimeRange range) {
+    const labels = {
+      _RangePreset.thisMonth: 'This month',
+      _RangePreset.lastMonth: 'Last month',
+      _RangePreset.last3Months: 'Last 3 months',
+    };
+    if (_preset == _RangePreset.custom) {
+      return '${_dayFmt.format(range.start)}  –  ${_dayFmt.format(range.end)}';
+    }
+    return labels[_preset] ??
+        '${_dayFmt.format(range.start)}  –  ${_dayFmt.format(range.end)}';
+  }
+
+  String? _insightLine(RangeReport report, FinanceStore store) {
+    if (report.isEmpty || report.spent <= 0) return null;
+    if (_preset != _RangePreset.thisMonth) return null;
+
+    final now = DateTime.now();
+    final firstOfThis = DateTime(now.year, now.month, 1);
+    final lastMonthEnd = firstOfThis.subtract(const Duration(days: 1));
+    final prev = store.buildReport(
+      DateTime(lastMonthEnd.year, lastMonthEnd.month, 1),
+      _endOfDay(lastMonthEnd),
+    );
+    if (prev.spent <= 0) return null;
+
+    final deltaPct =
+        (((report.spent - prev.spent) / prev.spent) * 100).round();
+    final top = report.topCategory;
+    final lead = top == null ? null : CategoryInfo.forCategory(top).label;
+
+    if (deltaPct < 0) {
+      final base = 'Spending ${deltaPct.abs()}% below last month';
+      return lead == null ? '$base.' : '$base — $lead still leads.';
+    }
+    if (deltaPct > 0) {
+      final base = 'Spending $deltaPct% above last month';
+      return lead == null ? '$base.' : '$base — $lead leads.';
+    }
+    return lead == null
+        ? 'Spend flat vs last month.'
+        : 'Spend flat vs last month — $lead leads.';
   }
 
   @override
@@ -147,124 +182,46 @@ class _ReportsScreenState extends State<ReportsScreen> {
           builder: (context, store, _) {
             final range = _resolveRange();
             final report = store.buildReport(range.start, range.end);
+            final txns = store.transactionsInRange(range.start, range.end);
 
-            return CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(child: _header()),
-                SliverToBoxAdapter(child: _presetChips()),
-                SliverToBoxAdapter(child: _rangeLabel(range)),
-                if (report.isEmpty)
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: _EmptyReport(),
-                  )
-                else ...[
-                  ..._reportSummarySlivers(report, range),
-                  ..._transactionsSlivers(
-                    store.transactionsInRange(range.start, range.end),
-                  ),
-                ],
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _header(),
+                _presetChips(),
+                _rangeCaption(range),
+                _folioTabs(),
+                Expanded(
+                  child: report.isEmpty && _tab != _FolioTab.ledger
+                      ? _EmptyReport()
+                      : switch (_tab) {
+                          _FolioTab.summary => _SummaryTab(
+                              report: report,
+                              periodLabel: _periodLabelForRange(range),
+                              insight: _insightLine(report, store),
+                            ),
+                          _FolioTab.breakdown => _BreakdownTab(
+                              report: report,
+                              range: range,
+                              periodLabel: _periodLabelForRange(range),
+                            ),
+                          _FolioTab.ledger => _LedgerTab(
+                              transactions: txns,
+                              sort: _txnSort,
+                              flow: _txnFlow,
+                              onSortChanged: (v) =>
+                                  setState(() => _txnSort = v),
+                              onFlowChanged: (v) =>
+                                  setState(() => _txnFlow = v),
+                            ),
+                        },
+                ),
               ],
             );
           },
         ),
       ),
     );
-  }
-
-  List<Widget> _reportSummarySlivers(RangeReport report, DateTimeRange range) {
-    return [
-      SliverPadding(
-        padding: const EdgeInsets.fromLTRB(22, 4, 22, 0),
-        sliver: SliverList(
-          delegate: SliverChildListDelegate([
-            _summaryHero(report),
-            const SizedBox(height: 12),
-            _secondaryStats(report),
-            const SizedBox(height: 18),
-            _insightBanner(report),
-            _categorySection(report, range),
-            _incomeSection(report, range),
-            _merchantSection(report, range),
-          ]),
-        ),
-      ),
-    ];
-  }
-
-  String _periodLabelForRange(DateTimeRange range) {
-    const labels = {
-      _RangePreset.thisMonth: 'This month',
-      _RangePreset.lastMonth: 'Last month',
-      _RangePreset.last3Months: 'Last 3 months',
-      _RangePreset.thisYear: 'This year',
-      _RangePreset.lastYear: 'Last year',
-      _RangePreset.allTime: 'All time',
-    };
-    if (_preset == _RangePreset.custom) {
-      return '${_dayFmt.format(range.start)}  –  ${_dayFmt.format(range.end)}';
-    }
-    return labels[_preset] ??
-        '${_dayFmt.format(range.start)}  –  ${_dayFmt.format(range.end)}';
-  }
-
-  List<Widget> _transactionsSlivers(List<Transaction> items) {
-    final sections = buildTransactionSections(items, _txnSort);
-
-    return [
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 0),
-          child: Row(
-            children: [
-              Text(
-                'Transactions',
-                style: PaisaTheme.sora(size: 14, weight: FontWeight.w700),
-              ),
-              const Spacer(),
-              Text(
-                items.length == 1 ? '1 item' : '${items.length} items',
-                style: PaisaTheme.manrope(
-                  size: 12,
-                  weight: FontWeight.w600,
-                  color: PaisaColors.mutedLight,
-                ),
-              ),
-              const SizedBox(width: 10),
-              TransactionSortControl(
-                sort: _txnSort,
-                showLabel: false,
-                onChanged: (value) => setState(() => _txnSort = value),
-              ),
-            ],
-          ),
-        ),
-      ),
-      if (sections.isEmpty)
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(22, 8, 22, 24),
-            child: Text(
-              'No transactions in this range.',
-              style: PaisaTheme.manrope(
-                size: 12.5,
-                color: PaisaColors.mutedLight,
-              ),
-            ),
-          ),
-        )
-      else
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(22, 4, 22, 24),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) =>
-                  TransactionSectionCard(section: sections[index]),
-              childCount: sections.length,
-            ),
-          ),
-        ),
-    ];
   }
 
   Widget _header() {
@@ -277,11 +234,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
             icon: const Icon(Icons.arrow_back_rounded, color: PaisaColors.ink),
           ),
           Text(
-            'Reports',
-            style: PaisaTheme.sora(
-              size: 22,
-              weight: FontWeight.w800,
-              letterSpacing: -0.3,
+            'REPORTS',
+            style: PaisaTheme.label(
+              size: 16,
+              color: PaisaColors.ink,
+              letterSpacing: 2.4,
             ),
           ),
         ],
@@ -290,567 +247,958 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Widget _presetChips() {
-    const labels = {
-      _RangePreset.thisMonth: 'This month',
-      _RangePreset.lastMonth: 'Last month',
-      _RangePreset.last3Months: 'Last 3 months',
-      _RangePreset.thisYear: 'This year',
-      _RangePreset.lastYear: 'Last year',
-      _RangePreset.allTime: 'All time',
-      _RangePreset.custom: 'Custom',
-    };
+    const items = <(_RangePreset, String)>[
+      (_RangePreset.thisMonth, 'This month'),
+      (_RangePreset.lastMonth, 'Last month'),
+      (_RangePreset.last3Months, '3M'),
+      (_RangePreset.custom, 'Custom'),
+    ];
 
     return SizedBox(
       height: 42,
-      child: SingleChildScrollView(
+      child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 18),
-        child: Row(
-          children: labels.entries.map((e) {
-            final active = _preset == e.key;
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: GestureDetector(
-                onTap: () {
-                  if (e.key == _RangePreset.custom) {
-                    _pickCustomRange();
-                  } else {
-                    setState(() => _preset = e.key);
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: active ? PaisaColors.primary : PaisaColors.card,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: active ? PaisaColors.primary : PaisaColors.dividerAlt,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      if (e.key == _RangePreset.custom) ...[
-                        Icon(
-                          Icons.calendar_today_rounded,
-                          size: 13,
-                          color: active
-                              ? PaisaColors.inkOnAccent
-                              : PaisaColors.mutedLight,
-                        ),
-                        const SizedBox(width: 6),
-                      ],
-                      Text(
-                        e.value,
-                        style: PaisaTheme.manrope(
-                          size: 12.5,
-                          weight: FontWeight.w700,
-                          color: active
-                              ? PaisaColors.inkOnAccent
-                              : PaisaColors.mutedLight,
-                        ),
-                      ),
-                    ],
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final (preset, label) = items[index];
+          final active = _preset == preset;
+          return Semantics(
+            button: true,
+            selected: active,
+            label: 'Range $label',
+            child: GestureDetector(
+              onTap: () {
+                if (preset == _RangePreset.custom) {
+                  _pickCustomRange();
+                } else {
+                  setState(() => _preset = preset);
+                }
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: active ? PaisaColors.primary : PaisaColors.cardElevated,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: active
+                        ? PaisaColors.inkOnAccent
+                        : PaisaColors.border,
+                    width: active ? 1.5 : 1,
                   ),
                 ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  Widget _rangeLabel(DateTimeRange range) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 12, 22, 8),
-      child: Row(
-        children: [
-          const Icon(Icons.event_rounded, size: 15, color: PaisaColors.mutedLight),
-          const SizedBox(width: 6),
-          Text(
-            '${_dayFmt.format(range.start)}  –  ${_dayFmt.format(range.end)}',
-            style: PaisaTheme.manrope(
-              size: 12.5,
-              weight: FontWeight.w600,
-              color: PaisaColors.mutedLight,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _summaryHero(RangeReport report) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: PaisaColors.primary,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: PaisaColors.inkOnAccent, width: 2.5),
-        boxShadow: PaisaColors.hardShadow(offset: 5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'NET FOR THIS RANGE',
-            style: PaisaTheme.manrope(
-              size: 10.5,
-              weight: FontWeight.w700,
-              color: PaisaColors.inkOnAccent,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            report.net >= 0
-                ? '+${formatInr(report.net)}'
-                : '−${formatInr(report.net.abs())}',
-            style: PaisaTheme.sora(
-              size: 34,
-              weight: FontWeight.w800,
-              color: PaisaColors.inkOnAccent,
-              letterSpacing: -0.5,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _heroStat('Spent', report.spent),
-              Container(
-                width: 1,
-                height: 34,
-                color: PaisaColors.inkOnAccent.withOpacity(0.22),
-              ),
-              _heroStat('Earned', report.income),
-              Container(
-                width: 1,
-                height: 34,
-                color: PaisaColors.inkOnAccent.withOpacity(0.22),
-              ),
-              _heroStat('Saved', report.saved),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _heroStat(String label, double value) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 2),
-            child: Text(
-              label.toUpperCase(),
-              style: PaisaTheme.manrope(
-                size: 10,
-                weight: FontWeight.w700,
-                color: PaisaColors.inkOnAccent.withOpacity(0.75),
-                letterSpacing: 0.8,
-              ),
-            ),
-          ),
-          const SizedBox(height: 3),
-          Padding(
-            padding: const EdgeInsets.only(left: 2),
-            child: Text(
-              formatInr(value),
-              style: PaisaTheme.sora(
-                size: 16,
-                weight: FontWeight.w800,
-                color: PaisaColors.inkOnAccent,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _secondaryStats(RangeReport report) {
-    return Row(
-      children: [
-        _StatCard(
-          label: 'Transactions',
-          value: '${report.transactionCount}',
-        ),
-        const SizedBox(width: 11),
-        _StatCard(
-          label: 'Daily average',
-          value: formatInr(report.dailyAverage),
-        ),
-        const SizedBox(width: 11),
-        _StatCard(
-          label: 'Savings rate',
-          value: '${(report.savingsRate * 100).round()}%',
-        ),
-      ],
-    );
-  }
-
-  Widget _insightBanner(RangeReport report) {
-    final topCat = report.topCategory;
-    if (topCat == null) return const SizedBox.shrink();
-    final info = CategoryInfo.forCategory(topCat);
-    final topAmount = report.categorySpending[topCat] ?? 0;
-    final share = report.spent > 0 ? (topAmount / report.spent) : 0.0;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: PaisaColors.cardElevated,
-          border: Border.all(color: PaisaColors.border),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: info.tintBg,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              alignment: Alignment.center,
-              child: Text(info.emoji, style: const TextStyle(fontSize: 16)),
-            ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Text.rich(
-                TextSpan(
-                  style: PaisaTheme.manrope(
-                    size: 12.5,
-                    color: PaisaColors.ink,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const TextSpan(text: 'Most of your spending went to '),
-                    TextSpan(
-                      text: info.label,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: PaisaColors.primary,
+                    if (preset == _RangePreset.custom) ...[
+                      Icon(
+                        Icons.calendar_today_rounded,
+                        size: 12,
+                        color: active
+                            ? PaisaColors.inkOnAccent
+                            : PaisaColors.mutedCaption,
                       ),
-                    ),
-                    TextSpan(
-                      text:
-                          ' — ${formatInr(topAmount)} (${(share * 100).round()}% of spend).',
+                      const SizedBox(width: 6),
+                    ],
+                    Text(
+                      label,
+                      style: PaisaTheme.label(
+                        size: 11,
+                        color: active
+                            ? PaisaColors.inkOnAccent
+                            : PaisaColors.mutedCaption,
+                        letterSpacing: 1.1,
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-          ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _rangeCaption(DateTimeRange range) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 10, 22, 0),
+      child: Text(
+        '${_dayFmt.format(range.start)}  –  ${_dayFmt.format(range.end)}',
+        style: PaisaTheme.manrope(
+          size: 12,
+          weight: FontWeight.w600,
+          color: PaisaColors.mutedLight,
         ),
       ),
     );
   }
 
-  Widget _categorySection(RangeReport report, DateTimeRange range) {
-    final entries = report.categorySpending.entries.toList();
-    if (entries.isEmpty) return const SizedBox.shrink();
-    final periodLabel = _periodLabelForRange(range);
+  Widget _folioTabs() {
+    const tabs = <(_FolioTab, String)>[
+      (_FolioTab.summary, 'SUMMARY'),
+      (_FolioTab.breakdown, 'BREAKDOWN'),
+      (_FolioTab.ledger, 'LEDGER'),
+    ];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 18),
-        Text(
-          'Where money went',
-          style: PaisaTheme.sora(size: 14, weight: FontWeight.w700),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: PaisaColors.border),
+          ),
         ),
-        const SizedBox(height: 12),
-        CategorySpendStickerGrid(
-          tiles: [
-            for (var i = 0; i < entries.length; i++)
-              CategorySpendTile(
-                category: entries[i].key,
-                amount: entries[i].value,
-                share: report.spent > 0
-                    ? (entries[i].value / report.spent).clamp(0.0, 1.0)
-                    : 0,
-                emphasize: i == 0,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => CategoryTransactionsScreen(
-                      category: entries[i].key,
-                      range: range,
-                      periodLabel: periodLabel,
+        child: Row(
+          children: [
+            for (final (tab, label) in tabs)
+              Expanded(
+                child: InkWell(
+                  key: ValueKey<String>('folio-tab-$label'),
+                  onTap: () => setState(() => _tab = tab),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Column(
+                      children: [
+                        Text(
+                          label,
+                          textAlign: TextAlign.center,
+                          style: PaisaTheme.label(
+                            size: 11,
+                            color: _tab == tab
+                                ? PaisaColors.primary
+                                : PaisaColors.mutedCaption,
+                            letterSpacing: 1.6,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          height: 2,
+                          width: _tab == tab ? 56 : 0,
+                          color: PaisaColors.primary,
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
           ],
         ),
-      ],
+      ),
     );
   }
+}
 
-  Widget _incomeSection(RangeReport report, DateTimeRange range) {
-    if (report.incomeSources.isEmpty) return const SizedBox.shrink();
-    final periodLabel = _periodLabelForRange(range);
+// ── Summary: Ledger Coin + ruled legend ─────────────────────────────────────
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+class _SummaryTab extends StatelessWidget {
+  const _SummaryTab({
+    required this.report,
+    required this.periodLabel,
+    this.insight,
+  });
+
+  final RangeReport report;
+  final String periodLabel;
+  final String? insight;
+
+  @override
+  Widget build(BuildContext context) {
+    if (report.isEmpty) return _EmptyReport();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
       children: [
-        const SizedBox(height: 18),
-        Text(
-          'Where money came from',
-          style: PaisaTheme.sora(size: 14, weight: FontWeight.w700),
+        _LedgerCoinHero(
+          periodLabel: periodLabel,
+          spent: report.spent,
+          income: report.income,
+          moves: report.transactionCount,
         ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          decoration: BoxDecoration(
-            color: PaisaColors.card,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: PaisaColors.dividerAlt),
-          ),
-          child: Column(
-            children: [
-              for (var i = 0; i < report.incomeSources.length; i++) ...[
-                Semantics(
-                  button: true,
-                  label:
-                      '${report.incomeSources[i].$1}, ${formatInr(report.incomeSources[i].$2)}',
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) =>
-                              FilteredTransactionsScreen.incomeSource(
-                            source: report.incomeSources[i].$1,
-                            range: range,
-                            periodLabel: periodLabel,
-                          ),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 30,
-                              height: 30,
-                              decoration: BoxDecoration(
-                                color: PaisaColors.cardElevated,
-                                borderRadius: BorderRadius.circular(9),
-                              ),
-                              alignment: Alignment.center,
-                              child: const Text(
-                                '💰',
-                                style: TextStyle(fontSize: 14),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                report.incomeSources[i].$1,
-                                style: PaisaTheme.manrope(
-                                  size: 13.5,
-                                  weight: FontWeight.w600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Text(
-                              '+${formatInr(report.incomeSources[i].$2)}',
-                              style: PaisaTheme.sora(
-                                size: 14,
-                                weight: FontWeight.w700,
-                                color: PaisaColors.credit,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            const PaisaNavChevron(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                if (i < report.incomeSources.length - 1)
-                  const Divider(height: 1, color: PaisaColors.divider),
-              ],
-            ],
-          ),
+        const SizedBox(height: 22),
+        _CoinLegendRail(
+          dailyAverage: report.dailyAverage,
+          peakDaySpend: report.highestDaySpend,
+          peakDay: report.highestDay,
+          net: report.net,
+          saved: report.saved,
         ),
-      ],
-    );
-  }
-
-  Widget _merchantSection(RangeReport report, DateTimeRange range) {
-    if (report.topMerchants.isEmpty) return const SizedBox.shrink();
-    final periodLabel = _periodLabelForRange(range);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 18),
-        Text(
-          'Top merchants',
-          style: PaisaTheme.sora(size: 14, weight: FontWeight.w700),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          decoration: BoxDecoration(
-            color: PaisaColors.card,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: PaisaColors.dividerAlt),
+        if (insight != null && insight!.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          Text(
+            insight!,
+            style: PaisaTheme.manrope(
+              size: 12.5,
+              weight: FontWeight.w600,
+              color: PaisaColors.mutedLight,
+              height: 1.35,
+            ),
           ),
-          child: Column(
-            children: [
-              for (var i = 0; i < report.topMerchants.length; i++) ...[
-                Semantics(
-                  button: true,
-                  label:
-                      '${report.topMerchants[i].$1}, ${formatInr(report.topMerchants[i].$3)}',
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(10),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => FilteredTransactionsScreen.merchant(
-                            merchant: report.topMerchants[i].$1,
-                            range: range,
-                            periodLabel: periodLabel,
-                          ),
-                        ),
-                      ),
-                      child: _MerchantRow(
-                        rank: i + 1,
-                        name: report.topMerchants[i].$1,
-                        sub: report.topMerchants[i].$2,
-                        amount: report.topMerchants[i].$3,
-                      ),
-                    ),
-                  ),
-                ),
-                if (i < report.topMerchants.length - 1)
-                  const Divider(height: 1, color: PaisaColors.divider),
-              ],
-            ],
-          ),
-        ),
+        ],
       ],
     );
   }
 }
 
-class _StatCard extends StatelessWidget {
-  const _StatCard({required this.label, required this.value});
+class _LedgerCoinHero extends StatelessWidget {
+  const _LedgerCoinHero({
+    required this.periodLabel,
+    required this.spent,
+    required this.income,
+    required this.moves,
+  });
+
+  final String periodLabel;
+  final double spent;
+  final double income;
+  final int moves;
+
+  @override
+  Widget build(BuildContext context) {
+    return PaisaCoinRise(
+      child: Column(
+        children: [
+          Text(
+            'LEDGER',
+            style: PaisaTheme.label(
+              size: 10,
+              color: PaisaColors.muted,
+              letterSpacing: 2.6,
+            ),
+          ),
+          const SizedBox(height: 5),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              periodLabel.toUpperCase(),
+              style: PaisaTheme.sora(
+                size: 19,
+                weight: FontWeight.w800,
+                color: PaisaColors.ink,
+                letterSpacing: 3.4,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          PaisaCoinFace(
+            outShare: paisaCoinOutShare(spent, income),
+            hasFlow: spent + income > 0,
+            topLegend: moves > 0 ? '$moves TRANSACTIONS' : '',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'SPENT',
+                  style: PaisaTheme.label(
+                    size: 10,
+                    color: PaisaColors.mutedCaption,
+                    letterSpacing: 3,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    formatInr(spent),
+                    style: PaisaTheme.sora(
+                      size: 28,
+                      weight: FontWeight.w800,
+                      color: PaisaColors.ink,
+                      letterSpacing: -0.8,
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: 34,
+                  height: 1.5,
+                  color: PaisaColors.muted.withOpacity(0.55),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'IN',
+                      style: PaisaTheme.label(
+                        size: 10,
+                        color: PaisaColors.primary,
+                        letterSpacing: 2.4,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          formatInr(income),
+                          style: PaisaTheme.sora(
+                            size: 14,
+                            weight: FontWeight.w800,
+                            color: PaisaColors.primary,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Ruled legend under the coin — daily / peak / net / saved.
+class _CoinLegendRail extends StatelessWidget {
+  const _CoinLegendRail({
+    required this.dailyAverage,
+    required this.peakDaySpend,
+    required this.peakDay,
+    required this.net,
+    required this.saved,
+  });
+
+  final double dailyAverage;
+  final double peakDaySpend;
+  final DateTime? peakDay;
+  final double net;
+  final double saved;
+
+  @override
+  Widget build(BuildContext context) {
+    return PaisaCoinRise(
+      duration: const Duration(milliseconds: 520),
+      offsetY: 10,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: const BoxDecoration(
+          border: Border(
+            top: BorderSide(color: PaisaColors.border),
+            bottom: BorderSide(color: PaisaColors.border),
+          ),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _CoinLegend(
+                    label: 'DAILY AVG',
+                    value: formatInr(dailyAverage),
+                    caption: 'per day',
+                  ),
+                ),
+                const _LegendRule(),
+                Expanded(
+                  child: _CoinLegend(
+                    label: 'PEAK DAY',
+                    value: formatInr(peakDaySpend),
+                    caption: peakDay == null
+                        ? 'no spend yet'
+                        : formatDayStripHeader(peakDay!),
+                    onTap: peakDay == null
+                        ? null
+                        : () => DayStripScreen.open(context, day: peakDay),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(height: 1, color: PaisaColors.border),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _CoinLegend(
+                    label: 'NET',
+                    value: formatAmount(net, isCredit: net >= 0),
+                    valueColor:
+                        net >= 0 ? PaisaColors.primary : PaisaColors.ink,
+                    caption: 'in − out',
+                  ),
+                ),
+                const _LegendRule(),
+                Expanded(
+                  child: _CoinLegend(
+                    label: 'SAVED',
+                    value: formatInr(saved),
+                    caption: 'income − spent',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LegendRule extends StatelessWidget {
+  const _LegendRule();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 46,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      color: PaisaColors.border,
+    );
+  }
+}
+
+class _CoinLegend extends StatelessWidget {
+  const _CoinLegend({
+    required this.label,
+    required this.value,
+    required this.caption,
+    this.valueColor,
+    this.onTap,
+  });
 
   final String label;
   final String value;
+  final String caption;
+  final Color? valueColor;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(13, 13, 13, 13),
-        decoration: BoxDecoration(
-          color: PaisaColors.card,
-          border: Border.all(color: PaisaColors.dividerAlt),
-          borderRadius: BorderRadius.circular(16),
+    final column = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          label,
+          style: PaisaTheme.label(
+            size: 9,
+            color: PaisaColors.muted,
+            letterSpacing: 1.6,
+          ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: PaisaTheme.manrope(
-                size: 10.5,
-                color: PaisaColors.mutedCaption,
+        const SizedBox(height: 5),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: PaisaTheme.sora(
+              size: 15.5,
+              weight: FontWeight.w800,
+              color: valueColor ?? PaisaColors.ink,
+              letterSpacing: -0.3,
+            ),
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          caption,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: PaisaTheme.manrope(
+            size: 10.5,
+            weight: FontWeight.w600,
+            color: PaisaColors.mutedCaption,
+          ),
+        ),
+      ],
+    );
+
+    if (onTap == null) return column;
+    return Semantics(
+      button: true,
+      label: '$label, $caption',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: column,
+      ),
+    );
+  }
+}
+
+// ── Breakdown: ruled categories / income / merchants ────────────────────────
+
+class _BreakdownTab extends StatelessWidget {
+  const _BreakdownTab({
+    required this.report,
+    required this.range,
+    required this.periodLabel,
+  });
+
+  final RangeReport report;
+  final DateTimeRange range;
+  final String periodLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    if (report.isEmpty) return _EmptyReport();
+
+    final categories = report.categorySpending.entries.toList();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(22, 16, 22, 28),
+      children: [
+        if (categories.isNotEmpty) ...[
+          const _SectionHeading(label: 'CATEGORIES'),
+          const SizedBox(height: 4),
+          for (var i = 0; i < categories.length; i++)
+            _CategorySpendRow(
+              category: categories[i].key,
+              amount: categories[i].value,
+              share: report.spent > 0
+                  ? (categories[i].value / report.spent).clamp(0.0, 1.0)
+                  : 0,
+              isLast: i == categories.length - 1,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => CategoryTransactionsScreen(
+                    category: categories[i].key,
+                    range: range,
+                    periodLabel: periodLabel,
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: PaisaTheme.sora(size: 16, weight: FontWeight.w800),
+          const SizedBox(height: 22),
+        ],
+        if (report.incomeSources.isNotEmpty) ...[
+          const _SectionHeading(label: 'INCOME SOURCES'),
+          const SizedBox(height: 4),
+          for (var i = 0; i < report.incomeSources.length; i++)
+            _RuledNavRow(
+              leading: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: i == 0
+                      ? PaisaColors.primary
+                      : PaisaColors.credit.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              title: report.incomeSources[i].$1,
+              trailing: '+${formatInr(report.incomeSources[i].$2)}',
+              trailingColor: PaisaColors.credit,
+              isLast: i == report.incomeSources.length - 1,
+              semanticLabel:
+                  '${report.incomeSources[i].$1}, ${formatInr(report.incomeSources[i].$2)}',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => FilteredTransactionsScreen.incomeSource(
+                    source: report.incomeSources[i].$1,
+                    range: range,
+                    periodLabel: periodLabel,
+                  ),
+                ),
+              ),
             ),
-          ],
+          const SizedBox(height: 22),
+        ],
+        if (report.topMerchants.isNotEmpty) ...[
+          const _SectionHeading(label: 'MERCHANTS'),
+          const SizedBox(height: 4),
+          for (var i = 0; i < report.topMerchants.length; i++)
+            _RuledNavRow(
+              leading: Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: PaisaColors.cardElevated,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: PaisaColors.border),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '${i + 1}',
+                  style: PaisaTheme.sora(
+                    size: 11,
+                    weight: FontWeight.w700,
+                    color: PaisaColors.mutedCaption,
+                  ),
+                ),
+              ),
+              title: report.topMerchants[i].$1,
+              subtitle: report.topMerchants[i].$2,
+              trailing: formatInr(report.topMerchants[i].$3),
+              isLast: i == report.topMerchants.length - 1,
+              semanticLabel:
+                  '${report.topMerchants[i].$1}, ${formatInr(report.topMerchants[i].$3)}',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => FilteredTransactionsScreen.merchant(
+                    merchant: report.topMerchants[i].$1,
+                    range: range,
+                    periodLabel: periodLabel,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _CategorySpendRow extends StatelessWidget {
+  const _CategorySpendRow({
+    required this.category,
+    required this.amount,
+    required this.share,
+    required this.isLast,
+    required this.onTap,
+  });
+
+  final SpendCategory category;
+  final double amount;
+  final double share;
+  final bool isLast;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final info = CategoryInfo.forCategory(category);
+    final pct = formatSharePercent(share);
+
+    return Semantics(
+      button: true,
+      label: '${info.label}, $pct, ${formatInr(amount)}',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: isLast
+                    ? BorderSide.none
+                    : const BorderSide(color: PaisaColors.border),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: info.iconColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              info.label,
+                              style: PaisaTheme.manrope(
+                                size: 13.5,
+                                weight: FontWeight.w700,
+                                color: PaisaColors.ink,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (pct.isNotEmpty)
+                            Text(
+                              pct,
+                              style: PaisaTheme.manrope(
+                                size: 11.5,
+                                weight: FontWeight.w700,
+                                color: PaisaColors.mutedCaption,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 7),
+                      PaisaProgressBar(
+                        progress: share,
+                        color: PaisaColors.primary,
+                        height: 5,
+                        trackColor: PaisaColors.cardElevated,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  formatInr(amount),
+                  style: PaisaTheme.sora(
+                    size: 13.5,
+                    weight: FontWeight.w700,
+                    color: PaisaColors.ink,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                const PaisaNavChevron(),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-class _MerchantRow extends StatelessWidget {
-  const _MerchantRow({
-    required this.rank,
-    required this.name,
-    required this.sub,
-    required this.amount,
+class _RuledNavRow extends StatelessWidget {
+  const _RuledNavRow({
+    required this.leading,
+    required this.title,
+    required this.trailing,
+    required this.isLast,
+    required this.onTap,
+    required this.semanticLabel,
+    this.subtitle,
+    this.trailingColor,
   });
 
-  final int rank;
-  final String name;
-  final String sub;
-  final double amount;
+  final Widget leading;
+  final String title;
+  final String? subtitle;
+  final String trailing;
+  final Color? trailingColor;
+  final bool isLast;
+  final VoidCallback onTap;
+  final String semanticLabel;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 11),
-      child: Row(
-        children: [
-          Container(
-            width: 26,
-            height: 26,
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
-              color: PaisaColors.dividerAlt,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              '$rank',
-              style: PaisaTheme.sora(
-                size: 12,
-                weight: FontWeight.w700,
-                color: PaisaColors.mutedCaption,
+              border: Border(
+                bottom: isLast
+                    ? BorderSide.none
+                    : const BorderSide(color: PaisaColors.border),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Text(
-                  name,
-                  style: PaisaTheme.manrope(size: 13.5, weight: FontWeight.w600),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  sub,
-                  style: PaisaTheme.manrope(
-                    size: 11,
-                    color: PaisaColors.mutedCaption,
+                leading,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: PaisaTheme.manrope(
+                          size: 13.5,
+                          weight: FontWeight.w600,
+                          color: PaisaColors.ink,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (subtitle != null)
+                        Text(
+                          subtitle!,
+                          style: PaisaTheme.manrope(
+                            size: 11,
+                            color: PaisaColors.mutedCaption,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
+                Text(
+                  trailing,
+                  style: PaisaTheme.sora(
+                    size: 14,
+                    weight: FontWeight.w700,
+                    color: trailingColor ?? PaisaColors.ink,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                const PaisaNavChevron(),
               ],
             ),
           ),
-          Text(
-            formatInr(amount),
-            style: PaisaTheme.sora(size: 14, weight: FontWeight.w700),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: PaisaTheme.label(
+        size: 10,
+        color: PaisaColors.muted,
+        letterSpacing: 2.2,
+      ),
+    );
+  }
+}
+
+// ── Ledger: full sorted / day-grouped list ──────────────────────────────────
+
+class _LedgerTab extends StatelessWidget {
+  const _LedgerTab({
+    required this.transactions,
+    required this.sort,
+    required this.flow,
+    required this.onSortChanged,
+    required this.onFlowChanged,
+  });
+
+  final List<Transaction> transactions;
+  final TransactionSort sort;
+  final _LedgerFlowFilter flow;
+  final ValueChanged<TransactionSort> onSortChanged;
+  final ValueChanged<_LedgerFlowFilter> onFlowChanged;
+
+  List<Transaction> get _filtered {
+    return switch (flow) {
+      _LedgerFlowFilter.all => transactions,
+      _LedgerFlowFilter.out =>
+        transactions.where((t) => !t.isCredit).toList(),
+      _LedgerFlowFilter.inn =>
+        transactions.where((t) => t.isCredit).toList(),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filtered;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 14, 22, 4),
+          child: Row(
+            children: [
+              Text(
+                filtered.length == 1
+                    ? '1 item'
+                    : '${filtered.length} items',
+                style: PaisaTheme.manrope(
+                  size: 12,
+                  weight: FontWeight.w600,
+                  color: PaisaColors.mutedLight,
+                ),
+              ),
+              const Spacer(),
+              _LedgerFlowChip(
+                label: 'All',
+                active: flow == _LedgerFlowFilter.all,
+                onTap: () => onFlowChanged(_LedgerFlowFilter.all),
+              ),
+              const SizedBox(width: 6),
+              _LedgerFlowChip(
+                label: 'Out',
+                active: flow == _LedgerFlowFilter.out,
+                onTap: () => onFlowChanged(_LedgerFlowFilter.out),
+              ),
+              const SizedBox(width: 6),
+              _LedgerFlowChip(
+                label: 'In',
+                active: flow == _LedgerFlowFilter.inn,
+                onTap: () => onFlowChanged(_LedgerFlowFilter.inn),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: TransactionSortControl(
+                      sort: sort,
+                      onChanged: onSortChanged,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 4),
-          const PaisaNavChevron(),
-        ],
+        ),
+        Expanded(
+          child: GroupedTransactionList(
+            transactions: filtered,
+            sort: sort,
+            padding: const EdgeInsets.fromLTRB(22, 4, 22, 24),
+            emptyTitle: flow == _LedgerFlowFilter.all
+                ? 'No transactions in this range'
+                : flow == _LedgerFlowFilter.out
+                    ? 'No outgoing transactions'
+                    : 'No incoming transactions',
+            emptySubtitle: flow == _LedgerFlowFilter.all
+                ? 'Try a different month or custom date range.'
+                : 'Try All, or pick another period.',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LedgerFlowChip extends StatelessWidget {
+  const _LedgerFlowChip({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      key: ValueKey<String>('ledger-flow-$label'),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: active ? PaisaColors.primary : PaisaColors.cardElevated,
+          border: Border.all(
+            color: active ? PaisaColors.primary : PaisaColors.border,
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: active ? PaisaColors.hardShadow(offset: 2) : null,
+        ),
+        child: Text(
+          label.toUpperCase(),
+          style: PaisaTheme.manrope(
+            size: 11,
+            weight: FontWeight.w700,
+            color: active ? PaisaColors.inkOnAccent : PaisaColors.mutedCaption,
+            letterSpacing: 0.5,
+          ),
+        ),
       ),
     );
   }
@@ -886,7 +1234,7 @@ class _EmptyReport extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Try a different month, year, or custom date range.',
+              'Try a different month or custom date range.',
               textAlign: TextAlign.center,
               style: PaisaTheme.manrope(
                 size: 12.5,

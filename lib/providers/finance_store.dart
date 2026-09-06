@@ -1112,9 +1112,10 @@ class FinanceStore extends ChangeNotifier {
         (existing?.$2 ?? 0) + t.amount,
       );
     }
+    // Extended list for Reports Period Folio Breakdown; Stats still .take(5).
     final topMerchants = (merchantTotals.entries.toList()
           ..sort((a, b) => b.value.$2.compareTo(a.value.$2)))
-        .take(5)
+        .take(12)
         .map((e) {
       final count = e.value.$1.round();
       final label = count == 1 ? '1 transaction' : '$count transactions';

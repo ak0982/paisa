@@ -38,7 +38,7 @@ It is purpose‑built for **Indian banks and payment providers** (HDFC, SBI, ICI
 - **Transactions** — searchable, category‑filtered, date‑grouped transaction list with sorting.
 - **Budgets** — **user‑editable** per‑category limits (seeded once from history, then owned by the user; progress can exceed 100%). Not a circular `spent × 1.3` formula.
 - **Stats** — **ledger coin** hero (shared `paisa_coin` chrome), spending charts, Home‑style category **stickers** (rim arc + TOP/mid/LOW % badges), top merchants, daily average, highest‑spend day, food‑spend trend.
-- **Reports** — date‑range reports (presets + **Custom via Pulse Calendar**) with the same sticker grid and category / merchant / income drill‑downs.
+- **Reports Period Folio** — range chips (This month / Last month / 3M / Custom via Pulse Calendar) with sticky **Summary | Breakdown | Ledger** tabs. Summary strikes a Ledger Coin (same chrome as Stats); Breakdown uses ruled category % bars + income + merchants; Ledger is the sorted day-grouped list.
 - **Coin Flip / Mint Slab** — tapping a transaction opens a flip coin: face = amount/merchant/account; reverse = **original SMS** fetched on demand by `smsId` (bodies are **not** stored).
 - **Sorting** — every transaction list supports Newest/Oldest (date) and High→Low / Low→High (amount) via a shared control.
 - **Filtering** — drill into a category, merchant, income source, or a **You** account (loan drilldown includes associated EMI without double‑counting a product SMS + funding debit).
@@ -114,7 +114,7 @@ flowchart TD
 
 #### `lib/widgets/` — reusable widgets
 
-`paisa_bottom_nav.dart` (HOME / TRANSACTIONS / BUDGET / STATS / YOU), `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `category_spend_chip.dart` (Home chips + Stats/Reports `CategorySpendStickerGrid` with rim arc and TOP/mid/LOW badges), `paisa_coin.dart` (shared struck-disc chrome for Day Strip + Stats ledger coin), `day_strip_teaser.dart` (Home DAY entry), `pulse_calendar_sheet.dart` (Pulse Calendar day/range picker), `sms_coin_slab.dart` (Coin Flip / Mint Slab transaction detail), `paisa_progress_bar.dart`, `gradient_button.dart`, `bank_logo.dart`, and `settings_detail_scaffold.dart`.
+`paisa_bottom_nav.dart` (HOME / TRANSACTIONS / BUDGET / STATS / YOU), `transaction_row.dart`, `grouped_transaction_list.dart`, `transaction_sort_control.dart`, `category_spend_chip.dart` (Home chips + `CategorySpendStickerGrid` where used), `paisa_coin.dart` (shared struck-disc chrome for Day Strip + Stats/Reports ledger coin), `day_strip_teaser.dart` (Home DAY entry), `pulse_calendar_sheet.dart` (Pulse Calendar day/range picker), `sms_coin_slab.dart` (Coin Flip / Mint Slab transaction detail), `paisa_progress_bar.dart`, `gradient_button.dart`, `bank_logo.dart`, and `settings_detail_scaffold.dart`.
 
 #### `lib/providers/` — state management
 

@@ -342,11 +342,11 @@ filters. Tapping an account opens `FilteredTransactionsScreen` via
 ### 4.8 Home chips + Stats/Reports stickers
 - **Home** category chips (`CategorySpendChip`, no share/badge) are **tappable** →
   `CategoryTransactionsScreen` for the **current month**.
-- **STATS** (`insights_screen.dart`) and **Reports** (`reports_screen.dart`) use
-  `CategorySpendStickerGrid`: same Home-style stickers in a 2-col wrap, **rim arc** = share of
-  perimeter, **TOP · N%** / mid `N%` / **LOW · N%** badges via `formatSharePercent` (tiny
-  shares must not vanish as `0%`). Highest-share tile is emphasized. Tiles drill into the
-  category list (Insights window or report range).
+- **STATS** (`insights_screen.dart`) uses a compact category share strip under the ledger
+  coin. **Reports Period Folio** (`reports_screen.dart`) Breakdown uses a ruled category
+  list with % bars (not sticker grids). Home still uses `CategorySpendChip`;
+  `CategorySpendStickerGrid` remains available for surfaces that need rim-arc / TOP·mid·LOW
+  badges via `formatSharePercent`.
 
 ### 4.8a Day Strip (Paisa Coin) + Pulse Calendar + Stats ledger coin
 UI-only day/range browsing and struck-coin chrome. **No schema bump.**
@@ -367,10 +367,16 @@ UI-only day/range browsing and struck-coin chrome. **No schema bump.**
 - **Stats ledger coin** (`insights_screen.dart`) — whole insights window struck as one coin
   via the same `paisa_coin.dart` chrome (`PaisaCoinFace` / tokens / wordmark `STATS`). Peak-day
   legend opens Day Strip for that day.
+- **Reports Period Folio** (`reports_screen.dart`) — range chips (This month / Last month /
+  3M / Custom via Pulse Calendar) + sticky **Summary | Breakdown | Ledger** tabs. Summary
+  strikes the selected range as a Ledger Coin (same chrome as Stats) with ruled daily/peak/
+  net/saved legends. From Stats with `initialRange`, default tab = Ledger; otherwise Summary.
+  Breakdown: ruled categories / income / extended merchants with chevrons. Ledger: sorted
+  day-grouped list.
 
-Shared chrome lives in `paisa_coin.dart` so Day Strip and Stats stay visually consistent.
+Shared chrome lives in `paisa_coin.dart` so Day Strip, Stats, and Reports stay visually consistent.
 Tests: `day_strip_test.dart`, `day_strip_widget_test.dart`, `insights_coin_widget_test.dart`,
-`reports_custom_range_test.dart` (Custom → Pulse Calendar).
+`reports_custom_range_test.dart`, `reports_category_drilldown_test.dart`.
 
 ### 4.9 Performance (no schema bump)
 These keep large inboxes responsive. **Do not bump `transactionSchemaVersion` for them.**
