@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Paisa Privacy Policy</title>
+  <meta name="description" content="Privacy policy for the My Paisa Android app (com.paisa.paisa_app).">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f7f5;
+      --fg: #1a1a1a;
+      --muted: #5c5c5c;
+      --border: #d9d9d4;
+      --accent: #0b6e4f;
+      --card: #ffffff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #121412;
+        --fg: #f2f2f0;
+        --muted: #a8a8a0;
+        --border: #2a2e2a;
+        --accent: #5dcea0;
+        --card: #1a1d1a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--fg);
+      background: var(--bg);
+    }
+    main {
+      max-width: 44rem;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem 1.35rem;
+    }
+    h1 {
+      font-size: 1.75rem;
+      line-height: 1.25;
+      margin: 0 0 0.35rem;
+    }
+    h2 {
+      font-size: 1.2rem;
+      margin: 1.75rem 0 0.65rem;
+    }
+    h3 {
+      font-size: 1.05rem;
+      margin: 1.25rem 0 0.5rem;
+    }
+    p, li { margin: 0.55rem 0; }
+    .meta {
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin-bottom: 1.25rem;
+    }
+    ul { padding-left: 1.25rem; }
+    a { color: var(--accent); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.85rem 0 1rem;
+      font-size: 0.95rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.65rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: color-mix(in srgb, var(--border) 35%, transparent); }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.9em;
+    }
+    strong { font-weight: 650; }
+  </style>
+</head>
+<body>
+  <main>
+    <article class="card">
+      <h1>My Paisa Privacy Policy</h1>
+      <p class="meta"><strong>Last updated:</strong> 31 August 2026</p>
+
+      <p>This privacy policy describes how <strong>My Paisa</strong> (<code>com.paisa.paisa_app</code>) handles information when you use the Android app.</p>
+
+      <h2>Summary</h2>
+      <p>My Paisa is an on-device personal finance app. It reads SMS on your phone to detect bank and UPI transaction alerts, parses them locally, and stores structured transaction data in a local database. <strong>There is no My Paisa backend.</strong> My Paisa does not upload your SMS or transaction history to our servers.</p>
+
+      <h2>Information we process on your device</h2>
+
+      <h3>SMS inbox</h3>
+      <p>With your permission (<code>READ_SMS</code>), My Paisa scans your SMS inbox to find messages that look like bank or UPI alerts. The scan runs on your device. Messages that are not financial alerts (for example personal chats, OTPs, delivery updates, marketing) are filtered out and <strong>are not stored as transactions</strong>.</p>
+      <p>Parsed transaction fields (amount, merchant/payee text, bank name, masked account last-4, debit/credit direction, timestamp, and a reference to the SMS id) may be stored in a local SQLite database on the device. <strong>Full SMS bodies are not written to that database.</strong> The app can re-read an original alert from the inbox by SMS id when you open a transaction detail.</p>
+
+      <h3>Profile and preferences</h3>
+      <p>Optional display name and email you enter, plus privacy preferences (for example merchant-name masking and screenshot blocking), are stored locally on the device (SharedPreferences / local database).</p>
+
+      <h3>Manual entries</h3>
+      <p>If you mint a cash / off-SMS transaction inside the app, that entry is stored only on the device.</p>
+
+      <h2>What we do <strong>not</strong> do</h2>
+      <ul>
+        <li>We do <strong>not</strong> operate a My Paisa cloud account or sync service.</li>
+        <li>We do <strong>not</strong> sell your data.</li>
+        <li>We do <strong>not</strong> use your SMS content for advertising.</li>
+        <li>The release build does <strong>not</strong> request the Android <code>INTERNET</code> permission for My Paisa itself. Opening this privacy policy hands the URL to your system browser.</li>
+      </ul>
+
+      <h2>Permissions</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Permission</th>
+            <th>Why</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>READ_SMS</code></td>
+            <td>Required to scan bank / UPI alert SMS and auto-build your ledger.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>My Paisa does not request <code>RECEIVE_SMS</code>, <code>SEND_SMS</code>, or <code>WRITE_SMS</code>.</p>
+
+      <h2>Data retention and your controls</h2>
+      <ul>
+        <li>Data stays on your device until you clear it or uninstall the app.</li>
+        <li><strong>Privacy → Clear local data</strong> deletes My Paisa’s stored transactions and scan history. It does not modify your SMS inbox.</li>
+        <li>You can revoke SMS permission in Android settings at any time (auto-import will stop).</li>
+        <li>Uninstalling My Paisa removes the app’s local storage.</li>
+      </ul>
+
+      <h2>Security notes</h2>
+      <p>Transaction data is stored in a local plaintext SQLite database. Cloud backup and device-to-device transfer of app data are disabled in the Android manifest. Screenshot / recents protection is on by default and can be turned off in Privacy settings. Biometric app lock and encrypted storage are not currently shipped.</p>
+
+      <h2>Children</h2>
+      <p>My Paisa is not directed at children under 13 (or the minimum age required in your country).</p>
+
+      <h2>Contact</h2>
+      <p>Questions about this policy: <strong>support@paisa.app</strong></p>
+
+      <h2>Changes</h2>
+      <p>We may update this policy when the app’s data practices change. The “Last updated” date at the top will change when we do. Continued use of the app after an update means you accept the revised policy.</p>
+    </article>
+  </main>
+</body>
+</html>

@@ -4,10 +4,8 @@
 
 This privacy policy describes how **My Paisa** (`com.paisa.paisa_app`) handles information when you use the Android app.
 
-> **Hosting:** Publish this file at the URL configured in `lib/constants/legal.dart`
-> (`LegalUrls.privacyPolicyUrl`, currently `https://ak0982.github.io/paisa/privacy`).
-> Until it is hosted, that URL is a placeholder — do not claim it is live in Play Console
-> until GitHub Pages (or another host) serves this document.
+> **Hosting:** Live at [`https://ak0982.github.io/paisa/privacy`](https://ak0982.github.io/paisa/privacy)
+> (`LegalUrls.privacyPolicyUrl`). Rendered HTML: `docs/privacy/index.html` (published via `gh-pages`).
 
 ## Summary
 

@@ -6,8 +6,8 @@
 class LegalUrls {
   LegalUrls._();
 
-  /// Placeholder until GitHub Pages (or another host) serves the policy.
-  /// Do not treat this as live until you have published `docs/privacy_policy.md`.
+  /// Hosted on GitHub Pages from the `gh-pages` branch (`docs/privacy/index.html`).
+  /// Source markdown: `docs/privacy_policy.md`.
   static const privacyPolicyUrl = 'https://ak0982.github.io/paisa/privacy';
 
   /// Support contact shown in Help (copy-to-clipboard).
