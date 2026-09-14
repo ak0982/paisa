@@ -373,7 +373,7 @@ void main() {
       expect(find.text('MINT RHYTHM'), findsNothing);
       expect(find.text('THIS MONTH PULSE'), findsNothing);
       expect(find.text('TOP MERCHANTS'), findsOneWidget);
-      expect(find.text('OPEN REPORTS'), findsOneWidget);
+      expect(find.text('SEE ALL MOVES'), findsOneWidget);
       // Merchants stay non-tappable without a chevron.
       expect(staticRowLacksChevron(tester, 'Swiggy'), isTrue);
       expect(staticRowLacksChevron(tester, 'Blinkit'), isTrue);

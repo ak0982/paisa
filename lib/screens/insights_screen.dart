@@ -21,7 +21,7 @@ import 'reports_screen.dart';
 /// Stats = period overview. One filter drives graph, coin, share, and merchants.
 ///
 /// Layout: period chips → Pulse Ribbon → period Ledger Coin → category share →
-/// top merchants → Open Reports (same range).
+/// top merchants → See All Moves (Reports Ledger, same range).
 class InsightsScreen extends StatefulWidget {
   const InsightsScreen({super.key});
 
@@ -243,7 +243,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                         amount: merchants[i].$3,
                       ),
                     const SizedBox(height: 14),
-                    _OpenReportsLink(
+                    _SeeAllMovesLink(
                       onTap: () => _openReports(spiralRange),
                     ),
                   ],
@@ -976,8 +976,9 @@ class _ReportsButton extends StatelessWidget {
   }
 }
 
-class _OpenReportsLink extends StatelessWidget {
-  const _OpenReportsLink({required this.onTap});
+/// Under Top Merchants — opens Period Folio Ledger for the selected Stats range.
+class _SeeAllMovesLink extends StatelessWidget {
+  const _SeeAllMovesLink({required this.onTap});
 
   final VoidCallback onTap;
 
@@ -985,8 +986,9 @@ class _OpenReportsLink extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Open Reports',
+      label: 'See all moves',
       child: InkWell(
+        key: const Key('stats_see_all_moves'),
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
         child: Padding(
@@ -995,7 +997,7 @@ class _OpenReportsLink extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'OPEN REPORTS',
+                'SEE ALL MOVES',
                 style: PaisaTheme.label(
                   size: 11,
                   color: PaisaColors.primary,

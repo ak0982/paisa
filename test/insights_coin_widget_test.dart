@@ -146,13 +146,14 @@ void main() {
     expect(find.text('THIS MONTH PULSE'), findsNothing);
     expect(find.text('SPEND SPIRAL'), findsNothing);
 
-    // Top merchants + Open Reports.
+    // Top merchants + See All Moves (Reports Ledger for selected period).
     expect(find.text('TOP MERCHANTS'), findsOneWidget);
     expect(find.text('Swiggy'), findsOneWidget);
     expect(find.text('Blinkit'), findsOneWidget);
-    expect(find.text('OPEN REPORTS'), findsOneWidget);
+    expect(find.text('SEE ALL MOVES'), findsOneWidget);
+    expect(find.byKey(const Key('stats_see_all_moves')), findsOneWidget);
 
-    // REPORTS chrome + PEAK DAY + OPEN REPORTS — no category row chevrons.
+    // REPORTS chrome + PEAK DAY + SEE ALL MOVES — no category row chevrons.
     final chevrons = find.byIcon(Icons.chevron_right_rounded);
     expect(chevrons, findsNWidgets(3));
   });
@@ -310,6 +311,32 @@ void main() {
 
     expect(find.text('DAY'), findsOneWidget);
     expect(find.text('BigDay'), findsOneWidget);
+  });
+
+  testWidgets('SEE ALL MOVES opens Reports Ledger for selected period',
+      (tester) async {
+    final now = DateTime.now();
+    final store = FinanceStore()
+      ..seedTransactions([
+        tx(
+          id: 'food',
+          amount: 320.58,
+          isCredit: false,
+          category: SpendCategory.food,
+          merchant: 'Swiggy',
+          timestamp: now.subtract(const Duration(days: 2)),
+        ),
+      ]);
+
+    await pumpStats(tester, store);
+
+    await tester.tap(find.byKey(const Key('stats_see_all_moves')));
+    await tester.pumpAndSettle();
+
+    // Period Folio with initialRange defaults to Ledger tab + Custom preset.
+    expect(find.text('Custom'), findsOneWidget);
+    expect(find.text('LEDGER'), findsWidgets);
+    expect(find.text('Swiggy'), findsOneWidget);
   });
 
   testWidgets('empty ledger keeps zeroed coin and scan prompt', (tester) async {
